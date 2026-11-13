@@ -101,12 +101,10 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     type: "said",
     visibility: PUBLIC,
     statement: {
-      kind: "plan",
+      kind: "alibi",
+      player: ana,
       round: 1,
-      plan: {
-        entries: [{ player: ana, placed: "vault", room: "office", power: { role: "hacker", target: "vault" }, agreed: true }],
-        history: [{ actor: ben, kind: "place", subject: ana, value: "vault", target: null, msBeforeDeadline: 120_000 }],
-      },
+      room: "office",
     },
   },
   alibiWindowClosed: { type: "alibiWindowClosed", visibility: PUBLIC, round: 1, noAlibi: [{ player: ben, room: "vault" }] },

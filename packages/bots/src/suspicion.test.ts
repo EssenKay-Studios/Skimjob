@@ -1,5 +1,5 @@
 // The suspicion model over real (scripted) engine games, read through viewFor
-// only. design §19.3; §5.3 shortfall, §10 plan spots, §11.3 alibis, §3.4 Security, §11.1
+// only. design §19.3; §5.3 shortfall, §10 alibis, §3.4 Security, §11.1
 // powers, §13 the Audit card, §9.6 shakedown results
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";

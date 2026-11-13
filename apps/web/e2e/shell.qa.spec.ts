@@ -158,11 +158,11 @@ test("a tap inside the sheet keeps it open; a tap beside it (tablet) closes it @
   const viewport = { width: 768, height: 1024 };
   const { ctx, page } = await open(browser, viewport);
   const tabs = page.getByRole("navigation", { name: "Game panels" });
-  await tabs.getByRole("button", { name: "Plan board" }).click();
-  const sheet = page.getByRole("dialog", { name: "Plan board" });
+  await tabs.getByRole("button", { name: "This round" }).click();
+  const sheet = page.getByRole("dialog", { name: "This round" });
   await settle(page);
-  await sheet.getByRole("heading", { name: "Plan board" }).click();
-  await sheet.getByText("1 of 6 agreed").click();
+  await sheet.getByRole("heading", { name: "This round" }).click();
+  await sheet.getByText("Your move and its preview.").click();
   await expect(sheet).toBeVisible();
   const s = (await sheet.locator(".bsheet__sheet").boundingBox())!;
   expect(s.x).toBeGreaterThan(44); // the sheet is capped, so there is backdrop beside it

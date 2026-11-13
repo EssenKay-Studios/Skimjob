@@ -7,7 +7,7 @@ import type { RoleId, RoomId } from "@skimjob/content";
 import { eventsFor, marksOf, type CaseFileEvent, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView, type PublicEvent } from "@skimjob/engine";
 import { suspectOf, type CaseData, type Fact, type Lead, type Trust, type Warning } from "./caseBoard";
 import { bellChecks, overClaimed, storyChecks, type CheckContext, type RoomRound, type RoundFacts } from "./caseChecks";
-import { cardName, describeEvent, perkName, roleName, roomName, the } from "./describeEvent";
+import { cardName, describeEvent, perkName, roomName, the } from "./describeEvent";
 import { jobOf, namesOf, seatsOf, setupOf } from "./hud";
 import { MEETING_TITLE, slotText } from "./meeting";
 
@@ -206,22 +206,9 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         if (s.kind === "alibi") {
           roundOf(s.round).alibis.set(s.player, s.room);
           fact(roomLead(s.round, s.room), `${seq}`, text(), trust, [s.player]);
-        } else if (s.kind === "role") {
+        } else {
           if (s.player !== me) claims.set(s.player, { role: s.role, round });
           fact(crewLead(round), `${seq}`, text(), trust, [s.player]);
-        } else {
-          // design §10: the plan snapshot, one said line per spot and per pledge.
-          for (const p of s.plan.entries) {
-            if (p.room !== null) {
-              fact(roomLead(s.round, p.room), `${seq}.${p.player}`, `Plan: ${who(p.player)} → ${roomName(p.room)}`, trust, [p.player]);
-            }
-            if (p.power !== null) {
-              const target = p.power.target;
-              const onRoom = Object.hasOwn(job.rooms, target);
-              const d = onRoom ? roomLead(s.round, target) : crewLead(s.round);
-              fact(d, `${seq}.${p.player}.power`, `Plan: ${who(p.player)} ${roleName(p.power.role)} → ${onRoom ? roomName(target) : who(target)}`, trust, onRoom ? [p.player] : [p.player, target]);
-            }
-          }
         }
         break;
       }

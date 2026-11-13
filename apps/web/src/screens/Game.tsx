@@ -12,15 +12,13 @@ import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { WantedStars } from "../components/Bell";
 import { HonestyMeter } from "../components/HonestyMeter";
-import { GameShell, SHELL_WIDE_QUERY, type ShellPanel } from "../components/GameShell";
-import { useMedia } from "../game/useMedia";
+import { GameShell, type ShellPanel } from "../components/GameShell";
 import { Bubble, Clock, Evidence, Pin, Star } from "../components/icons";
 import { InfoTip, MoreInGame } from "../components/InfoTip";
 import { MEETING_TITLE } from "../game/meeting";
 import { BankCutaway } from "../art/BankCutaway";
 import type { BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
-import { PlanBoard } from "../components/PlanBoard";
 import { AlibiPopup } from "../components/AlibiPopup";
 import { CardKey, SnapshotCard } from "../components/SnapshotCard";
 import { myMarks, snapshotOf, snapshotRounds } from "../game/snapshot";
@@ -54,7 +52,6 @@ import {
   type Presence,
   type Timer,
 } from "../game/hud";
-import { lastPlan } from "../game/plan";
 import { endingText } from "../game/reveal";
 import { bailPromptOf, openMeetingOf, slotText } from "../game/meeting";
 import { DecidingPanel, MeetingNow, MeetingsPanel, ResultDialog, resultCardOf, RoleCard } from "./Meetings";
@@ -228,14 +225,11 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   useEffect(() => {
     if (bailId) setOpen("round");
   }, [bailId]);
-  // From 1024 px the plan board sits in the shell's centre column, under the bank (design §15.6); below it, it is the first block of "This round".
-  const wide = useMedia(SHELL_WIDE_QUERY);
   const panels: readonly ShellPanel[] = [
     { id: "crew", title: "Crew", place: "left", tab: { icon: <Star /> }, node: <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} /> },
     { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} card={(r) => <RoundCard view={view} send={send} round={r} title={`Round ${r}`} />} /> },
     ...(outcome ? [] : [{ id: "notes", title: "Notes", place: "left", tab: { icon: <Pin /> }, node: <CrewBoard people={people} board={board} /> } satisfies ShellPanel]),
     { id: "chat", title: "Chat", place: "left", tab: { icon: <Bubble />, badge: chat.unread }, node: chat.node },
-    ...(wide ? [{ id: "plan", title: "Plan board", place: "centre", node: <PlanPanel view={view} channel={channel} bare /> } satisfies ShellPanel] : []),
     {
       id: "round",
       title: outcome ? "The result" : "This round",
@@ -244,7 +238,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
       node: (
         <div className="round">
           {host && <GameHost gameId={gameId} game={host} view={view} control={channel.control} />}
-          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} plan={!wide} />}
+          {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} />}
           {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} marks={myMarks(view)} cards={new Map(snapshotRounds(view).map((r) => [r, snapshotOf(view, r)!]))} bulbs={jobOf(view).alarm.bulbs} />}
         </div>
       ),
@@ -457,14 +451,13 @@ function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: 
   );
 }
 
-function Actions({ view, timers, offset, send, autoMeetings, pick, channel, plan }: BoardProps & { pick: Pick; channel: GameChannel; plan: boolean }) {
+function Actions({ view, timers, offset, send, autoMeetings, pick }: BoardProps & { pick: Pick }) {
   const p = view.phase;
   const voting = p.kind === "meeting" || p.kind === "shakedownPending";
   return (
     <>
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} send={send} />}
-      {plan && <PlanPanel view={view} channel={channel} />}
       <LatestCard view={view} send={send} />
       {p.kind === "planning" ? (
         <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} pick={pick} />
@@ -507,38 +500,6 @@ function LatestCard({ view, send }: { view: PlayerView; send: BoardProps["send"]
 function RoundCard({ view, send, round, title }: { view: PlayerView; send: BoardProps["send"]; round: number; title?: string }) {
   const snap = snapshotOf(view, round);
   return snap && <SnapshotCard snap={snap} title={title} crew={seatLooks(view)} me={view.me.id} marks={myMarks(view)} bulbs={jobOf(view).alarm.bulbs} onMark={(r, target, mark) => void send({ type: "markAlibi", round: r, target, mark })} />;
-}
-
-/** design §10: the live board while a round is planned, and its snapshot after. */
-function PlanPanel({ view, channel, bare }: { view: PlayerView; channel: GameChannel; bare?: boolean }) {
-  const toast = useToast();
-  const looks = seatLooks(view);
-  const round = view.phase.kind === "planning" ? view.phase.round : null;
-  const live = channel.plan;
-  const board = (
-      <PlanBoard
-        seats={seatsOf(view).map((s) => ({ ...s, look: looks.get(s.id)?.look ?? 0, tag: looks.get(s.id)?.tag }))}
-        rooms={roomOptions(view).map((r) => ({ id: r.id, name: r.name, closed: r.closed }))}
-        board={round === null ? null : live?.round === round ? live : { round, entries: [] }}
-        onEdit={async (edit) => {
-          const r = await channel.sendPlan(edit);
-          if (!r.ok) toast(sentence(r.reason), "bad");
-        }}
-        last={lastPlan(view)}
-      />
-  );
-  return bare ? (
-    board
-  ) : (
-    <SketchFrame as="section" seed="game-plan" radius={16} shadow={0.45} className="panel" aria-labelledby="plan-h">
-      <div className="panel__head">
-        <h2 id="plan-h" className="panel__title">
-          <Underline seed="plan-u">Plan board</Underline>
-        </h2>
-      </div>
-      {board}
-    </SketchFrame>
-  );
 }
 
 function WaitPanel({ view }: { view: PlayerView }) {

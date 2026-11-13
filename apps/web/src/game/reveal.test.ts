@@ -41,7 +41,7 @@ describe("reveal lines", () => {
 });
 
 describe("each round's lies — design §15.5, §18 board 5", () => {
-  const move = (player: string, room: string, alibi: string | null) => ({ player, room, duffel: 1, pocket: 0, missed: false, alibi, planned: null });
+  const move = (player: string, room: string, alibi: string | null) => ({ player, room, duffel: 1, pocket: 0, missed: false, alibi });
   const round = (moves: ReturnType<typeof move>[]) => ({ round: 3, card: null, moves, satOut: [], resolved: null, split: null, items: [], stashes: {} });
   const r = round([move("p1", "vault", "vault"), move("p2", "office", "vault"), move("p3", "lobby", null)]);
 
@@ -81,7 +81,7 @@ describe("<Reveal>", () => {
       {
         round: 1,
         card: null,
-        moves: [{ player: "p2", room: "vault", duffel: 2, pocket: 4, missed: false, alibi: "lobby", planned: "office" }],
+        moves: [{ player: "p2", room: "vault", duffel: 2, pocket: 4, missed: false, alibi: "lobby" }],
         satOut: ["p3"],
         resolved: { taken: 6, missing: 4 },
         split: { cut: 0, share: 0 },
@@ -122,7 +122,6 @@ describe("<Reveal>", () => {
     expect(html).toMatch(/class="snap__stamp snap__stamp--lie">LIE</);
     expect(html).toMatch(/data-room="vault".*?really:<\/span><span class="snap__liar">/);
     expect(html).toContain("Went: Vault");
-    expect(html).not.toMatch(/Plan:|Changed story|broken/);
     expect(html).toContain("Cy sat the round out: the Lobby was taped off.");
   });
 

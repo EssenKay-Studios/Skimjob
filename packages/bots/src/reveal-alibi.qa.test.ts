@@ -1,5 +1,5 @@
-// QA (PR #219, S4.9): the reveal's plan-against-moves, sat-out rounds and Secret-mode ballots,
-// checked against the raw game log of seeded whole bot games (design §3.3, §10, §15.4, §15.5, §18).
+// QA (PR #219, S4.9): the reveal's alibis against moves, sat-out rounds and Secret-mode ballots,
+// checked against the raw game log of seeded whole bot games (design §3.3, §10, §15.4, §18).
 import { describe, expect, it } from "vitest";
 import { createGame, viewFor, type GameConfig, type GameEvent, type GameState, type PlayerId, type RoomId } from "@skimjob/engine";
 import { PERSONALITIES, type PersonalityId } from "./personalities";
@@ -22,42 +22,31 @@ function play(n: number, seed: string, absent: number, extra: Partial<GameConfig
   return runBotGame(config, createBots(seats, (_, i) => PERSONALITIES[IDS[i % IDS.length] as PersonalityId], seed), { maxSteps: 400 }).state;
 }
 
-/** Truth straight from the full log: per round, each seat's plan spot, last alibi, grab room and sat-out. */
+/** Truth straight from the full log: per round, each seat's alibi, grab room and sat-out. */
 function truth(log: readonly GameEvent[]) {
   const k = (r: number, p: PlayerId) => `${r}/${p}`;
-  const plan = new Map<string, RoomId | null>();
-  const plansPerRound = new Map<number, number>();
   const alibi = new Map<string, RoomId>();
   const went = new Map<string, RoomId>();
   const satOut = new Set<string>();
   for (const e of log) {
-    if (e.type === "said" && e.statement.kind === "plan") {
-      plansPerRound.set(e.statement.round, (plansPerRound.get(e.statement.round) ?? 0) + 1);
-      for (const entry of e.statement.plan.entries) plan.set(k(e.statement.round, entry.player), entry.room);
-    }
     if (e.type === "said" && e.statement.kind === "alibi") alibi.set(k(e.statement.round, e.statement.player), e.statement.room);
     if (e.type === "coinsGrabbed") went.set(k(e.round, e.player), e.room);
     if (e.type === "defaultMoveAssigned" && e.move === null) satOut.add(k(e.round, e.player));
   }
-  return { k, plan, plansPerRound, alibi, went, satOut };
+  return { k, alibi, went, satOut };
 }
 
-function checkAgainstLog(state: GameState): { satOut: number; changed: number; broken: number; secret: number } {
+function checkAgainstLog(state: GameState): { satOut: number; lies: number; secret: number } {
   const t = truth(state.log);
-  // design §10: one plan snapshot per round, so "the plan" is never ambiguous.
-  for (const [round, count] of t.plansPerRound) expect(count, `round ${round} plan snapshots`).toBe(1);
-  const counts = { satOut: 0, changed: 0, broken: 0, secret: state.log.filter((e) => e.type === "voteCast" && e.visibility.kind === "secret").length };
+  const counts = { satOut: 0, lies: 0, secret: state.log.filter((e) => e.type === "voteCast" && e.visibility.kind === "secret").length };
   const summaries = state.playerOrder.map((p) => viewFor(state, p).reveal!.summary);
   const summary = summaries[0]!;
   for (const round of summary.rounds) {
     for (const m of round.moves) {
       const key = t.k(round.round, m.player);
-      // design §15.5: the plan line is exactly the logged snapshot's spot (null when unplaced).
-      expect(m.planned, key).toBe(t.plan.get(key) ?? null);
       expect(m.alibi, key).toBe(t.alibi.get(key) ?? null);
       expect(m.room, key).toBe(t.went.get(key));
-      if (m.planned && m.planned !== m.room) counts.broken++;
-      if (m.planned && m.alibi && m.planned !== m.alibi) counts.changed++;
+      if (m.alibi && m.alibi !== m.room) counts.lies++;
     }
     // design §3.3: everyone who sat out is named, and none of them also has a move.
     const sat = state.playerOrder.filter((p) => t.satOut.has(t.k(round.round, p)));
@@ -77,19 +66,17 @@ function checkAgainstLog(state: GameState): { satOut: number; changed: number; b
   return counts;
 }
 
-describe("reveal plan against moves, against the log (design §3.3, §10, §15.5, §18)", () => {
-  it("matches the logged plan, alibi and grab for every seat in 3-, 6- and 12-seat Secret-mode games", () => {
-    const total = { changed: 0, broken: 0, secret: 0 };
+describe("reveal alibis against moves, against the log (design §3.3, §10, §18)", () => {
+  it("matches the logged alibi and grab for every seat in 3-, 6- and 12-seat Secret-mode games", () => {
+    const total = { lies: 0, secret: 0 };
     for (const n of [3, 6, 12])
       for (let s = 0; s < 6; s++) {
         const c = checkAgainstLog(play(n, `qa219-plan-${n}-${s}`, n >= 6 ? 2 : 0));
-        total.changed += c.changed;
-        total.broken += c.broken;
+        total.lies += c.lies;
         total.secret += c.secret;
       }
     // The games did exercise the lines under test.
-    expect(total.changed).toBeGreaterThan(0);
-    expect(total.broken).toBeGreaterThan(0);
+    expect(total.lies).toBeGreaterThan(0);
     expect(total.secret).toBeGreaterThan(0);
   });
 

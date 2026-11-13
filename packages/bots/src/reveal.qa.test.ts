@@ -214,10 +214,8 @@ function audit(state: GameState, cov: Coverage): RevealSummary {
     const m = moves.find((x) => x.round === sp.round && x.player === sp.player);
     const said = state.log.flatMap((e) => (e.type === "said" ? [e.statement] : []));
     const alibi = said.find((x) => x.kind === "alibi" && x.player === sp.player && x.round === sp.round);
-    const spot = said.find((x) => x.kind === "plan" && x.round === sp.round);
-    const planned = spot?.kind === "plan" ? (spot.plan.entries.find((e) => e.player === sp.player)?.room ?? null) : null;
     const missed = state.log.some((e) => e.type === "defaultMoveAssigned" && e.player === sp.player && e.round === sp.round);
-    expect(m).toEqual({ player: sp.player, round: sp.round, room: sp.room, duffel: sp.duffel, pocket: sp.pocket, missed, alibi: alibi?.kind === "alibi" ? alibi.room : null, planned });
+    expect(m).toEqual({ player: sp.player, round: sp.round, room: sp.room, duffel: sp.duffel, pocket: sp.pocket, missed, alibi: alibi?.kind === "alibi" ? alibi.room : null });
     if (missed) cov.add("missed");
   }
   return summary;
@@ -238,7 +236,7 @@ describe("QA #55 reveal summary vs the engine's truth — design §8, §15.5", (
     // Content bells (no R6 pins), so raids happen (design §5.3), and the Rooftop escapees win a bust (§5.5).
     audit(play(config(8, "qa55-8-c-10", { contentOverrides: null })), cov);
     // A greedy crew on the R6 pins (bells too big to bust): sunk by theft below the honesty line, and a Mole or Fixer on top wins it (design §8.4).
-    audit(play(config(5, "qa55-greedy-5-4"), [], ["greedy", "random"]), cov);
+    audit(play(config(5, "qa55-greedy-5-0"), [], ["greedy", "random"]), cov);
     for (const k of MUST) expect(cov, k).toContain(k);
   }, 120_000);
 

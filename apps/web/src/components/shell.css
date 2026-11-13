@@ -4,7 +4,6 @@
 
 .shell {
   --shell-gap: 12px;
-  --shell-plan-min: 160px;
   /* The bank board's frame around its drawing: padding, heading and caption. */
   --shell-board-chrome: 92px;
 }
@@ -158,12 +157,12 @@
 }
 /* The drawing keeps its shape (--bank-aspect, set by BankCutaway), so on wide
    windows its width is capped by the column height left for it once the board's
-   frame, the gap and the Plan board's minimum are set aside: the whole board stays
+   frame is set aside: the whole board stays
    on screen (design §15.6 one screen). It sits centred in its frame. It never
    drops below 600 px, where it would switch to the stacked layout and its rooms
    get too small to tap: short windows scroll the column as before. */
 .shell--wide .shell__board .bank {
-  max-width: max(600px, calc((100cqh - var(--shell-board-chrome) - 10px - var(--shell-plan-min)) * var(--bank-aspect)));
+  max-width: max(600px, calc((100cqh - var(--shell-board-chrome)) * var(--bank-aspect)));
   margin-inline: auto;
 }
 .shell__panel {
@@ -174,10 +173,6 @@
   padding: 12px 14px;
 }
 /* The columns scroll when the window is too short; a panel never shrinks below its heading and a few lines. */
-.shell__plan {
-  flex: 1 0 var(--shell-plan-min);
-  min-height: var(--shell-plan-min);
-}
 .shell__right .shell__panel {
   flex: 1 0 120px;
 }

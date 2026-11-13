@@ -69,47 +69,6 @@ export interface Move {
   readonly ability?: AbilityUse;
 }
 
-// ---------------------------------------------------------------- the plan board (§10)
-
-/** A power claim (a pledge): "Hacker → Vault" or "Detective → Eli". design §10 */
-export interface PowerClaim {
-  readonly role: RoleId;
-  /** A room in play or another player, by the role's power. */
-  readonly target: RoomId | PlayerId;
-}
-
-/** One seat's line on the plan board. Seats with nothing on it are not listed. design §10 */
-export interface PlanEntry {
-  readonly player: PlayerId;
-  /** Where the crew put this avatar on the proposed plan (anyone may move it); null: nowhere. */
-  readonly placed: RoomId | null;
-  /** The seat's own room claim (✋): only that seat sets it. */
-  readonly room: RoomId | null;
-  readonly power: PowerClaim | null;
-  readonly agreed: boolean;
-}
-
-/** One edit in the board's compact history: the latest of its actor, kind and subject. design §10 */
-export interface PlanEditRecord {
-  readonly actor: PlayerId;
-  /** "place" moves `subject`'s avatar; "room", "power" and "agree" are the actor's own claims (subject = actor). */
-  readonly kind: "place" | "room" | "power" | "agree";
-  readonly subject: PlayerId;
-  /** The room, the claimed role, or "true" / "false" for agree; null: cleared. */
-  readonly value: string | null;
-  /** A power claim's target. */
-  readonly target: string | null;
-  /** Ms left to the round's deadline when it was made; null if there was none. */
-  readonly msBeforeDeadline: number | null;
-}
-
-/** The plan board as its round resolves: the final plan and its pledges, and the edit history oldest first. design §10 */
-export interface PlanSnapshot {
-  /** In seat order. */
-  readonly entries: readonly PlanEntry[];
-  readonly history: readonly PlanEditRecord[];
-}
-
 /** A vote in a crew meeting: shake someone down, or skip. design §11.2 */
 export type VoteChoice =
   | { readonly kind: "shakedown"; readonly target: PlayerId }
@@ -161,11 +120,9 @@ export type Deadline =
   /**
    * The planning deadline for `round`: resolve it (default moves for anyone
    * missing). Rejected unless `round` is the one being planned, so a retried
-   * or late deadline can't resolve the next round early. `plan` is the plan
-   * board as the round resolves (the server's live board, design §10), left
-   * out when nobody used it. design §4.2
+   * or late deadline can't resolve the next round early. design §4.2
    */
-  | { readonly kind: "round"; readonly round: number; readonly plan?: PlanSnapshot }
+  | { readonly kind: "round"; readonly round: number }
   /** `round`'s alibi window has ended: the no-alibi facts, then any meeting it called, the result window or the next round. design §4.1, §10 */
   | { readonly kind: "alibi"; readonly round: number }
   /** The result window after `round` has closed with no emergency called: the next round starts. design §9.3 */

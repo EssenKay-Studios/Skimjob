@@ -1,6 +1,6 @@
 // The case board adapter over real engine views (design §15.4, §18): leads, ⚠,
 // the suspect and stable pin ids, all from viewFor() alone.
-import { handleCommand, viewFor, type GameConfig, type GameState, type Move, type PlanSnapshot, type PlayerCommand, type PlayerView, type SystemCommand } from "@skimjob/engine";
+import { handleCommand, viewFor, type GameConfig, type GameState, type Move, type PlayerCommand, type PlayerView, type SystemCommand } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
 import { caseData } from "./caseLeads";
 import { createGame } from "./deal.testkit";
@@ -23,18 +23,10 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   return state;
 }
 const move = (player: string, m: Move): PlayerCommand => ({ type: "submitMove", player, move: m });
-const PLAN: PlanSnapshot = {
-  entries: [
-    { player: "p3", placed: null, room: "vault", power: null, agreed: true },
-    { player: "p5", placed: null, room: "office", power: null, agreed: true },
-  ],
-  history: [],
-};
 
 /**
  * Round 1: you (p1, Lookout) sit in Security watching the Vault; Ava and Dev
- * grab in the Vault, Ben in the Office, Cleo `cleo`. The plan put Ben in the
- * Vault and Dev in the Office (it counts for no check). In the alibi window Ben
+ * grab in the Vault, Ben in the Office, Cleo `cleo`. In the alibi window Ben
  * says the Vault and Dev says Security; the rest post none, so as it closes
  * they are shown in their real rooms.
  */
@@ -47,7 +39,7 @@ function game(roles: string[], cleo: Move): GameState {
     move("p3", { room: "office", duffel: 1, pocket: 0 }),
     move("p4", cleo),
     move("p5", { room: "vault", duffel: 1, pocket: 0 }),
-    { type: "advance", deadline: { kind: "round", round: 1, plan: PLAN } },
+    { type: "advance", deadline: { kind: "round", round: 1 } },
   );
   return run(
     s,
@@ -68,13 +60,12 @@ describe("the case board adapter — design §15.4", () => {
     expect(vault.title).toBe("Vault");
     expect(vault.bell).toBe(true);
     expect(vault.facts.map((f) => f.trust)).toEqual(expect.arrayContaining(["fact", "seen", "said"]));
-    expect(vault.facts.map((f) => f.text)).toEqual(expect.arrayContaining(["The bell rang 2 times (2 lit).", "Round 1, on the cameras: Ava and Dev in the Vault.", "Plan: Ben → Vault"]));
-    // Claimed: the alibis only, not the plan spots.
+    expect(vault.facts.map((f) => f.text)).toEqual(expect.arrayContaining(["The bell rang 2 times (2 lit).", "Round 1, on the cameras: Ava and Dev in the Vault."]));
     expect(vault.summary).toBe("rang 2 · seen Ava, Dev · claimed Ben");
     expect(vault.names).toEqual(expect.arrayContaining(["p2", "p3", "p5"]));
   });
 
-  it("fires Seen elsewhere and Not seen from the alibis, never the plan spots (owner, 13 Nov)", () => {
+  it("fires Seen elsewhere and Not seen from the alibis (owner, 13 Nov)", () => {
     const warnings = data.leads.flatMap((l) => l.warnings.map((w) => [l.id, w.kind, w.names.join()]));
     expect(warnings).toEqual([
       ["r1.room.vault", "seenElsewhere", "p5"],

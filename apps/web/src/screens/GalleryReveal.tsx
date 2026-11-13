@@ -90,25 +90,6 @@ const resolved = (round: number, bank: number, taken: number, missing: number, r
   missing,
   honesty: { reached, taken: 64 - bank },
 });
-/** The plan board as the round resolved: each seat's room claim. design §10 */
-const plan = (round: number, claims: Record<string, string>): GameEvent => ({
-  type: "said",
-  visibility: PUBLIC,
-  statement: {
-    kind: "plan",
-    round,
-    plan: {
-      entries: Object.entries(claims).map(([player, room]) => ({
-        player,
-        placed: null,
-        room,
-        power: null,
-        agreed: false,
-      })),
-      history: [],
-    },
-  },
-});
 const alibi = (player: string, round: number, room: string): GameEvent => ({
   type: "said",
   visibility: PUBLIC,
@@ -161,7 +142,6 @@ const LOG: GameEvent[] = [
     perks: ["tail", "softShoes", "bail"],
   },
   { type: "roundStarted", visibility: PUBLIC, round: 1 },
-  plan(1, { p1: "security", p2: "vault", p3: "office", p4: "vault" }),
   split("p1", 1, "security", 0, 0),
   split("p2", 1, "vault", 6, 3),
   split("p3", 1, "office", 4, 0),
@@ -180,7 +160,6 @@ const LOG: GameEvent[] = [
   alibi("p2", 1, "lobby"),
   alibi("p3", 1, "office"),
   { type: "roundStarted", visibility: PUBLIC, round: 2 },
-  plan(2, { p1: "office", p2: "vault", p3: "lobby", p4: "vault" }),
   {
     type: "abilityResolved",
     visibility: privateTo("p2"),
@@ -249,7 +228,6 @@ const LOG: GameEvent[] = [
     perk: { kind: "tail", room: "vault" },
     cost: 1,
   },
-  plan(3, { p1: "rooftop", p2: "depositBoxes", p3: "vault", p4: "lobby" }),
   // design §3.3: the Lobby is taped off through round 3, so Dot's missed move sits the round out.
   {
     type: "defaultMoveAssigned",

@@ -43,7 +43,7 @@ test.describe("the reveal demo", () => {
     await expect(sheet.locator(".reveal__lies")).toContainText("Lies in round 1");
     await expect(sheet.locator(".reveal__lies")).toContainText("Ben said the Lobby; really the Vault.");
 
-    // Round 2: Dot broke the plan; the Lobby raid is in the timeline.
+    // Round 2: the Lobby raid is in the timeline.
     await reveal.getByRole("button", { name: "Next round" }).click();
     await expect(sheet.getByRole("heading", { name: "Round 2", exact: true })).toBeVisible();
     await expect(moves.locator("li").filter({ hasText: "Dot" })).toContainText("Went:");

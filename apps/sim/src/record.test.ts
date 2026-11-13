@@ -106,17 +106,6 @@ describe("recordGame — a scripted game", () => {
     expect(rec.winners).toEqual(["p1"]);
   });
 
-  it("records the plan spots and how many were kept (design §10)", () => {
-    expect([rec.planSpots, rec.planKept]).toEqual([0, 0]); // nobody used the board
-    const cfg = { ...config(3), contentOverrides: { ...R6, roundCap: 1 } };
-    let t = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
-    const spot = (player: string, room: string | null) => ({ player, placed: null, room, power: null, agreed: true });
-    // p0 keeps its spot, p1 claims the Lobby but goes to the Vault, p2 claims nothing.
-    const plan = { entries: [spot("p0", "lobby"), spot("p1", "lobby"), spot("p2", null)], history: [] };
-    t = run(t, move("p0", "lobby"), move("p1", "vault"), move("p2", "lobby"), { type: "advance", deadline: { kind: "round", round: 1, plan } });
-    expect(recordGame(t, ["honest", "greedy", "honest"])).toMatchObject({ planSpots: 2, planKept: 1 });
-  });
-
   it("records a heist sunk by theft (design §8.4)", () => {
     const cfg = { ...config(3), contentOverrides: { ...R6, roundCap: 1 } };
     let t = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));

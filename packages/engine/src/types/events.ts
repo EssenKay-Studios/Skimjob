@@ -6,7 +6,7 @@
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
 import type { EventId, JobId, PerkId, RoleId, RoomId } from "@skimjob/content";
 import type { ContentOverrides, PlayerId, PlayerSeat, RoleListSetting, VoteVisibility } from "./config";
-import type { AbilityUse, AlibiMark, Move, PerkUse, PlanSnapshot, VoteChoice } from "./commands";
+import type { AbilityUse, AlibiMark, Move, PerkUse, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
 import type { RoleState } from "./state";
 
@@ -372,10 +372,8 @@ export interface AuditReport {
 
 // ---------------------------------------------------------------- said (§10, §11.3, §19.2 seam 5)
 
-/** What a player (or the crew, on the plan board) said: talk that changes no rule, possibly false. */
+/** What a player said: talk that changes no rule, possibly false. */
 export type Statement =
-  /** The plan board as `round` resolved (design §10): its final plan, pledges and edit history. */
-  | { readonly kind: "plan"; readonly round: number; readonly plan: PlanSnapshot }
   /** "I was in the `room` in round `round`", posted in its alibi window (design §10). */
   | { readonly kind: "alibi"; readonly player: PlayerId; readonly round: number; readonly room: RoomId }
   /** "I'm the `role`" (design §11.3 Claims), once per player per stretch (`stretch`, the one it was made in, §9.1). */

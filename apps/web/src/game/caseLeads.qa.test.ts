@@ -1,7 +1,7 @@
 // QA (S4.4, #105): adversarial games against the case board adapter, over real
 // engine views (design §15.4, §18): leaks, false ⚠ on innocent players, the
 // suspect, and pin ids.
-import { handleCommand, viewFor, type GameConfig, type GameState, type Move, type PlanSnapshot, type PlayerCommand, type PlayerView, type SystemCommand } from "@skimjob/engine";
+import { handleCommand, viewFor, type GameConfig, type GameState, type Move, type PlayerCommand, type PlayerView, type SystemCommand } from "@skimjob/engine";
 import { BANK_JOB, EVENTS } from "@skimjob/content";
 import { describe, expect, it } from "vitest";
 import { suspectOf, type Lead } from "./caseBoard";
@@ -29,12 +29,11 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
 }
 const move = (player: string, m: Move): PlayerCommand => ({ type: "submitMove", player, move: m });
 const grab = (room: string, coins = 1): Move => ({ room, duffel: coins, pocket: 0 });
-const plan = (spots: [string, string][]): PlanSnapshot => ({ entries: spots.map(([player, room]) => ({ player, placed: null, room, power: null, agreed: true })), history: [] });
 
-/** Round 1 with the given roles, moves (p1..p5) and plan spots, then the given commands. */
-function round1(roles: string[], moves: Move[], spots: [string, string][], ...after: (PlayerCommand | SystemCommand)[]): GameState {
+/** Round 1 with the given roles and moves (p1..p5), then the given commands. */
+function round1(roles: string[], moves: Move[], ...after: (PlayerCommand | SystemCommand)[]): GameState {
   let s = createGame(config, roles);
-  s = run(s, ...moves.map((m, i) => move(`p${i + 1}`, m)), { type: "advance", deadline: { kind: "round", round: 1, plan: plan(spots) } });
+  s = run(s, ...moves.map((m, i) => move(`p${i + 1}`, m)), { type: "advance", deadline: { kind: "round", round: 1 } });
   return run(s, ...after);
 }
 const warned = (s: GameState) => caseData(viewFor(s, "p1"), new Set()).leads.flatMap((l) => l.warnings.map((w) => ({ lead: l.id, kind: w.kind, names: w.names })));
@@ -47,7 +46,6 @@ describe("QA: Too quiet must not point at an innocent player — design §15.4",
     const s = round1(
       ROLES,
       [grab("office"), grab("vault"), grab("office"), grab("lobby"), grab("lobby")],
-      [],
       { type: "postAlibi", player: "p2", round: 1, room: "vault" },
       { type: "postAlibi", player: "p3", round: 1, room: "vault" },
     );
@@ -61,7 +59,6 @@ describe("QA: Too quiet must not point at an innocent player — design §15.4",
     const s = round1(
       ["lookout", "locksmith", "detective", "mole", "fixer"],
       [grab("office"), grab("vault"), grab("office"), grab("lobby"), grab("lobby")],
-      [["p2", "vault"]],
       { type: "postAlibi", player: "p2", round: 1, room: "vault" },
     );
     expect(warned(s)).toEqual([]);
@@ -77,8 +74,8 @@ describe("QA: leaks — design §18", () => {
       { type: "postAlibi", player: "p2", round: 1, room: "lobby" },
       { type: "postAlibi", player: "p5", round: 1, room: "lobby" },
     ];
-    const a = round1(ROLES, [grab("office"), grab("vault"), hide, grab("lobby"), grab("lobby")], [], ...alibis);
-    const b = round1(ROLES, [grab("office"), grab("lobby"), hide, grab("lobby"), grab("vault")], [], ...alibis);
+    const a = round1(ROLES, [grab("office"), grab("vault"), hide, grab("lobby"), grab("lobby")], ...alibis);
+    const b = round1(ROLES, [grab("office"), grab("lobby"), hide, grab("lobby"), grab("vault")], ...alibis);
     expect(a.log).not.toEqual(b.log);
     const da = caseData(viewFor(a, "p1"), new Set());
     expect(da).toEqual(caseData(viewFor(b, "p1"), new Set()));
@@ -87,8 +84,8 @@ describe("QA: leaks — design §18", () => {
 
   it("another player's private sightings and secret coins don't change your leads, ⚠ or suspect", () => {
     // Cleo (Security) watches the Vault or the Lobby; Ben pockets or hands in. Neither is in your view.
-    const a = round1(ROLES, [grab("office"), grab("vault"), grab("office"), { room: "security", duffel: 0, pocket: 0, watch: "vault" }, grab("lobby")], [["p5", "vault"]]);
-    const b = round1(ROLES, [grab("office"), grab("vault"), { room: "office", duffel: 0, pocket: 1 }, { room: "security", duffel: 0, pocket: 0, watch: "lobby" }, grab("lobby")], [["p5", "vault"]]);
+    const a = round1(ROLES, [grab("office"), grab("vault"), grab("office"), { room: "security", duffel: 0, pocket: 0, watch: "vault" }, grab("lobby")]);
+    const b = round1(ROLES, [grab("office"), grab("vault"), { room: "office", duffel: 0, pocket: 1 }, { room: "security", duffel: 0, pocket: 0, watch: "lobby" }, grab("lobby")]);
     expect(a.log).not.toEqual(b.log);
     // The round summary's "missing" is public, so compare what the ⚠ and suspect read.
     const pick = (s: GameState) => {
@@ -105,7 +102,6 @@ describe("QA: pin ids — design §15.4", () => {
     const s = round1(
       ROLES,
       [grab("office"), grab("vault"), grab("office"), grab("lobby"), grab("lobby")],
-      [["p3", "vault"], ["p5", "office"]],
       { type: "postAlibi", player: "p5", round: 1, room: "security" },
       { type: "advance", deadline: { kind: "alibi", round: 1 } },
       { type: "markAlibi", player: "p1", round: 1, target: "p5", mark: "liar" },
@@ -117,7 +113,7 @@ describe("QA: pin ids — design §15.4", () => {
   });
 
   it("ids don't change when a later alibi and a role claim arrive", () => {
-    let s = round1(ROLES, [grab("office"), grab("vault"), grab("office"), grab("lobby"), grab("lobby")], [["p3", "vault"]]);
+    let s = round1(ROLES, [grab("office"), grab("vault"), grab("office"), grab("lobby"), grab("lobby")]);
     const ids = (st: GameState) => caseData(viewFor(st, "p1"), new Set()).leads.flatMap((l) => [l.id, ...l.facts.map((f) => `${f.id}=${f.text}`)]);
     const before = ids(s);
     s = run(s, { type: "postAlibi", player: "p3", round: 1, room: "office" }, { type: "claimRole", player: "p4", role: "fixer" });
@@ -184,7 +180,6 @@ describe("QA re-run: count a player only where seen, and your own plant — desi
     const s = round1(
       ROLES,
       [{ ...grab("office"), ability: { kind: "lookout", rooms: ["lobby"] } }, grab("vault"), grab("lobby"), grab("office"), grab("lobby")],
-      [],
       { type: "postAlibi", player: "p2", round: 1, room: "vault" },
       { type: "postAlibi", player: "p3", round: 1, room: "vault" },
     );
@@ -199,7 +194,6 @@ describe("QA re-run: count a player only where seen, and your own plant — desi
     const s = round1(
       ROLES,
       [{ room: "security", duffel: 0, pocket: 0, watch: "vault" }, grab("vault"), grab("office"), grab("office"), grab("vault")],
-      [],
       { type: "postAlibi", player: "p5", round: 1, room: "lobby" },
     );
     const v = viewFor(s, "p1");

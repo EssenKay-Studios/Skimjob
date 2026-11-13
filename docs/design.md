@@ -54,7 +54,6 @@ No role is good or evil, and nothing pays anyone to be nice. Every player faces 
 | **Meeting** | A vote on a shakedown: regular, police briefing or emergency (§9). |
 | **Shakedown** | Opening one player's stash and setting what's above the share aside for the next split (§9.6). |
 | **Protected** | A player a shakedown passed against: no shakedown can target them again until the next regular meeting (§9.7). |
-| **Plan board** | The shared, non-binding board for planning each round (§10). |
 | **Alibi** | Where a player says they were in a round, true or a lie, posted in the round's alibi window (§10). |
 | **Snapshot card** | A small picture of the bank for one round: where everyone says they were, with the round's public facts (§10.2). |
 | **Lead** | One case-board entry that combines the facts about one thing in one round (§15.4). |
@@ -109,7 +108,7 @@ After the round, each player learns **who else was in their room** (none in a bl
 
 ### 4.1 Phases
 
-**Round start** (event card, §13; power-cut announcements) → **Planning** (moves, powers, perks, plan board, chat; until everyone has locked in plus a short grace, or the deadline, §17.3) → **Resolution** (§4.2) → the **alibi window** (§10.1) → a meeting if one is due (§9) → the **result window**, when an emergency can be called (§9.3) → the next round, or the end (§6.2).
+**Round start** (event card, §13; power-cut announcements) → **Planning** (moves, powers, perks, chat; until everyone has locked in plus a short grace, or the deadline, §17.3) → **Resolution** (§4.2) → the **alibi window** (§10.1) → a meeting if one is due (§9) → the **result window**, when an emergency can be called (§9.3) → the next round, or the end (§6.2).
 
 ### 4.2 End-of-round order *(owner, 4 Nov)*
 
@@ -351,21 +350,6 @@ A **police briefing** follows every raid, after that round's resolution. It vote
 - **A mark covers one player's alibi in one round** (Ben can be a Liar in round 3 and Trusted in round 4). It can be set, changed or cleared at any time, past rounds included, once that round's card is out; never on yourself or on a round not played yet.
 - **Private for good:** only the marker ever sees their marks, even after the game (a `secret:<marker>` event, §18). They show as a tick or cross on that avatar in the card and as "Your mark" lines in the case board's Leads. Bots don't mark.
 
-### 10.4 The plan board (until #258)
-
-The plan board below is removed by #258; until then it stays, without its alibi form.
-
-- **A shared board for each round,** open the whole round: a miniature of the bank where anyone drags crew avatars onto rooms ("A → Office"), and each player marks their own spot (✋). Players tap **I agree**; the board shows how many have agreed ("4 of 6 agreed") and each seat shows whether its player has.
-- **Claims:** a player's spot is a **room claim**; a **power claim** (a pledge) says where they will use their power ("Hacker → Vault"). The two have their own drawn icons (a door for a room, a bolt for a power). A claim is not a commitment and can be a bluff.
-- **The plan ledger:** under the avatars, one short line per player with their claims ("Cleo · Office · Detective → Eli"). It is linked both ways with the board: tapping a line opens that player's pop-up and marks their head on the board; tapping a head opens the pop-up and marks their line.
-- **Few words:** labels stay short; explanations sit behind "i" InfoTips (§15.6).
-- **Nothing is binding;** breaking the plan is the betrayal.
-- **Async-friendly:** the plan persists and can change until the deadline.
-- **Bots** take a sensible spot and sometimes break it.
-- **The plan is evidence:** when the round resolves, its final plan, its pledges and a compact edit history ("B moved themselves to the Vault 2 minutes before the deadline") go into the log as one public **said** snapshot (§19 seam 5), read by bots, the case board and the reveal.
-- **Build:** the live board runs server-side like chat (fast updates, not in the game log); only the per-round snapshot enters the engine.
-- **The channel:** over the game socket every seat gets the whole board live. Two things stay apart: the **proposed plan** (any seat may put any crew avatar, bots too, on a room or take it off) and each seat's **own claims** (room claim, optional power claim, agree), which only that seat sets. A room claim names a room in play; a power claim names a role with a targeted power and a room in play or another player (any role: it may be a bluff). The board takes edits from the round's start until the round resolves, the span of its deadline, but not past the deadline itself; after that it stays as it was until the next round starts a fresh, empty one. Each effective edit is also kept in a compact, bounded history (who moved whom or what, when, and how long before the deadline) for the round's snapshot. Rate-limited per seat. Nothing on it is private.
-
 ---
 
 ## 11. Roles
@@ -482,7 +466,7 @@ Each player has a private board: tags (trusted / unsure / suspicious), notes and
 
 - **Evidence only, from your own `viewFor`:** public facts (coins taken, the duffel split, missing, bells, raids, Wanted, purchases, events, emergencies called, who is protected), what you saw or learned (your sightings, Security and power results), what people said (plans, claims, alibis), the "no alibi" facts (§10.1), your own trust marks (§10.3) and what the crew did (votes, shakedowns). Nothing hidden is revealed, only shown better. Coins per room are not public, so the checks below reason from bells and who was there. Lock-in marks, presence and meeting-time housekeeping live on the seats and the meeting panel.
 - **Trust levels** (§19 seam 2): **Fact** (from the game), **Seen by you** (you or your power), **Shared evidence** ("from X's case file"), **Said** (a claim, in handwriting).
-- **One Leads list, newest first.** A lead combines the facts about one thing in one round: a room (its bell and rings, a raid and what was seized, who you saw, who claimed it, the plan), a meeting (a shakedown result, protection), the black market (an anonymous purchase), missing coins, Wanted rising, the round itself (its event card, a power cut) or the crew (role claims, votes, emergencies called). A lead with a contradiction carries a ⚠. Tapping a lead opens its facts, each with its trust level.
+- **One Leads list, newest first.** A lead combines the facts about one thing in one round: a room (its bell and rings, a raid and what was seized, who you saw, who said they were there), a meeting (a shakedown result, protection), the black market (an anonymous purchase), missing coins, Wanted rising, the round itself (its event card, a power cut) or the crew (role claims, votes, emergencies called). A lead with a contradiction carries a ⚠. Tapping a lead opens its facts, each with its trust level.
 - **⚠ "doesn't add up" warnings, never verdicts.** A contradiction is two facts in your view that can't both be true, judged only from what you can see. Each kind names the players it points at:
   - **Seen elsewhere:** you or your power saw a player in one room, but their alibi for that round says another → names that player.
   - **Not seen:** a player claims a room you or your power watched that round, and you didn't see them there → names that player. Skipped for a blacked-out room (its power cut is public, and nobody is seen there).
@@ -505,11 +489,11 @@ When the game ends, every reveal event opens (§18): every role, every move and 
 ### 15.6 UI principles
 
 - **One look everywhere:** the hand-drawn notebook style of `docs/ui-style.md`, from the shared kit and `theme.css` tokens only.
-- **One screen, no long scroll:** the bank board in the middle (coins, bells, tape, Wanted, the bank pile), a "This round" panel (your move and its preview, the plan board, the event card), and the ledger, chat and rules in tabs or drawers; bottom sheets on phones, three columns on laptops. Checked at 360, 390, 768, 1024 and 1280 px.
+- **One screen, no long scroll:** the bank board in the middle (coins, bells, tape, Wanted, the bank pile), a "This round" panel (your move and its preview, the event card), and the ledger, chat and rules in tabs or drawers; bottom sheets on phones, three columns on laptops. Checked at 360, 390, 768, 1024 and 1280 px.
 - **The move as a picture:** tap coins, drag each into the duffel or the pocket; the bell previews the rings.
 - **Info on everything:** one shared `InfoTip` (tap, hover or focus; ≥ 44 px target) on every icon, room, bell, perk, role and meter, with its line from content (§20).
 - **"This game" rulebook:** only this game's roles (per the role list), rooms, events and 3 shop items, plus a **Terms** glossary (§20.5), one tap from anywhere.
-- **Role icons:** every role has its own drawn icon (Lookout binoculars, Locksmith key, Detective magnifier, Auditor adding machine, Smooth Talker two speech bubbles, Hacker laptop, Electrician plug, Priest praying hands, Mole a mole, Fixer scissors), used everywhere the role appears: role card, roles in play, rulebook, plan-board claims, case board and power buttons.
+- **Role icons:** every role has its own drawn icon (Lookout binoculars, Locksmith key, Detective magnifier, Auditor adding machine, Smooth Talker two speech bubbles, Hacker laptop, Electrician plug, Priest praying hands, Mole a mole, Fixer scissors), used everywhere the role appears: role card, roles in play, rulebook, case board and power buttons.
 - **Board motion:** a raided, taped-off room shows a constant siren, and its bell is off until it reopens (§5.3); the Vault door swings slowly shut and open; the Office screen cycles and its desk lamp flicks off and on; a security camera pans across the Lobby. All of it stops under `prefers-reduced-motion` (doors open, lamp on, camera still).
 - **Crowded rooms:** avatars shrink to fit their room, so a room holds every visitor (6 of 12 in the Vault).
 - **Grab:** the control for choosing your coins is labelled "Grab".
@@ -565,7 +549,7 @@ Every event has one visibility; `viewFor(state, playerId)` returns only what tha
 
 | Level | Who sees it | R7 contents |
 |---|---|---|
-| **Public** | Everyone, live | Every bell (except a hidden one, and a taped-off room's, which is off), rings and raids, taped rooms, Wanted, the bank count; each round's taken / duffel / missing / honesty / share / kitty; lock-in marks; event cards; power-cut announcements (no source); anonymous purchases; meeting slots, results and votes (per the visibility setting); shakedown results; "a shakedown fell through"; who is protected (§9.7); emergencies called, with the caller, and the pool left (§9.3); said entries (plan snapshots, pledges, alibis, claims); the "no alibi" facts at each alibi window's close (§10.1) |
+| **Public** | Everyone, live | Every bell (except a hidden one, and a taped-off room's, which is off), rings and raids, taped rooms, Wanted, the bank count; each round's taken / duffel / missing / honesty / share / kitty; lock-in marks; event cards; power-cut announcements (no source); anonymous purchases; meeting slots, results and votes (per the visibility setting); shakedown results; "a shakedown fell through"; who is protected (§9.7); emergencies called, with the caller, and the pool left (§9.3); said entries (alibis, role claims); the "no alibi" facts at each alibi window's close (§10.1) |
 | **Private** | One player, until the reveal | Your role, move, split and stash; who was in your room; Security, Lookout, Tail, Detective, Auditor and Priest results; Inside tip; perks you hold; your Bail choice; "already done this round" when another copy of your role used it on the same target first (the Priest learns 0, §11.4); "your sins were absolved"; the Hacker's real bell |
 | **Reveal** | Everyone, at the end | Every private event: roles, every move and split, every stash over time, every power use (the Mole's ring, the Hacker's hide, Plant evidence), every buyer, every Bail choice; the seed |
 | **Secret** | Only that player, forever | Secret-mode ballots (except one seen through Check ballot); trust marks, seen only by the marker (§10.3) |
@@ -591,7 +575,7 @@ R7 builds these ten seams (seams, not stub code; `docs/advanced.md` is additive 
 2. **Case-board trust levels are generic data** ("Fact", "Seen by you", "Shared evidence", "Said"); an entry's level comes from its event's source, with its badge from content.
 3. **Rulesets are content.** A game names its ruleset (`simplified`; Learn the game is another); a ruleset only selects content (fact visibility, rooms, roles, perks, events). Engine and UI never branch on its name.
 4. **Roles, perks and events register by id:** a content entry plus one handler, **including any role-specific win rule** (the Mole's and Fixer's live in their handlers, not in the end-of-game code).
-5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records will be **one generic record command** whose per-role format comes from content, so a new role needs no new command, event type or screen; records show in the case board through seam 2. R7 builds no record command.
+5. **Player statements are one "said" event type** (alibis, role claims). Advanced's records will be **one generic record command** whose per-role format comes from content, so a new role needs no new command, event type or screen; records show in the case board through seam 2. R7 builds no record command.
 6. **Bots read facts only through `viewFor`.**
 7. **Holder secrecy and result routing are content settings per role;** R7 builds only "secret holder, private result".
 8. **The deal reads its counts from content** (how many roles of which kinds, by crew size, and how many copies a role may have).
@@ -600,12 +584,12 @@ R7 builds these ten seams (seams, not stub code; `docs/advanced.md` is additive 
 
 ### 19.3 Bots and the simulator
 
-- **Bots are players:** they get only `viewFor()`, emit the same commands, use their own seeded RNG, and rebuild suspicion from their view each time. Personalities (Honest, Opportunist, Greedy, Cautious, Random; the Mole and Fixer play to their win; each has a Bail-use and an emergency-call policy) are parameter sets in `packages/bots`. Bots use the plan board and claims, and post their alibis in the alibi window from their own view (their personality decides when they lie); they don't mark alibis and they don't chat.
+- **Bots are players:** they get only `viewFor()`, emit the same commands, use their own seeded RNG, and rebuild suspicion from their view each time. Personalities (Honest, Opportunist, Greedy, Cautious, Random; the Mole and Fixer play to their win; each has a Bail-use and an emergency-call policy) are parameter sets in `packages/bots`. Bots claim roles and post their alibis in the alibi window from their own view (their personality decides when they lie); they don't mark alibis and they don't chat.
 - **The simulator** (`apps/sim`) runs batches of all-bot games by crew size, bot mix, overrides and seed, and reports the gates of §21 (`docs/testing.md`).
 
 ### 19.4 System
 
-One authoritative Node server (engine, event log in Postgres, scheduler, bots, chat, the plan board's live channel) serves the web app, the API and the sockets on one origin. Clients are thin: they read `viewFor` JSON, and the web app imports engine and content for types, names, numbers and texts only.
+One authoritative Node server (engine, event log in Postgres, scheduler, bots, chat) serves the web app, the API and the sockets on one origin. Clients are thin: they read `viewFor` JSON, and the web app imports engine and content for types, names, numbers and texts only.
 
 ---
 
@@ -692,8 +676,6 @@ Bust (every role): "On a bust, only the Rooftop gets away."
 | Missing | Coins taken this round that never reached the duffel. Nobody knows whose. |
 | Taped off | A raided room stays closed for a couple of rounds. The sign counts down. |
 | Emergency | The crew shares a few emergency meetings. Anyone can call one after a round's result. |
-| Plan board | Drag the crew onto rooms. Nothing is binding. |
-| I agree | Tap when the plan suits you. Anyone can still break it. |
 | Where were you? | After each round, say which room you were in, true or a lie. One alibi a round, and you can't change it. |
 | Snapshot card | Where everyone says they were this round, with what everyone saw: bells, raids, the event and missing coins. |
 | Your marks | Mark any crook's alibi Trusted or Liar for your own notes. Only you see your marks. |

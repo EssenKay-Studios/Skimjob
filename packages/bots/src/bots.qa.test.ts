@@ -46,7 +46,6 @@ function recording(agents: readonly Agent[]) {
       for (const command of out) sent.push({ view, command });
       return out;
     },
-    spot: (view) => a.spot?.(view) ?? null,
   }));
   return { sent, wrapped };
 }
@@ -165,7 +164,6 @@ describe("QA: bots never read the state, only their view — design §17.3", () 
         createBots(c.players, rotate(1), "json").map((a): Agent => ({
           player: a.player,
           act: (v) => a.act(JSON.parse(JSON.stringify(v)) as PlayerView),
-          spot: (v) => a.spot?.(JSON.parse(JSON.stringify(v)) as PlayerView) ?? null,
         })),
       );
       expect(JSON.stringify(detached.state.log)).toBe(JSON.stringify(normal.state.log));
@@ -240,11 +238,6 @@ describe("QA: vandalising a view doesn't touch the game — design §17.3", () =
         player: a.player,
         act: (view) => {
           const out = a.act(view);
-          vandalise(view);
-          return out;
-        },
-        spot: (view) => {
-          const out = a.spot?.(view) ?? null;
           vandalise(view);
           return out;
         },

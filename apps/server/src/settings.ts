@@ -130,5 +130,3 @@ export const BOARD_RATE = { writes: 20, windowMs: 10_000 } as const;
 export const PINS_MAX = 100;
 export const PIN_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,80}$/;
 export const SEEN_RATE = { writes: 60, windowMs: 10_000 } as const;
-/** Plan board edits per window per seat (design §10): a drag or a tap each. */
-export const PLAN_RATE = { writes: 20, windowMs: 10_000 } as const;

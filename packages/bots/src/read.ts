@@ -55,17 +55,13 @@ export function saidOf<K extends Statement["kind"]>(view: PlayerView, kind: K): 
   return ofType(view.ledger, "said").flatMap((e) => (e.statement.kind === kind ? [e.statement as Extract<Statement, { kind: K }>] : []));
 }
 
-/**
- * Where each player said they were, per round: their room claim on the round's
- * plan board, replaced by an alibi if they posted one (design §10).
- */
+/** Where each player said they were, per round: their alibi (design §10). */
 export function saidRooms(view: PlayerView): Map<number, Map<PlayerId, RoomId>> {
   const out = new Map<number, Map<PlayerId, RoomId>>();
   const set = (round: number, player: PlayerId, room: RoomId) => {
     if (!out.has(round)) out.set(round, new Map());
     out.get(round)?.set(player, room);
   };
-  for (const p of saidOf(view, "plan")) for (const e of p.plan.entries) if (e.room !== null) set(p.round, e.player, e.room);
   for (const a of saidOf(view, "alibi")) set(a.round, a.player, a.room);
   return out;
 }

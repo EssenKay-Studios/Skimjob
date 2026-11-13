@@ -22,13 +22,9 @@
 //   replied to like a command; the message goes out as `{ chat }` (a DM only to
 //   its two players, others get `{ dmNotice }` if the host left notices on).
 //   On connect, after the first view: `{ chatHistory }`.
-// - The plan board (S3b.4, plan.ts): client `{ plan: { place?, room?, power?, agree? }, id? }`
-//   places any avatar on the proposed plan or sets the sender's own claims (replied to like a command); everyone then gets
-//   the whole board as `{ plan }`, only if it changed for them. It is also sent
-//   after the first view and again when a new round starts it empty.
-// - Per socket the order is always: first view, `{ chatHistory }`, `{ plan }`,
-//   `{ presence }`. Chat, DM notices, plan and presence updates wait until a socket
-//   has had all four (`Conn.ready`); nothing is lost, as chat and plan edits are
+// - Per socket the order is always: first view, `{ chatHistory }`,
+//   `{ presence }`. Chat, DM notices and presence updates wait until a socket
+//   has had all three (`Conn.ready`); nothing is lost, as chat messages are
 //   made under the game lock the first view is sent under, and presence is sent whole.
 // - Presence (owner decision, 2 Nov): `{ presence }`, each human seat's
 //   `online` (a socket open now) and `lastSeen` (epoch ms, kept in
@@ -65,7 +61,6 @@ import { createChat, parseChatRequest, type ChatHistory, type ChatMessage, type 
 import type { Clock } from "./clock";
 import type { Db } from "./db";
 import { HttpError, playerIdOf } from "./lobby";
-import { createPlan, parsePlanEdit, type PlanBoard } from "./plan";
 import { DEADLINE_SKIPPED, type Timer } from "./scheduler";
 import type { GameStore } from "./store";
 
@@ -129,7 +124,6 @@ export type ServerMessage =
   | { readonly chat: ChatMessage }
   | { readonly dmNotice: DmNotice }
   | { readonly chatHistory: ChatHistory }
-  | { readonly plan: PlanBoard }
   | { readonly ok: true; readonly id?: string | number }
   | { readonly rejected: true; readonly reason: string; readonly id?: string | number };
 
@@ -197,10 +191,8 @@ interface Conn {
   last: string | null;
   /** Messages waiting for the game's lock. */
   queued: number;
-  /** It has had its first view, chat history, plan board and presence; only then does it get chat, plan and presence updates. */
+  /** It has had its first view, chat history and presence; only then does it get chat and presence updates. */
   ready: boolean;
-  /** The plan board text last sent, so an unchanged one isn't sent again. */
-  plan: string | null;
   /** When its session expires (epoch ms, on the server's clock); the socket is closed then. */
   readonly expiresAt: number;
   /** The presence text last sent, so an unchanged one isn't sent again. */
@@ -239,17 +231,17 @@ export function parseClientMessage(
 const messageId = (raw: unknown): string | number | undefined =>
   (typeof raw === "string" && raw.length <= 64) || (typeof raw === "number" && Number.isFinite(raw)) ? raw : undefined;
 
-/** A `{ <field>, id? }` message's parts (`field` is "chat" or "plan"), or null if the text isn't one (then it's a command). */
-function fieldPart(text: string, field: "chat" | "plan"): { body: unknown; id?: string | number } | null {
+/** A `{ chat, id? }` message's parts, or null if the text isn't one (then it's a command). */
+function chatPart(text: string): { body: unknown; id?: string | number } | null {
   let msg: unknown;
   try {
     msg = JSON.parse(text);
   } catch {
     return null;
   }
-  if (typeof msg !== "object" || msg === null || Array.isArray(msg) || !Object.hasOwn(msg, field)) return null;
+  if (typeof msg !== "object" || msg === null || Array.isArray(msg) || !Object.hasOwn(msg, "chat")) return null;
   const id = messageId((msg as { id?: unknown }).id);
-  const body = (msg as Record<string, unknown>)[field];
+  const body = (msg as Record<string, unknown>).chat;
   return id === undefined ? { body } : { body, id };
 }
 
@@ -292,7 +284,6 @@ export function originAllowed(origin: string | undefined, host: string | undefin
 export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Sessions, options: LiveOptions): Live {
   const allowedOrigins = options.allowedOrigins ?? [];
   const chat = createChat(db, options.clock);
-  const plan = createPlan(db, options.clock);
   const conns = new Map<string, Set<Conn>>();
   const bots = new Map<string, readonly { readonly player: PlayerId; readonly personality: PersonalityId }[]>();
   /** Per game, the view text each bot last acted on. */
@@ -370,12 +361,6 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           state = r.state;
           changed ||= r.changed;
         }
-        // design §10: with its move, the bot takes its spot on the round's plan board (everyone sees it as the board goes out).
-        const spot = agent.spot(viewFor(state, seat.player));
-        if (spot) {
-          const r = await plan.edit(gameId, state, seat.player, { place: { player: seat.player, room: spot.room }, room: spot.room, power: spot.power, agree: true });
-          if (!r.ok) app.log.warn({ gameId, player: seat.player, reason: r.reason }, "bot plan edit refused");
-        }
         // Kept across restarts (after its commands), so a rebuilt server doesn't act again on a view this bot already acted on.
         await db.query("update seats set bot_seen = $3 where game_id = $1 and player_id = $2", [gameId, seat.player, hash]);
       }
@@ -417,25 +402,12 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
     conn.last = text;
     conn.socket.send(JSON.stringify({ view, timers, control, now: options.clock.now() }));
   };
-  /** Sends `conn` the plan board, if it differs from the one it last got. */
-  const sendPlan = (conn: Conn, board: PlanBoard) => {
-    const text = JSON.stringify(board);
-    if (text === conn.plan || conn.socket.readyState !== conn.socket.OPEN) return;
-    conn.plan = text;
-    conn.socket.send(JSON.stringify({ plan: board }));
-  };
-  /** Sends every ready socket in the game the plan board, if it changed for it (a new round starts it empty). */
-  const pushPlan = async (gameId: string, state: GameState) => {
-    const board = await plan.board(gameId, state);
-    for (const conn of conns.get(gameId) ?? []) if (conn.ready) sendPlan(conn, board);
-  };
   const push = async (gameId: string, state: GameState) => {
     const set = conns.get(gameId);
     if (!set || set.size === 0) return;
     const timers = await timersOf(gameId);
     const control = await controlOf(gameId, state);
     for (const conn of set) sendView(conn, state, timers, control);
-    await pushPlan(gameId, state).catch((err: unknown) => app.log.error({ err, gameId }, "plan board update failed"));
   };
   /** A crew message to everyone; a DM to its two players only, and its notice (if any) to the rest. design §12.1 */
   const deliver = (gameId: string, message: ChatMessage, notice: DmNotice | null) => {
@@ -501,13 +473,11 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
     return settled;
   };
 
-  /** Applies a system command; the caller holds the game's lock. A round's deadline carries its plan board (design §10). */
+  /** Applies a system command; the caller holds the game's lock. */
   const runSystem = async (gameId: string, command: SystemCommand) => {
     const state = await store.load(gameId);
     if (!state) throw new Error(`game ${gameId} has not started`);
-    const deadline = command.type === "advance" ? command.deadline : null;
-    const full: SystemCommand = deadline?.kind === "round" ? { type: "advance", deadline: { ...deadline, plan: await plan.snapshot(gameId, state) } } : command;
-    const r = await apply(gameId, state, full);
+    const r = await apply(gameId, state, command);
     if (!r.ok) throw new SystemRefused(`system command refused: ${JSON.stringify(command)}: ${r.reason}`);
     return afterChange(gameId, r.state);
   };
@@ -584,7 +554,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
       (socket, req) => {
         const gameId = req.params.id;
         const seat = seatOf.get(req)!;
-        const conn: Conn = { player: seat.player, socket, token: req.cookies[SESSION_COOKIE] ?? "", last: null, queued: 0, ready: false, plan: null, presence: null, expiresAt: seat.expiresAt };
+        const conn: Conn = { player: seat.player, socket, token: req.cookies[SESSION_COOKIE] ?? "", last: null, queued: 0, ready: false, presence: null, expiresAt: seat.expiresAt };
         /** Closes the socket if its session has expired; true if it did. */
         const expired = () => {
           if (options.clock.now() < conn.expiresAt) return false;
@@ -620,7 +590,6 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
           if (!state) return;
           sendView(conn, state, await timersOf(gameId), await controlOf(gameId, state));
           send(conn, { chatHistory: await chat.history(gameId, conn.player) });
-          sendPlan(conn, await plan.board(gameId, state));
           // Presence: this socket gets it now (always, even if a broadcast raced it); everyone else if it changed (the seat came online).
           await seen(gameId, conn.player).catch(presenceFailed(gameId));
           const presence = await presenceOf(gameId).catch((err: unknown) => (presenceFailed(gameId)(err), {}));
@@ -636,10 +605,9 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
             return;
           }
           conn.queued++;
-          const chatMsg = isBinary ? null : fieldPart(String(data), "chat");
-          const planMsg = isBinary || chatMsg ? null : fieldPart(String(data), "plan");
+          const chatMsg = isBinary ? null : chatPart(String(data));
           const parsed = isBinary ? { ok: false as const, reason: "messages must be text" } : parseClientMessage(String(data), conn.player);
-          const msgId = chatMsg ? chatMsg.id : planMsg ? planMsg.id : parsed.id;
+          const msgId = chatMsg ? chatMsg.id : parsed.id;
           const id = msgId === undefined ? {} : { id: msgId };
           let replied = false;
           const reply = (msg: ServerMessage) => {
@@ -658,17 +626,6 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
                 if (!r.ok) return reply({ rejected: true, reason: r.reason, ...id });
                 reply({ ok: true, ...id });
                 return deliver(gameId, r.value.message, r.value.notice);
-              }
-              if (planMsg) {
-                const state = await store.load(gameId);
-                if (!state) return reply({ rejected: true, reason: "game not found", ...id });
-                const edit = parsePlanEdit(planMsg.body, state, conn.player);
-                if (!edit.ok) return reply({ rejected: true, reason: edit.reason, ...id });
-                // The actor is the socket's seat, never the client's say. design §17.2
-                const r = await plan.edit(gameId, state, conn.player, edit.value);
-                if (!r.ok) return reply({ rejected: true, reason: r.reason, ...id });
-                reply({ ok: true, ...id });
-                return pushPlan(gameId, state);
               }
               if (!parsed.ok) return reply({ rejected: true, reason: parsed.reason, ...id });
               const state = await store.load(gameId);

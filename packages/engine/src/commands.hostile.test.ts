@@ -152,12 +152,6 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
   }
   const meetingIds = [s.scheduledMeeting?.meetingId, s.pendingEmergency?.meetingId, s.meeting?.id, s.pendingShakedown?.meetingId];
   out.push({ type: "advance", deadline: { kind: "round", round: s.round } });
-  // design §10: the round deadline with the plan board as it resolves (every field fuzzed).
-  const plan = {
-    entries: [{ player: "p0", placed: "lobby", room: "lobby", power: { role: "hacker", target: "vault" }, agreed: true }],
-    history: [{ actor: "p1", kind: "place", subject: "p0", value: "lobby", target: null, msBeforeDeadline: 1000 }],
-  };
-  out.push({ type: "advance", deadline: { kind: "round", round: s.round, plan } });
   out.push({ type: "advance", deadline: { kind: "alibi", round: s.resolvedRound } });
   out.push({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
   for (const kind of ["openMeeting", "closeMeeting", "resolveShakedown"]) {
@@ -172,7 +166,7 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
 /** Fields whose strings are free text the engine only stores and compares (`slot`, design §9.4): any short string is fine there. */
 const FREE_TEXT = new Set(["slot"]);
 /** Fields a command may leave out (a move without a power). */
-const OPTIONAL = new Set(["move.ability", "deadline.plan"]);
+const OPTIONAL = new Set(["move.ability"]);
 /** Hostile values that are valid in these fields (design §10: nobody placed, no claim, no deadline, an empty board or history, a cleared trust mark). */
 const isEmptyList = (h: unknown) => Array.isArray(h) && h.length === 0;
 const ALSO_VALID: ReadonlyMap<string, (h: unknown) => boolean> = new Map([

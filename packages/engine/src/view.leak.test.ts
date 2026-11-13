@@ -152,12 +152,7 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       if (i === 0) step({ type: "submitMove", player: id, move: fullGrab("lobby") }); // later changed
       step({ type: "submitMove", player: id, move });
     });
-    // design §10: the plan board as the round resolves: two seats' claims and pledges (a bluff among them) and the edits.
-    const plan = {
-      entries: ids.slice(0, 2).map((id, i) => ({ player: id, placed: s.rooms[i], room: s.rooms[round % s.rooms.length], power: i ? { role: "hacker", target: "vault" } : null, agreed: i === 0 })),
-      history: [{ actor: ids[1], kind: "place", subject: ids[0], value: s.rooms[0], target: null, msBeforeDeadline: 60_000 * round }],
-    };
-    step({ type: "advance", deadline: { kind: "round", round, plan } });
+    step({ type: "advance", deadline: { kind: "round", round } });
     // design §11.3: a role claim (a bluff, maybe) once in the game.
     if (round === 1 && !over()) step({ type: "claimRole", player: ids[1], role: "lookout" });
     // design §10: alibis only in the round's alibi window; a few seats post none and are shown in their real room as it closes.
@@ -421,7 +416,7 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
   it("the games above reach every info, vote, role and event-card event (design §11, §13)", () => {
     for (const t of ["shakedownPending", "shakedownCancelled", "said", "roleListShown", "shopDealt"]) expect(seenTypes, t).toContain(t);
     // design §10, §11.3: every kind of said statement.
-    for (const k of ["plan", "alibi", "role"]) expect(seenSaid, k).toContain(k);
+    for (const k of ["alibi", "role"]) expect(seenSaid, k).toContain(k);
     for (const t of ["alibiWindowClosed", "alibiMarked"]) expect(seenTypes, t).toContain(t);
     // design §5: bells, raids and cooling.
     for (const t of ["bellsRung", "roomRaided", "bellsCooled"]) expect(seenTypes, t).toContain(t);

@@ -119,7 +119,7 @@ describe("QA alibis — design §10", () => {
 
   it("is public and carries nothing but player, round and room (extra fields dropped, no RNG draw)", () => {
     const s = run(createGame(config(3)), ROUND);
-    const r = handleCommand(s, alibi("p1", "office", { secret: "mole", pocket: 9, visibility: { kind: "private", player: "p1" }, statement: { kind: "plan" } }));
+    const r = handleCommand(s, alibi("p1", "office", { secret: "mole", pocket: 9, visibility: { kind: "private", player: "p1" }, statement: { kind: "role" } }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.events).toEqual([{ type: "said", visibility: PUBLIC, statement: { kind: "alibi", player: "p1", round: 1, room: "office" } }]);

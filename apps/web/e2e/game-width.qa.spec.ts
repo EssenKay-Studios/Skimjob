@@ -57,12 +57,8 @@ for (const viewport of [
     });
     expect(bank.width).toBeGreaterThanOrEqual(Math.min(600, room) - 0.5);
     expect(Math.abs(bank.x - board.x - (board.x + board.width - bank.x - bank.width))).toBeLessThanOrEqual(1);
-    // Whenever the drawing is above its floor, the whole board and the Plan heading are on screen.
-    if (bank.width > 600.5) {
-      expect(board.y + board.height).toBeLessThanOrEqual(viewport.height);
-      const plan = await box(page, ".shell__plan h2");
-      expect(plan.y + plan.height).toBeLessThanOrEqual(viewport.height);
-    }
+    // Whenever the drawing is above its floor, the whole board is on screen.
+    if (bank.width > 600.5) expect(board.y + board.height).toBeLessThanOrEqual(viewport.height);
     await ctx.close();
   });
 }

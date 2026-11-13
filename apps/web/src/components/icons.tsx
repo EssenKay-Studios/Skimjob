@@ -30,16 +30,6 @@ export function Door() {
   );
 }
 
-/** A power claim (a pledge) on the plan board; the Door is a room claim. design §10 */
-export function Bolt() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M12.4 3.4 6 11.2h4.4l-1 5.6 6.2-8h-4.4z" fill="var(--gold)" transform="translate(.8 .8)" />
-      <path d="M11.6 2.2 4.6 11.2h4.6l-1.2 6.6 7.4-9.2h-4.6z" {...S} />
-    </svg>
-  );
-}
-
 export function ArrowBack() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">

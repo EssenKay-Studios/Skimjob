@@ -167,8 +167,6 @@ export const TIPS = {
   missing: { name: "Missing", text: "Coins taken this round that never reached the duffel. Nobody knows whose." },
   tapedOff: { name: "Taped off", text: "A raided room stays closed for a couple of rounds. The sign counts down." },
   emergency: { name: "Emergency", text: "The crew shares a few emergency meetings. Anyone can call one after a round's result." },
-  planBoard: { name: "Plan board", text: "Drag the crew onto rooms. Nothing is binding." },
-  iAgree: { name: "I agree", text: "Tap when the plan suits you. Anyone can still break it." },
   alibiPopup: { name: "Where were you?", text: "After each round, say which room you were in, true or a lie. One alibi a round, and you can't change it." },
   snapshot: { name: "Snapshot card", text: "Where everyone says they were this round, with what everyone saw: bells, raids, the event and missing coins." },
   trustMarks: { name: "Your marks", text: "Mark any crook's alibi Trusted or Liar for your own notes. Only you see your marks." },
