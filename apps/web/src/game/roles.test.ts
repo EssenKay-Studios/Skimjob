@@ -126,12 +126,12 @@ describe("the This game rulebook — design §12, §13, §15.6, §20", () => {
     expect(eventsNote).toBe(`from round 2 · ${EVENT_CHANCE.in} in ${EVENT_CHANCE.of}`);
   });
 
-  it("reads every number from content and the game's overrides (4th bulb, Wanted 3, honesty ⅔, the pool)", () => {
+  it("reads every number from content and the game's overrides (5th bulb, Wanted 3, honesty ⅔, the pool)", () => {
     const rows = Object.fromEntries(numberRows(game()).map((r) => [r.label, r.value]));
     expect(rows).toEqual({
       Bank: `${4 * BANK_JOB.bank.coinsPerPlayer} coins (${BANK_JOB.bank.coinsPerPlayer} a player)`,
       Rounds: `up to ${BANK_JOB.roundCap}`,
-      Bell: "4 bulbs; the 4th is a raid",
+      Bell: "5 bulbs; the 5th is a raid",
       Raid: `seized grab, closed ${BANK_JOB.alarm.tapedRounds} rounds, Wanted +1`,
       Wanted: "3 stars is a bust",
       "Honesty line": "⅔ of what's taken",
@@ -139,8 +139,8 @@ describe("the This game rulebook — design §12, §13, §15.6, §20", () => {
       Emergencies: `${EMERGENCY_POOL[4]} for the crew (3–6 players)`,
     });
     // A game with other numbers shows them: the tips and the rulebook never say "4th" or "3" by hand.
-    const odd = numberRows(game({ contentOverrides: { alarm: { bulbs: 5 } } }));
-    expect(odd.find((r) => r.label === "Bell")!.value).toBe("5 bulbs; the 5th is a raid");
+    const odd = numberRows(game({ contentOverrides: { alarm: { bulbs: 6 } } }));
+    expect(odd.find((r) => r.label === "Bell")!.value).toBe("6 bulbs; the 6th is a raid");
     expect(odd.find((r) => r.label === "Wanted")!.value).toBe("3 stars is a bust");
   });
 
@@ -156,11 +156,11 @@ describe("the This game rulebook — design §12, §13, §15.6, §20", () => {
   });
 
   it("reads the Terms from the game's own numbers, not content's defaults", () => {
-    const ui = html(createElement(Rulebook, { view: game({ contentOverrides: { alarm: { bulbs: 5, bustStars: 4 } } }) }));
-    expect(ui).toContain("The 5th bulb lights");
+    const ui = html(createElement(Rulebook, { view: game({ contentOverrides: { alarm: { bulbs: 6, bustStars: 4 } } }) }));
+    expect(ui).toContain("The 6th bulb lights");
     expect(ui).toContain("Four is a bust.");
     expect(ui).not.toContain("Three is a bust");
-    expect(ui).not.toContain("The 4th bulb");
+    expect(ui).not.toContain("The 5th bulb");
   });
 
   it("has the Terms glossary", () => {

@@ -52,7 +52,7 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
    | Room | Coins per visitor | Noise | Players |
    |---|---|---|---|
    | Lobby | 1 | Silent | All |
-   | Office | 2 | The 1st coin is silent; each extra coin rings once | All |
+   | Office | 2 | Every coin rings once | All |
    | Deposit boxes | 2 | As the Office | 5+ |
    | Manager's office | 2 | As the Office | 9+ |
    | Vault | 3 | Every coin rings (or the 1st is silent: the simulator picks) | All |
@@ -66,18 +66,18 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 
 ### A2. Bells, raids and Wanted (replaces Heat 0–100)
 
-- **Every room has an alarm bell with 4 bulbs** [tunable], public to everyone (except a room the Hacker hides this round, and a taped-off room, whose bell is off until it reopens).
+- **Every room has an alarm bell with 5 bulbs** [tunable], public to everyone (except a room the Hacker hides this round, and a taped-off room, whose bell is off until it reopens).
 - **Rings add bulbs:** each ring lights one bulb in that room. Rings from everyone in the room add up.
 - **Cooling, at the end of every round** (after the raid check, the bust check and the split; the full order is below):
   1. every room turns off 1 bulb;
   2. then **each player on the Rooftop automatically cools the hottest room by 1 more bulb**. Several Rooftop players cool one after another, each time the room that is hottest at that moment. Ties are broken at random, with the game's seeded randomness. Nobody chooses a room; it's what a crew lying low would do anyway.
-- **Raid:** when a room's 4th bulb lights, the police raid it:
+- **Raid:** when a room's 5th bulb lights, the police raid it:
   - everyone inside loses that round's grab (the police seize it; it leaves the game). Seizure happens **before** the split, so seized coins are never pocketed or handed in;
   - the room is taped off for 2 rounds [tunable];
   - **Wanted** goes up 1 star;
   - a **police briefing** meeting is called.
 - **Wanted 3 stars** [tunable] = **bust**: the heist ends at once, before that round's split (who escapes: A5).
-- **End-of-round order** *(owner, 4 Nov)*: moves resolve → rings light bulbs → **raid check** (a 4th bulb: seize that room's grabs, tape for 2 rounds, Wanted +1) → **bust check** (Wanted 3: the game ends at once and that round's duffel is **not** split) → **split** of the duffel and kitty (only if no bust) → **cooling** (−1 in every room, then each Rooftop player cools the hottest). Raids come before cooling, so the Rooftop can't save a room in the same round, and the bell preview stays exact. A police briefing follows a raid.
+- **End-of-round order** *(owner, 4 Nov)*: moves resolve → rings light bulbs → **raid check** (a 5th bulb: seize that room's grabs, tape for 2 rounds, Wanted +1) → **bust check** (Wanted 3: the game ends at once and that round's duffel is **not** split) → **split** of the duffel and kitty (only if no bust) → **cooling** (−1 in every room, then each Rooftop player cools the hottest). Raids come before cooling, so the Rooftop can't save a room in the same round, and the bell preview stays exact. A police briefing follows a raid.
 - **Crew size:** bigger crews get more rooms (5+, 9+). If big crews still get raided too often, the raid line rises behind the scenes; players only see a strip of bulbs.
 - **No room has a visitor limit,** the Rooftop included: a limit would reveal secret moves ("the Office is full") and reward whoever locks in first, which is unfair in async games.
 

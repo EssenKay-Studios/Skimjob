@@ -115,7 +115,7 @@ describe("the bank empties — design §6.1, §6.2, §3.2", () => {
   });
 
   it("an empty bank ends the game even when every coin of the last round was seized", () => {
-    // 3 × 2 = 6 coins; two Vault grabs take all 6, ring 6 and raid (4 bulbs). Nothing taken counts, so honesty reads full.
+    // 3 × 2 = 6 coins; two Vault grabs take all 6, ring 6 and raid (5 bulbs). Nothing taken counts, so honesty reads full.
     const s = round(game(3, [], { bank: { coinsPerPlayer: 2 } }), [["vault", 3], ["vault", 3], ["rooftop", 0]]);
     expect(s.bank).toBe(0);
     expect(s.seized).toBe(6);

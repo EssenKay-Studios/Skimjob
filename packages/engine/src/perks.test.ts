@@ -100,7 +100,7 @@ describe("the black market — design §12", () => {
 });
 
 describe("buying a perk — design §7.6, §7.7, §12", () => {
-  // Round 1: p0 pockets the Vault's 3 (no raid: 3 of the bell's 4 bulbs), p1 and p2 hand in a Lobby coin each.
+  // Round 1: p0 pockets the Vault's 3 (no raid: 3 of the bell's 5 bulbs), p1 and p2 hand in a Lobby coin each.
   const rich = () => run(game(3, { contentOverrides: { roundCap: 2 } }), mv("p0", "vault", 3), mv("p1", "lobby"), mv("p2", "lobby"), ...NEXT);
 
   it("the coins leave the buyer's stash and the game; logged without a name as planning closes; who bought it opens at the reveal", () => {
@@ -227,7 +227,7 @@ describe("Soft shoes: next round, your coins don't ring at all — design §5.2,
   it("the buyer's grab rings nothing the round after; everyone else's still rings", () => {
     let s = run(withStash(game(), "p0", 2), buy("p0", { kind: "softShoes" }), mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"), ...NEXT);
     const before = s;
-    // 3 + 3 rings would raid the Vault (4 bulbs); the buyer's 3 are silent.
+    // 3 + 3 rings would raid the Vault (5 bulbs); the buyer's 3 are silent.
     s = run(s, mv("p0", "vault"), mv("p1", "vault"), mv("p2", "lobby"), ROUND);
     expect(ofType(since(before, s), "bellsRung")[0]?.bells.vault).toBe(3);
     expect(ofType(since(before, s), "roomRaided")).toEqual([]);
@@ -246,7 +246,7 @@ describe("Blackout: next round, one room goes dark, announced like a power cut �
     const events = since(before, s);
     expect(ofType(events, "roomSighting").filter((e) => e.room === "office").map((e) => e.others)).toEqual([[], []]);
     expect(ofType(events, "roomWatched").map((e) => [e.seen, e.offline])).toEqual([[[], true]]);
-    expect(ofType(events, "bellsRung")[0]?.bells.office).toBe(2);
+    expect(ofType(events, "bellsRung")[0]?.bells.office).toBe(4);
   });
 
   it("leak: a round's cuts are announced in the game's room order, whatever their source (perk or Electrician) or the order bought — design §11.1, §12, §18", () => {

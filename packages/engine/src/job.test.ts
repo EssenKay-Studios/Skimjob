@@ -26,14 +26,16 @@ describe("rooms in play — design §3.1", () => {
 });
 
 describe("rings — design §3.1, §5.2", () => {
-  it("each coin after the room's quiet ones rings once", () => {
+  it("every coin rings once, except in the Lobby; the Locksmith's and Soft shoes' rings are 0", () => {
     const ring = (room: string, coins: number) => ringsOf(roomDef(bank, room), coins);
-    // The Lobby is silent; the Office's 1st coin is silent; every Vault coin rings.
+    // The Lobby is silent; every coin elsewhere rings once.
     expect(ring("lobby", 1)).toBe(0);
-    expect([1, 2].map((n) => ring("office", n))).toEqual([0, 1]);
-    for (const room of ["depositBoxes", "managersOffice", "serverRoom"]) expect(ring(room, 2), room).toBe(1);
+    expect([1, 2].map((n) => ring("office", n))).toEqual([1, 2]);
+    for (const room of ["depositBoxes", "managersOffice", "serverRoom"]) expect(ring(room, 2), room).toBe(2);
     expect([1, 2, 3].map((n) => ring("vault", n))).toEqual([1, 2, 3]);
     // Nothing grabbed, nothing rung (Security, the Rooftop, a cut grab).
     for (const room of ["security", "rooftop", "vault", "office"]) expect(ring(room, 0), room).toBe(0);
+    // The Locksmith's coins each ring one fewer (so none); Soft shoes ring nothing.
+    for (const room of ["office", "vault", "depositBoxes", "managersOffice", "serverRoom"]) expect(ringsOf(roomDef(bank, room), 3, 1), room).toBe(0);
   });
 });

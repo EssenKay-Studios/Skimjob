@@ -30,7 +30,7 @@ describe("reveal summary in whole bot games — design §15.5", () => {
       [5, "rv-b"],
       [8, "rv-c"],
       [12, "rv-d"],
-      [5, "rv-5-7"],
+      [5, "rv-5-12"],
       [8, "rv-8-4"],
     ] as const) {
       const state = play(config(n, seed));

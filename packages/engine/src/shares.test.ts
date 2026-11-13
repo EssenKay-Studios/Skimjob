@@ -69,7 +69,7 @@ describe("the split and the kitty — design §7.1, §7.2, §4.2 step 5", () => 
     // Round 1: 2 handed in, 3 ways: the kitty is 2. Round 2: Wanted 2 and the Vault one bulb short; p0 rings it.
     let s = run(game(3, null), mv("p0", "rooftop"), mv("p1", "office", 2), mv("p2", "rooftop"), ROUND);
     expect([s.share, s.kitty]).toEqual([0, 2]);
-    s = run({ ...s, wanted: 2, bells: { ...s.bells, vault: 3 } }, mv("p0", "vault", 1), mv("p1", "office", 2), mv("p2", "rooftop"), ROUND);
+    s = run({ ...s, wanted: 2, bells: { ...s.bells, vault: 4 } }, mv("p0", "vault", 1), mv("p1", "office", 2), mv("p2", "rooftop"), ROUND);
     expect(outcome(s)).toMatchObject({ result: "failed", reason: "bust", escapees: ["p2"] });
     expect(ofType(s, "duffelSplit").map((e) => e.round)).toEqual([1]);
     expect(stashes(s)).toEqual([0, 0, 0]);

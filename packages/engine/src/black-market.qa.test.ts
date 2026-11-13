@@ -324,7 +324,7 @@ describe("QA: each perk at its boundaries — design §12", () => {
   });
 
   it("Soft shoes: rings the round bought; silent only the next round; rings again the round after", () => {
-    // The Office (2 coins, 1 quiet) rings 1 per full grab; compare with the same game unbought.
+    // The Office (2 coins) rings 2 per full grab; compare with the same game unbought.
     const office = (x: GameState, round: number) =>
       ofType(x.log, "bellsRung").find((e) => e.round === round)?.bells.office;
     const play = (bought: boolean) => {
@@ -342,8 +342,8 @@ describe("QA: each perk at its boundaries — design §12", () => {
     };
     const [yes, no] = [play(true), play(false)];
     expect(office(yes, 1)).toBe(office(no, 1));
-    expect(office(yes, 2)).toBe((office(no, 2) as number) - 1);
-    expect([office(yes, 2), office(yes, 3), office(no, 3)]).toEqual([0, 1, 1]);
+    expect(office(yes, 2)).toBe((office(no, 2) as number) - 2);
+    expect([office(yes, 2), office(yes, 3), office(no, 3)]).toEqual([1, 2, 4]);
   });
 
   it("Blackout: dark only the next round; the same room as an Electrician's cut is announced once; two buyers' rooms both go dark", () => {
@@ -507,7 +507,7 @@ describe("QA: Check ballot — design §9.5, §12", () => {
   });
 
   it("Hidden-then-revealed: the buyer sees the target's sealed ballot at the next meeting of any kind (a briefing), nobody else does", () => {
-    // Round 1: p0 checks p1; p1 seals a vote on p2; p1 and p2 raid the Vault (3 + 3 rings of 4 bulbs) to call a briefing.
+    // Round 1: p0 checks p1; p1 seals a vote on p2; p1 and p2 raid the Vault (3 + 3 rings of 5 bulbs) to call a briefing.
     let s = run(
       withStash(game(3), { p0: 1 }),
       buy("p0", { kind: "ballot", target: "p1" }),
@@ -821,7 +821,7 @@ describe("QA: determinism — design §19.1", () => {
       buy("p1", { kind: "softShoes" }),
       buy("p2", { kind: "tail", room: "vault" }),
       buy("p3", { kind: "blackout", room: "office" }),
-      mv("p1", "office", 2),
+      mv("p1", "lobby", 1),
       mv("p2", "lobby", 1),
       ...emergency("p2"),
       vote("p1", "p0"),

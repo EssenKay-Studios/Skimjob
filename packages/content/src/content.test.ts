@@ -86,13 +86,13 @@ describe("First National Bank bank — design §6.1", () => {
 });
 
 describe("First National Bank alarm — design §3.1, §5", () => {
-  it("4-bulb bells, taped off for 2 rounds, a bust at 3 Wanted stars", () => {
-    expect(BANK_JOB.alarm).toEqual({ bulbs: 4, tapedRounds: 2, bustStars: 3 });
+  it("5-bulb bells, taped off for 2 rounds, a bust at 3 Wanted stars", () => {
+    expect(BANK_JOB.alarm).toEqual({ bulbs: 5, tapedRounds: 2, bustStars: 3 });
   });
 
-  it("noise: the Lobby is silent, the Office-like rooms' 1st coin is silent, every Vault coin rings; the Rooftop lies low", () => {
+  it("noise: the Lobby is silent, every coin elsewhere rings once; the Rooftop lies low", () => {
     const quiet = Object.fromEntries(Object.values(BANK_JOB.rooms).map((d) => [d.id, d.quietCoins]));
-    expect(quiet).toEqual({ vault: 0, office: 1, lobby: 1, security: 0, rooftop: 0, depositBoxes: 1, serverRoom: 1, managersOffice: 1 });
+    expect(quiet).toEqual({ vault: 0, office: 0, lobby: 1, security: 0, rooftop: 0, depositBoxes: 0, serverRoom: 0, managersOffice: 0 });
     expect(BANK_JOB.rooms.lobby?.quietCoins).toBe(BANK_JOB.rooms.lobby?.coins);
     expect(Object.values(BANK_JOB.rooms).filter((d) => d.lieLow).map((d) => d.id)).toEqual(["rooftop"]);
   });

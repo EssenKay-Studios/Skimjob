@@ -36,10 +36,10 @@ export interface InfoText {
 /** Room text by room id (the name is the room's own). design §20.1 */
 export const ROOM_TEXT: Readonly<Record<RoomId, string>> = {
   lobby: "1 coin, and not a sound. The safe choice.",
-  office: "Up to 2 coins. The first is quiet; the second rings the bell.",
-  depositBoxes: "Up to 2 coins. The first is quiet; the second rings the bell.",
-  managersOffice: "Up to 2 coins. The first is quiet; the second rings the bell.",
-  serverRoom: "Up to 2 coins. The first is quiet; the second rings the bell.",
+  office: "Up to 2 coins. Each coin rings the bell once.",
+  depositBoxes: "Up to 2 coins. Each coin rings the bell once.",
+  managersOffice: "Up to 2 coins. Each coin rings the bell once.",
+  serverRoom: "Up to 2 coins. Each coin rings the bell once.",
   vault: "Up to 3 coins, and they ring the bell. Big money, big noise.",
   security: "No coins, but you watch one room's cameras and see who was there.",
   rooftop: "No coins. Lie low, cool the hottest bell, and it's the only way out of a bust.",

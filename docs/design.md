@@ -44,7 +44,7 @@ No role is good or evil, and nothing pays anyone to be nice. Every player faces 
 | **Kitty** | Leftover change from a split that didn't divide evenly, carried into the next split. |
 | **Missing** | Coins taken this round that didn't reach the duffel: "N coins went missing", never who (§7.4). |
 | **Honesty** | Coins that reached the duffel ÷ coins taken from the bank, shown as a meter against the two-thirds line (§7.5). |
-| **Bell** | Each room's alarm bell: 4 bulbs [tunable] (§5). |
+| **Bell** | Each room's alarm bell: 5 bulbs [tunable] (§5). |
 | **Ring** | One noisy coin; it lights one bulb. |
 | **Raid** | The police hitting one room when its last bulb lights (§5.3). |
 | **Taped off** | A raided room, closed for 2 rounds [tunable]. |
@@ -71,11 +71,11 @@ Each room offers a number of coins **per visitor** per round [tunable]. Visitors
 | Room | Coins per visitor | Noise | In play |
 |---|---|---|---|
 | **Lobby** | 1 | Silent | Always |
-| **Office** | 2 | The 1st coin is silent; each extra coin rings once | Always |
+| **Office** | 2 | Every coin rings once | Always |
 | **Deposit boxes** | 2 | As the Office | 5+ players |
 | **Manager's office** | 2 | As the Office | 9+ players |
 | **Server room** | 2 | As the Office | 5+ players |
-| **Vault** | 3 | Every coin rings [tunable: or the 1st is silent; the simulator picks] | Always |
+| **Vault** | 3 | Every coin rings once | Always |
 | **Security** | 0 | — Watch one room's cameras: see who was in it this round | Always |
 | **Rooftop** | 0 | — Lie low: automatically cools the hottest room (§5.6); the only escape on a bust (§5.5) | Always |
 
@@ -113,7 +113,7 @@ After the round, each player learns **who else was in their room** (none in a bl
 
 1. **Moves resolve:** grabs come out of the bank; powers and perks that act this round apply (Locksmith, Soft shoes, Hacker, Mole's ring, Plant evidence…).
 2. **Rings light bulbs:** each ring lights one bulb in its room (§5.2).
-3. **Raid check:** every room whose 4th bulb lit is raided: its visitors' grabs are seized, the room is taped off for 2 rounds, and Wanted goes up 1 star per raided room (§5.3).
+3. **Raid check:** every room whose 5th bulb lit is raided: its visitors' grabs are seized, the room is taped off for 2 rounds, and Wanted goes up 1 star per raided room (§5.3).
 4. **Bust check:** if Wanted is 3 or more (two raids in one round can jump it), the game ends at once (§5.5); that round's duffel is **not** split.
 5. **Split** (only if no bust): first the Priest's absolve resolves (§11.1; its coins are set aside for the next split, not this one), then the duffel is split equally; the leftover change is the kitty (§7.2).
 6. **Cooling:** every room turns off 1 bulb, then each Rooftop player cools the hottest room by 1 more (§5.6).
@@ -130,17 +130,17 @@ Raids come before cooling, so the Rooftop can't save a room in the same round, a
 
 ### 5.1 Bells
 
-Every room has an **alarm bell with 4 bulbs** [tunable]. Every bell is **public**, always, with two exceptions: a room the Hacker hides this round (§11) shows "?" to everyone else, and a taped-off room's bell is off (§5.3).
+Every room has an **alarm bell with 5 bulbs** [tunable]. Every bell is **public**, always, with two exceptions: a room the Hacker hides this round (§11) shows "?" to everyone else, and a taped-off room's bell is off (§5.3).
 
 ### 5.2 Rings
 
 - Each ring lights one bulb in that room; rings from everyone in the room add up.
-- Ring counts per coin come from the room's noise (§3.1). The Locksmith's coins each ring one time fewer, never below 0, so a Locksmith's Office or Vault grab is silent *(owner, 4 Nov)*. Soft shoes ring nothing. The Mole adds one ring to any room except the Rooftop or a taped-off room (§11.1).
+- Ring counts per coin come from the room's noise (§3.1). The Locksmith's coins each ring one time fewer, never below 0, so a Locksmith's grab is silent in every room, as every coin rings exactly once *(owner, 4 Nov; 11 Nov)*. Soft shoes ring nothing. The Mole adds one ring to any room except the Rooftop or a taped-off room (§11.1).
 - **Preview:** while planning, the bell shows the bulbs your own grab would add. Other players' rings are unknown until the round resolves.
 
 ### 5.3 Raids
 
-When a room's **4th bulb** lights:
+When a room's **5th bulb** lights:
 - everyone inside **loses that round's grab**: the police seize it and it leaves the game. Seizure happens **before** the split, so seized coins are never handed in or pocketed;
 - the room is **taped off for 2 rounds** [tunable] ("CLOSED 2" counting down): nobody can pick it, and its bell resets to 0 *(owner, 6 Nov)*. While taped off, its bell is **off**: not shown, and nothing can ring it (no grabs; the Mole and the Hacker can't target it). It reappears at 0 when the room reopens, also when the Fixer reopens it early;
 - **Wanted goes up 1 star**;
@@ -342,7 +342,7 @@ Every role has a one-sentence power, a "How you win" line and a "How to spot it"
 | Role | Kind | Power | Frequency |
 |---|---|---|---|
 | **Lookout** | Eyes | You also see who was in one extra room. | Every round |
-| **Locksmith** | Shadows | Each of your coins rings one time fewer (an Office or Vault grab is silent). | Every round (passive) |
+| **Locksmith** | Shadows | Each of your coins rings one time fewer (every grab is silent). | Every round (passive) |
 | **Detective** | Eyes | Learn how many coins one player grabbed last round (not how many they kept). | Every round |
 | **Auditor** | Eyes | Learn how many coins reached the duffel from one room last round. | Once between meetings |
 | **Smooth Talker** | Eyes | Your vote counts twice. | Every meeting (passive) |
@@ -583,10 +583,10 @@ One-line texts the UI, the rulebook and the tips read from content, so they neve
 | Room | Text |
 |---|---|
 | Lobby | 1 coin, and not a sound. The safe choice. |
-| Office | Up to 2 coins. The first is quiet; the second rings the bell. |
-| Deposit boxes | Up to 2 coins. The first is quiet; the second rings the bell. |
-| Manager's office | Up to 2 coins. The first is quiet; the second rings the bell. |
-| Server room | Up to 2 coins. The first is quiet; the second rings the bell. |
+| Office | Up to 2 coins. Each coin rings the bell once. |
+| Deposit boxes | Up to 2 coins. Each coin rings the bell once. |
+| Manager's office | Up to 2 coins. Each coin rings the bell once. |
+| Server room | Up to 2 coins. Each coin rings the bell once. |
 | Vault | Up to 3 coins, and they ring the bell. Big money, big noise. |
 | Security | No coins, but you watch one room's cameras and see who was there. |
 | Rooftop | No coins. Lie low, cool the hottest bell, and it's the only way out of a bust. |
@@ -643,7 +643,7 @@ Bust (every role): "On a bust, only the Rooftop gets away."
 | Shakedown | A vote that opens one stash; what's above the share goes into the next split. |
 | Protected | Shaken down already: safe until the next regular meeting. |
 | Wanted | One star per raid. Three is a bust. |
-| Raid | The 4th bulb lights: grabs there are seized. |
+| Raid | The 5th bulb lights: grabs there are seized. |
 | Bust | Wanted 3. Only the Rooftop gets away. |
 | Honesty | Coins that reached the duffel ÷ coins taken. Line: ⅔. |
 
@@ -651,7 +651,7 @@ Bust (every role): "On a bust, only the Rooftop gets away."
 
 | Thing | Text |
 |---|---|
-| Bell | Every noisy coin lights a bulb. Light the 4th and the police raid the room. |
+| Bell | Every noisy coin lights a bulb. Light the 5th and the police raid the room. |
 | Bank | Coins left to steal. The game ends when it's empty, or after the last round. |
 | Duffel (your move) | Coins here are shared equally by the whole crew. |
 | Pocket (your move) | Coins here are yours alone. Nobody sees them, unless you're shaken down or absolved. |
@@ -672,7 +672,7 @@ Each is "What just happened / What it means / What you can do", shown once per p
 
 | Pop-up | What just happened | What it means | What you can do |
 |---|---|---|---|
-| Raid! | A room's 4th bulb lit and the police raided it. | Every grab there was seized, the room is taped off for a couple of rounds, and Wanted went up by one star. | Go somewhere else while the tape is up. Three stars is a bust. |
+| Raid! | A room's 5th bulb lit and the police raided it. | Every grab there was seized, the room is taped off for a couple of rounds, and Wanted went up by one star. | Go somewhere else while the tape is up. Three stars is a bust. |
 | One star from a bust | Wanted is at 2 of 3. | One more raid is a bust, and on a bust only the Rooftop gets away. | Keep the bells low, or hide on the Rooftop. |
 | A shakedown | The crew voted to open one stash. | The Shakedown line of §20.5. | Keep your pocket modest, or bring a Bail. A shaken-down player is protected until the next regular meeting. |
 | A power cut | The lights went out in one room. | Nobody there sees who else is there this round, and its cameras are offline. Its bell still rings. | Ask the crew who wanted no witnesses. An Electrician can do this. |

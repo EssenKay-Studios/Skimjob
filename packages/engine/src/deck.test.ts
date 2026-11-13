@@ -195,10 +195,10 @@ describe("card effects — design §13", () => {
 
   it("Audit: every room in play shows the coins that reached the duffel from it; a raided room shows 0 (§5.3)", () => {
     const base = withCard(resolve(game(4)), "audit");
-    const s = resolve(base, { p0: fullGrab("vault", 2), p1: fullGrab("vault"), p2: fullGrab("office", 2), p3: fullGrab("lobby") });
-    expect(find(lastRound(s), "auditReport")).toEqual([{ type: "auditReport", visibility: PUBLIC, round: 2, duffel: { vault: 4, office: 0, lobby: 1, security: 0, rooftop: 0 } }]);
+    const s = resolve(base, { p0: fullGrab("vault", 2), p1: fullGrab("office"), p2: fullGrab("office", 2), p3: fullGrab("lobby") });
+    expect(find(lastRound(s), "auditReport")).toEqual([{ type: "auditReport", visibility: PUBLIC, round: 2, duffel: { vault: 1, office: 2, lobby: 1, security: 0, rooftop: 0 } }]);
     // With real bells, two full Vault grabs ring 6 and raid it: its coins were seized, none reached the duffel.
-    const raided = resolve(withCard(resolve(game(3, [], { contentOverrides: null })), "audit"), { p0: fullGrab("vault"), p1: fullGrab("vault") });
+    const raided = resolve(withCard(resolve(game(3, [], { contentOverrides: null }), { p0: fullGrab("lobby"), p1: fullGrab("lobby"), p2: fullGrab("lobby") }), "audit"), { p0: fullGrab("vault"), p1: fullGrab("vault") });
     expect(find(lastRound(raided), "roomRaided")).toHaveLength(1);
     expect(find(lastRound(raided), "auditReport")[0]?.duffel).toMatchObject({ vault: 0, office: 2 });
   });

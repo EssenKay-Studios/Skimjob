@@ -84,7 +84,7 @@ describe("the seen set", () => {
 describe("lesson text — design §20.6", () => {
   it("has the three parts for every lesson, with the numbers from content", () => {
     for (const l of Object.values(LESSONS)) for (const part of [l.title, l.happened, l.means, l.canDo]) expect(part.trim()).not.toBe("");
-    expect(LESSONS.raid.happened).toContain("4th");
+    expect(LESSONS.raid.happened).toContain("5th");
     expect(LESSONS.oneStar.happened).toContain("2 of 3");
   });
 });

@@ -56,22 +56,21 @@ export const BANK_JOB: JobDef = {
     { minPlayers: 5, rooms: ["depositBoxes", "serverRoom"] },
     { minPlayers: 9, rooms: ["managersOffice"] },
   ],
-  // Coins per visitor and noise [tunable]: the Lobby is silent, the Office-like rooms' 1st coin is silent,
-  // every Vault coin rings (or its 1st is silent; the simulator picks). design §3.1
+  // Coins per visitor and noise [tunable]: the Lobby is silent, every coin elsewhere rings once. design §3.1
   rooms: {
     vault: { id: "vault", name: "Vault", coins: 3, quietCoins: 0, lieLow: false, info: "none" },
-    office: { id: "office", name: "Office", coins: 2, quietCoins: 1, lieLow: false, info: "none" },
+    office: { id: "office", name: "Office", coins: 2, quietCoins: 0, lieLow: false, info: "none" },
     lobby: { id: "lobby", name: "Lobby", coins: 1, quietCoins: 1, lieLow: false, info: "none" },
     security: { id: "security", name: "Security", coins: 0, quietCoins: 0, lieLow: false, info: "watchRoom" },
     rooftop: { id: "rooftop", name: "Rooftop", coins: 0, quietCoins: 0, lieLow: true, info: "none" },
-    depositBoxes: { id: "depositBoxes", name: "Deposit boxes", coins: 2, quietCoins: 1, lieLow: false, info: "none" },
-    serverRoom: { id: "serverRoom", name: "Server room", coins: 2, quietCoins: 1, lieLow: false, info: "none" },
-    managersOffice: { id: "managersOffice", name: "Manager's office", coins: 2, quietCoins: 1, lieLow: false, info: "none" },
+    depositBoxes: { id: "depositBoxes", name: "Deposit boxes", coins: 2, quietCoins: 0, lieLow: false, info: "none" },
+    serverRoom: { id: "serverRoom", name: "Server room", coins: 2, quietCoins: 0, lieLow: false, info: "none" },
+    managersOffice: { id: "managersOffice", name: "Manager's office", coins: 2, quietCoins: 0, lieLow: false, info: "none" },
   },
   defaultRoom: "lobby",
   bank: { coinsPerPlayer: 16 },
   // design §5.1, §5.3, §5.5
-  alarm: { bulbs: 4, tapedRounds: 2, bustStars: 3 },
+  alarm: { bulbs: 5, tapedRounds: 2, bustStars: 3 },
   // design §6.2, §7.5
   roundCap: 12,
   honestyLine: 2 / 3,

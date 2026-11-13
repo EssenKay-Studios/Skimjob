@@ -31,7 +31,7 @@ describe("the move panel", () => {
     expect(out).toContain("Change");
     expect(out).toContain('data-pile="duffel"');
     // A fresh move holds nothing yet: the bags and the bell show with 0 coins grabbed.
-    expect(out).toContain("Bell: 0 of 4 lit");
+    expect(out).toContain("Bell: 0 of 5 lit");
     expect(out).toContain("Nothing from you goes to the share.");
     expect(out).toContain('move__lock" disabled=""'); // design §3.2: Lock it in waits for 1 coin in a bag
   });

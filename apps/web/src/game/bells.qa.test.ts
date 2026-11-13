@@ -185,7 +185,7 @@ describe("QA #199: the preview is only on the room you picked, only while planni
     expect(html.match(/grab adds/g)).toHaveLength(1);
     expect(bellOf(html, "vault")).toContain("grab adds 3");
     expect(bellOf(html, "office")).not.toContain("grab adds");
-    expect(render(v)).toMatch(/data-bell="office".*?grab adds 1/);
+    expect(render(v)).toMatch(/data-bell="office".*?grab adds 2/);
     const done = viewFor(
       run(
         s,

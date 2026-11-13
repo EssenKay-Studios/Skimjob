@@ -133,9 +133,9 @@ describe("move panel", () => {
     const opts = roomOptions(viewFor(createGame(config(5)), "p1"));
     const by = Object.fromEntries(opts.map((o) => [o.id, o]));
     expect(opts.map((o) => o.id)).toEqual(["vault", "office", "lobby", "security", "rooftop", "depositBoxes", "serverRoom"]);
-    expect(by.vault).toMatchObject({ coins: 3, bell: "Bell 0 of 4", watcher: false, closed: null });
+    expect(by.vault).toMatchObject({ coins: 3, bell: "Bell 0 of 5", watcher: false, closed: null });
     expect(by.serverRoom).toMatchObject({ coins: 2, notes: [] });
-    expect(by.rooftop).toMatchObject({ coins: 0, bell: "Bell 0 of 4" });
+    expect(by.rooftop).toMatchObject({ coins: 0, bell: "Bell 0 of 5" });
     expect(by.security).toMatchObject({ watcher: true, notes: ["watch one room"] });
     expect(by.depositBoxes).toMatchObject({ coins: 2, notes: [] }); // no visitor limit (design §3.2)
   });

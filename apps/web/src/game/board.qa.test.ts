@@ -134,11 +134,11 @@ describe("QA: board figures come only from the viewer's view (PR #41)", () => {
   });
 
   it("another player's hidden move never changes your board (3 seats, same view in, same board out)", () => {
-    // p1 alone in the vault; p2 is in the lobby in one world, the office in the other. p1 never saw p2.
-    const world = (p2Room: RoomId) =>
-      step(step(step(step(createGame(config(3)), move("p1", "vault")), move("p2", p2Room)), move("p3", "lobby")), { type: "advance", deadline: { kind: "round", round: 1 } });
-    const a = boardScene(viewFor(world("lobby"), "p1"));
-    const b = boardScene(viewFor(world("office"), "p1"));
+    // p1 alone in the vault; p2 is in the lobby in both worlds but bags the coin differently. p1 never saw p2.
+    const world = (p2Bag: "duffel" | "pocket") =>
+      step(step(step(step(createGame(config(3)), move("p1", "vault")), { type: "submitMove", player: "p2", move: { room: "lobby", duffel: p2Bag === "duffel" ? 1 : 0, pocket: p2Bag === "pocket" ? 1 : 0 } } as PlayerCommand), move("p3", "lobby")), { type: "advance", deadline: { kind: "round", round: 1 } });
+    const a = boardScene(viewFor(world("duffel"), "p1"));
+    const b = boardScene(viewFor(world("pocket"), "p1"));
     expect(figures(a)).toEqual(["p1@vault"]);
     expect(b).toEqual(a);
     // And during planning: p2's locked move never shows.

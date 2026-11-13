@@ -148,10 +148,10 @@ describe("Too quiet — design §15.4", () => {
     expect(bellChecks(round({ rooms: vault({ rings: 1, raided: true, watched: true, seen }) }), ctx(), name)).toEqual([]);
   });
 
-  it("allows a grab cut to 0 when the bank ran dry (design §3.2), and a silent first coin", () => {
+  it("allows a grab cut to 0 when the bank ran dry (design §3.2), and a silent Lobby", () => {
     const seen = new Map<string, "room" | "feed">([["p5", "room"]]);
     expect(bellChecks(round({ rooms: vault({ rings: 0, watched: true, seen }), bankEmptied: true }), ctx(), name)).toEqual([]);
-    expect(bellChecks(round({ rooms: new Map([["office", room({ rings: 0, watched: true, seen })]]) }), ctx(), name)).toEqual([]);
+    expect(bellChecks(round({ rooms: new Map([["lobby", room({ rings: 0, watched: true, seen })]]) }), ctx(), name)).toEqual([]);
   });
 
   it("still runs in a blacked-out room on what its claimants say (its bell rings)", () => {
@@ -163,8 +163,8 @@ describe("Too quiet — design §15.4", () => {
 describe("Too loud — design §15.4", () => {
   const seen = new Map<string, "room" | "feed">([["p5", "room"]]);
   it("names nobody when the room rang more than everyone counted could", () => {
-    const [f] = bellChecks(round({ rooms: new Map([["office", room({ rings: 2, watched: true, seen })]]) }), ctx(), name);
-    expect(f?.warning).toEqual({ kind: "tooLoud", names: [], text: "The Office rang 2 times in R4; who was there can ring at most 1." });
+    const [f] = bellChecks(round({ rooms: new Map([["office", room({ rings: 3, watched: true, seen })]]) }), ctx(), name);
+    expect(f?.warning).toEqual({ kind: "tooLoud", names: [], text: "The Office rang 3 times in R4; who was there can ring at most 2." });
   });
 
   it("counts Shift change's extra coin, and a raid's capped bell as at least", () => {

@@ -178,13 +178,13 @@ describe("Lookout: each round, also see who was in one more room — design §11
 });
 
 describe("Locksmith: each coin rings one time fewer — design §5.2, §11.1", () => {
-  it("a Locksmith's Office or Vault grab is silent; everyone else rings as usual", () => {
+  it("a Locksmith's grab is silent in every room; everyone else rings as usual", () => {
     const office = roomDef(BANK_JOB, "office");
     const vault = roomDef(BANK_JOB, "vault");
-    expect([ringsOf(office, 2), ringsOf(office, 2, 1), ringsOf(vault, 3), ringsOf(vault, 3, 1), ringsOf(vault, 3, 0)]).toEqual([1, 0, 3, 0, 3]);
+    expect([ringsOf(office, 2), ringsOf(office, 2, 1), ringsOf(vault, 3), ringsOf(vault, 3, 1), ringsOf(vault, 3, 0)]).toEqual([2, 0, 3, 0, 3]);
     const s = game(3, ["locksmith"]);
     const vaultOnly = ofType(since(s, resolve(run(s, mv("p0", "vault"), mv("p1", "office"), mv("p2", "lobby")))), "bellsRung")[0];
-    expect(vaultOnly?.bells).toMatchObject({ vault: 0, office: 1 });
+    expect(vaultOnly?.bells).toMatchObject({ vault: 0, office: 2 });
     const officeToo = ofType(since(s, resolve(run(s, mv("p0", "office"), mv("p1", "vault"), mv("p2", "lobby")))), "bellsRung")[0];
     expect(officeToo?.bells).toMatchObject({ vault: 3, office: 0 });
   });
@@ -305,7 +305,7 @@ describe("Hacker: once between meetings, hide one open room's bell this round �
     const rung = ofType(events, "bellsRung")[0];
     expect(rung?.hidden).toEqual(["vault"]);
     expect(rung?.bells).not.toHaveProperty("vault");
-    expect(rung?.bells).toMatchObject({ office: 1 });
+    expect(rung?.bells).toMatchObject({ office: 2 });
     expect(ofType(events, "bellsCooled")[0]?.bells).not.toHaveProperty("vault");
     // 3 rings, then cooled by 1.
     expect(ofType(events, "abilityResolved")).toEqual([
@@ -366,7 +366,7 @@ describe("Electrician: once between meetings, black out one room next round — 
       ["lookout", [], true],
       ["tail", [], true],
     ]);
-    expect(ofType(events, "bellsRung")[0]?.bells.office).toBe(2);
+    expect(ofType(events, "bellsRung")[0]?.bells.office).toBe(4);
     // The power cut ends with the round.
     s = run(s, (x: GameState) => ({ type: "advance", deadline: { kind: "result", round: x.resolvedRound } }));
     expect(s.dark).toEqual([]);
@@ -463,14 +463,14 @@ describe("Mole: once between meetings, ring any room once — design §5.2, §11
     const rung = resolve(run(s, mv("p0", "lobby", 0, ring("office")), mv("p1", "lobby", 0, ring("office")), mv("p2", "lobby")));
     expect(ofType(since(s, rung), "bellsRung")[0]?.bells.office).toBe(2);
     expect([used(rung, "p0").usedThisStretch, used(rung, "p1").usedThisStretch]).toEqual([1, 1]);
-    const raid = resolve(run(s, mv("p0", "lobby", 0, ring("vault")), mv("p1", "lobby"), mv("p2", "vault")));
+    const raid = resolve(run(s, mv("p0", "lobby", 0, ring("vault")), mv("p1", "lobby", 0, ring("vault")), mv("p2", "vault")));
     expect(ofType(since(s, raid), "roomRaided")).toMatchObject([{ room: "vault" }]);
   });
 
   it("never the Rooftop or a taped-off room; once between meetings", () => {
     const s = game(3, ["mole"]);
     expect(reason(s, mv("p0", "lobby", 0, ring("rooftop")))).toMatch(/Rooftop/);
-    const raided = pastBriefing(run(s, mv("p0", "lobby", 0, ring("vault")), mv("p1", "vault"), ROUND));
+    const raided = pastBriefing(run(s, mv("p0", "lobby", 0, ring("vault")), mv("p1", "vault"), mv("p2", "vault"), ROUND));
     expect(raided.taped).toHaveProperty("vault");
     expect(reason(raided, mv("p0", "lobby", 0, ring("office")))).toMatch(/already rung a bell/);
     const fresh = pastBriefing(run(game(3, ["mole"], { roles: { mole: { perStretch: 2 } } }), mv("p1", "vault"), mv("p2", "vault"), ROUND));

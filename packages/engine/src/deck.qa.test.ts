@@ -100,7 +100,7 @@ describe("QA: room surges — design §13", () => {
   // design §13, §5.2, §5.3: Shift change's extra Vault coin rings like the rest.
   it("Shift change: two of three grab 4 in the Vault → 8 rings, a raid seizing all 8; one coin lights one bulb; 4 coins accepted, 5 refused; next round back to 3", () => {
     const grab = (n: number) => ({ room: "vault", duffel: 0, pocket: n });
-    const base = withCard(resolve(game(3, [], { contentOverrides: null })), "shiftChange");
+    const base = withCard(resolve(game(3, [], { contentOverrides: null }), { p0: fullGrab("lobby"), p1: fullGrab("lobby"), p2: fullGrab("lobby") }), "shiftChange");
     expect(refused(base, { type: "submitMove", player: "p0", move: grab(5) })).toBe(true);
     const two = resolve(base, { p0: grab(4), p1: { room: "vault", duffel: 4, pocket: 0 } });
     expect(find(lastResolution(two), "coinsGrabbed").filter((e) => e.room === "vault").map((e) => e.seized)).toEqual([4, 4]);

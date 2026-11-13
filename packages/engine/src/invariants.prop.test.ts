@@ -440,7 +440,8 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
     meeting: state.meeting && {
       ...state.meeting,
       // The ballots the viewer bought a Check ballot for are theirs to see (design §12).
-      votes: { ...fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer }), ...seenBy(state.meeting, viewer) },
+      // A granted ballot not yet cast reads null either way, so it is never faked.
+      votes: Object.fromEntries(Object.entries({ ...fakeFor(state.meeting.votes, { kind: "shakedown", target: viewer }), ...seenBy(state.meeting, viewer) }).filter(([id]) => !(state.meeting?.ballotGrants[viewer] ?? []).includes(id) || Object.hasOwn(state.meeting?.votes ?? {}, id))),
       ballotGrants: fakeFor(state.meeting.ballotGrants, [viewer]),
     },
     log,
@@ -666,7 +667,7 @@ describe("engine invariants under fuzzing — design §17.2", () => {
 
   it("a game at Wanted 2 with a hot Vault ends as a bust, with the end invariants holding (design §5.5)", () => {
     const start = createGame({ ...threeSeats, seed: "bust-end" });
-    const moved = handleCommand({ ...start, wanted: 2, bells: { ...start.bells, vault: 3 } }, { type: "submitMove", player: "p1", move: { room: "vault", duffel: 1, pocket: 0 } });
+    const moved = handleCommand({ ...start, wanted: 2, bells: { ...start.bells, vault: 4 } }, { type: "submitMove", player: "p1", move: { room: "vault", duffel: 1, pocket: 0 } });
     if (!moved.ok) throw new Failure(moved.reason);
     let state: GameState = moved.state;
     for (let steps = 0; state.phase.kind !== "ended"; steps++) {

@@ -60,10 +60,10 @@ describe("the grab and the two bags (design §3.2)", () => {
 });
 
 describe("the bell preview (design §5.2, §5.3)", () => {
-  it("lights the rings of the grab: the first Office coin is quiet, every Vault coin rings", () => {
+  it("lights the rings of the grab: every Office and Vault coin rings, the Lobby is silent", () => {
     const v = viewAs("detective");
-    expect(bellPreview(v, option(v, "office"), 1)).toMatchObject({ bulbs: 4, lit: 0, adds: 0, raid: false });
-    expect(bellPreview(v, option(v, "office"), 2)).toMatchObject({ adds: 1 });
+    expect(bellPreview(v, option(v, "office"), 1)).toMatchObject({ bulbs: 5, lit: 0, adds: 1, raid: false });
+    expect(bellPreview(v, option(v, "office"), 2)).toMatchObject({ adds: 2 });
     expect(bellPreview(v, option(v, "vault"), 3)).toMatchObject({ adds: 3, raid: false });
     expect(bellPreview(v, option(v, "lobby"), 1)).toMatchObject({ adds: 0 });
   });
@@ -71,12 +71,12 @@ describe("the bell preview (design §5.2, §5.3)", () => {
   it("shows the bulbs already lit and caps what the grab adds at the last bulb", () => {
     const v = viewAs("detective");
     const lit = { ...v, bells: { ...v.bells, vault: 2 } };
-    expect(bellPreview(lit, option(lit, "vault"), 3)).toMatchObject({ lit: 2, adds: 2 });
+    expect(bellPreview(lit, option(lit, "vault"), 3)).toMatchObject({ lit: 2, adds: 3 });
   });
 
   it("warns of a raid when your grab alone lights the last bulb", () => {
     const v = viewAs("detective");
-    // The Vault's 3 coins ring 3 times: one short of 4 bulbs, unless the job's bell has fewer.
+    // The Vault's 3 coins ring 3 times: two short of 5 bulbs, unless the job's bell has fewer.
     expect(bellPreview(v, option(v, "vault"), 3).raid).toBe(false);
     const three = viewFor(createGame({ ...config(), contentOverrides: { alarm: { bulbs: 3 } } }, ["detective"]), "p1");
     expect(bellPreview(three, option(three, "vault"), 3)).toMatchObject({ bulbs: 3, adds: 3, raid: true });
@@ -85,9 +85,9 @@ describe("the bell preview (design §5.2, §5.3)", () => {
   it("warns of a raid when the bulbs already lit plus your rings reach the last one (design §5.3: lit + rings >= bulbs)", () => {
     const v = viewAs("detective");
     const at = (lit: number) => ({ ...v, bells: { ...v.bells, vault: lit } });
-    expect(bellPreview(at(2), option(v, "vault"), 3)).toMatchObject({ lit: 2, adds: 2, raid: true }); // 2 + 3 >= 4
-    expect(bellPreview(at(1), option(v, "vault"), 2)).toMatchObject({ raid: false }); // 1 + 2 < 4
-    expect(bellPreview(at(1), option(v, "vault"), 3)).toMatchObject({ raid: true });
+    expect(bellPreview(at(2), option(v, "vault"), 3)).toMatchObject({ lit: 2, adds: 3, raid: true }); // 2 + 3 >= 5
+    expect(bellPreview(at(1), option(v, "vault"), 2)).toMatchObject({ raid: false }); // 1 + 2 < 5
+    expect(bellPreview(at(2), option(v, "vault"), 3)).toMatchObject({ raid: true });
     // A hidden bell's count is unknown: only the grab counts.
     const { vault: _hidden, ...bells } = v.bells;
     expect(bellPreview({ ...v, bells, hiddenBells: ["vault"] }, option(v, "vault"), 3).raid).toBe(false);
