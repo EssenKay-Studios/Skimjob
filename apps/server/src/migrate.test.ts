@@ -23,7 +23,7 @@ const tables = async (db: Db) =>
   (await db.query<{ t: string }>("select table_name as t from information_schema.tables where table_schema = current_schema() order by 1")).map((r) => r.t);
 const versions = async (db: Db) => (await db.query<{ version: string }>("select version from schema_migrations order by 1")).map((r) => r.version);
 
-const ALL = ["001_init.sql", "002_identity.sql", "003_chat.sql", "004_deadline_pause.sql", "005_bot_seen.sql", "006_seat_last_seen.sql", "007_suspicion_board.sql", "008_host_controls.sql", "009_tips.sql", "010_plan_board.sql", "011_case_pins.sql", "012_drop_plan_board.sql"];
+const ALL = ["001_init.sql", "002_identity.sql", "003_chat.sql", "004_deadline_pause.sql", "005_bot_seen.sql", "006_seat_last_seen.sql", "007_suspicion_board.sql", "008_host_controls.sql", "009_tips.sql", "010_plan_board.sql", "011_case_pins.sql", "012_drop_plan_board.sql", "013_drop_seat_tags.sql"];
 let real: Db;
 let scratch: Db;
 beforeAll(async () => {
@@ -60,10 +60,30 @@ describe("migrate (renumbered migrations)", () => {
         "004_bot_seen.sql": await sql("005_bot_seen.sql"),
       });
       await migrate(old, before);
-      expect(await migrate(old)).toEqual(["003_chat.sql", "006_seat_last_seen.sql", "007_suspicion_board.sql", "008_host_controls.sql", "009_tips.sql", "010_plan_board.sql", "011_case_pins.sql", "012_drop_plan_board.sql"]);
+      expect(await migrate(old)).toEqual(["003_chat.sql", "006_seat_last_seen.sql", "007_suspicion_board.sql", "008_host_controls.sql", "009_tips.sql", "010_plan_board.sql", "011_case_pins.sql", "012_drop_plan_board.sql", "013_drop_seat_tags.sql"]);
       expect(await versions(old)).toEqual(ALL);
     } finally {
       await old.close();
+    }
+  });
+});
+
+describe("migrate (013: seat tags go, design §15.3)", () => {
+  it("keeps every note, drops a tag-only mark and the tag column, and refuses an empty note", { timeout: 60_000 }, async () => {
+    const db = await freshDb();
+    try {
+      const upTo12 = await tempMigrations(Object.fromEntries(await Promise.all(ALL.slice(0, 12).map(async (f) => [f, await readFile(new URL(f, MIGRATIONS_DIR), "utf8")] as const))));
+      await migrate(db, upTo12);
+      const host = await insertUser(db);
+      const [game] = await db.query<{ id: string }>("insert into games (host_user_id, invite_code) values ($1, 'CODE13') returning id", [host]);
+      const id = game!.id;
+      await db.query("insert into suspicion_marks (game_id, player_id, subject, tag, note) values ($1, 'p1', 'p2', 'suspicious', 'said Vault'), ($1, 'p1', 'p3', 'trusted', '')", [id]);
+      expect(await migrate(db)).toEqual(["013_drop_seat_tags.sql"]);
+      expect(await db.query("select * from suspicion_marks where game_id = $1", [id])).toEqual([expect.objectContaining({ subject: "p2", note: "said Vault" })]);
+      expect(Object.keys((await db.query("select * from suspicion_marks"))[0]!)).not.toContain("tag");
+      await expect(db.query("insert into suspicion_marks (game_id, player_id, subject, note) values ($1, 'p1', 'p3', '')", [id])).rejects.toThrow();
+    } finally {
+      await db.close();
     }
   });
 });

@@ -1,7 +1,7 @@
 // The seat's own notes on the server (apps/server notes.ts, M2-10): the "last
-// seen" seq for "while you were away" (design §13) and the private suspicion
-// board (design §12.3). Neither goes over the live channel; both are read and
-// written by this seat only.
+// seen" seq for "while you were away" (design §13) and the private board: a
+// note per player and the case board's pins (design §15.3). None of it goes
+// over the live channel; it is read and written by this seat only.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { eventsSince, type PlayerId, type PlayerView } from "@skimjob/engine";
 import { api, ApiError, sentence } from "../api";
@@ -9,17 +9,11 @@ import { recap, topSeq } from "./away";
 import { pinSync, type PinSync } from "./pinSync";
 import type { DescribeContext } from "./describeEvent";
 
-export const SUSPICION_TAGS = ["trusted", "unsure", "suspicious"] as const;
-export type SuspicionTag = (typeof SUSPICION_TAGS)[number];
-export const TAG_LABELS: Readonly<Record<SuspicionTag, string>> = { trusted: "Trusted", unsure: "Unsure", suspicious: "Suspicious" };
 /** Characters per note (the server's BOARD_NOTE_MAX_CHARS). */
 export const NOTE_MAX_CHARS = 280;
 
-export interface BoardMark {
-  readonly tag: SuspicionTag | null;
-  readonly note: string;
-}
-export type Board = Readonly<Record<PlayerId, BoardMark>>;
+/** Your note on each player you wrote one on (design §15.3). */
+export type Board = Readonly<Record<PlayerId, string>>;
 
 interface SeatNotes {
   readonly lastSeen: number;
@@ -27,12 +21,12 @@ interface SeatNotes {
   readonly pins: readonly string[];
 }
 
-/** The board and a way to change one mark; `error` if it couldn't be loaded. */
+/** Your notes and a way to change one; `board` is null while loading, with `error` if it couldn't load. */
 export interface BoardChannel {
   readonly board: Board | null;
   readonly error: string | null;
-  /** Saves a mark (tag null and an empty note clears it). Resolves with the refusal, if any. */
-  readonly save: (subject: PlayerId, mark: BoardMark) => Promise<string | null>;
+  /** Saves a note (an empty one clears it). Resolves with the refusal, if any. */
+  readonly save: (subject: PlayerId, note: string) => Promise<string | null>;
 }
 
 export interface AwayChannel {
@@ -258,15 +252,15 @@ export function useAwayRecap(gameId: string, view: PlayerView, ctx: DescribeCont
   return { lines: state.open ? lines : [], dismiss };
 }
 
-/** This seat's suspicion board (design §12.3): loaded once, changed only by `save`. */
-export function useSuspicionBoard(gameId: string, notes: NotesLoad): BoardChannel {
+/** This seat's notes on the others (design §15.3): loaded once, changed only by `save`. */
+export function useSeatBoard(gameId: string, notes: NotesLoad): BoardChannel {
   const [saved, setBoard] = useState<Board | null>(null);
   const board = saved ?? notes.notes?.board ?? null;
   const error = board === null ? notes.error : null;
   const save = useCallback(
-    async (subject: PlayerId, mark: BoardMark) => {
+    async (subject: PlayerId, note: string) => {
       try {
-        const r = await api<{ board: Board }>("PATCH", `/games/${encodeURIComponent(gameId)}/notes/board`, { subject, tag: mark.tag, note: mark.note });
+        const r = await api<{ board: Board }>("PATCH", `/games/${encodeURIComponent(gameId)}/notes/board`, { subject, note });
         setBoard(r.board);
         return null;
       } catch (e) {

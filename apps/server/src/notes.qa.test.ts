@@ -1,5 +1,5 @@
 // QA (M2-10, PR #46): hostile calls to the per-seat notes routes — the "last
-// seen" seq (design §13) and the private suspicion board (design §12.3).
+// seen" seq (design §13) and the private board of notes (design §15.3).
 import type { FastifyInstance } from "fastify";
 import { handleCommand, type GameState, type SystemCommand } from "@skimjob/engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -81,34 +81,34 @@ async function playOn(id: string, stop: (s: GameState) => boolean = () => false)
   return s;
 }
 
-describe("QA: another seat, another game, not seated (design §12.3, §13)", () => {
+describe("QA: another seat, another game, not seated (design §15.3, §13)", () => {
   it("a seat can only ever read and write its own notes, by game", async () => {
     const g1 = await startGame(3);
     const g2 = await startGame(2, 1);
     const [a, b] = g1.humans;
     const [x, y] = g2.humans;
-    expect((await board(g1.id, a!.who, { subject: b!.player, tag: "suspicious", note: "a's secret on b" })).status).toBe(200);
+    expect((await board(g1.id, a!.who, { subject: b!.player, note: "a's secret on b" })).status).toBe(200);
     expect((await seen(g1.id, a!.who, { seq: 3 })).body).toEqual({ lastSeen: 3 });
 
     // No field names the owner: a forged owner or player is refused, never honoured.
     for (const forged of [{ player: a!.player }, { owner: a!.player }, { playerId: a!.player }, { gameId: g2.id }]) {
-      expect((await board(g1.id, b!.who, { subject: a!.player, tag: "trusted", ...forged })).status).toBe(400);
+      expect((await board(g1.id, b!.who, { subject: a!.player, note: "b on a", ...forged })).status).toBe(400);
     }
     // b writes its own board about a: a's board is untouched, and b never sees a's.
-    expect((await board(g1.id, b!.who, { subject: a!.player, tag: "trusted" })).status).toBe(200);
-    expect((await notes(g1.id, a!.who)).board).toEqual({ [b!.player]: { tag: "suspicious", note: "a's secret on b" } });
-    expect((await notes(g1.id, b!.who)).board).toEqual({ [a!.player]: { tag: "trusted", note: "" } });
+    expect((await board(g1.id, b!.who, { subject: a!.player, note: "b on a" })).status).toBe(200);
+    expect((await notes(g1.id, a!.who)).board).toEqual({ [b!.player]: "a's secret on b" });
+    expect((await notes(g1.id, b!.who)).board).toEqual({ [a!.player]: "b on a" });
     expect((await notes(g1.id, b!.who)).lastSeen).toBe(-1);
 
     // A seat in game 2 asking about game 1 (same player ids p1, p2, …): not found, both ways.
     for (const who of [x!.who, y!.who]) {
       expect((await call("GET", `/games/${g1.id}/notes`, who)).status).toBe(404);
       expect((await seen(g1.id, who, { seq: 0 })).status).toBe(404);
-      expect((await board(g1.id, who, { subject: b!.player, tag: "trusted" })).status).toBe(404);
+      expect((await board(g1.id, who, { subject: b!.player, note: "x" })).status).toBe(404);
     }
     // A game-1 subject id that exists in game 2 by name writes only to game 2's own board for x.
-    expect((await board(g2.id, x!.who, { subject: y!.player, tag: "unsure" })).status).toBe(200);
-    expect((await notes(g1.id, a!.who)).board).toEqual({ [b!.player]: { tag: "suspicious", note: "a's secret on b" } });
+    expect((await board(g2.id, x!.who, { subject: y!.player, note: "x on y" })).status).toBe(200);
+    expect((await notes(g1.id, a!.who)).board).toEqual({ [b!.player]: "a's secret on b" });
     expect((await notes(g1.id, a!.who)).lastSeen).toBe(3);
     // The rows really are keyed by game and seat.
     const rows = await db.query<{ game_id: string; player_id: string; subject: string }>("select game_id, player_id, subject from suspicion_marks where game_id = $1 order by player_id", [g1.id]);
@@ -125,18 +125,18 @@ describe("QA: another seat, another game, not seated (design §12.3, §13)", () 
       expect((await call("GET", url, stranger)).status).toBe(404);
     }
     expect((await seen(g.id, stranger, { seq: 0 })).status).toBe(404);
-    expect((await board(g.id, stranger, { subject: b!.player, tag: "trusted" })).status).toBe(404);
-    expect((await board(g.id, null as unknown as string, { subject: b!.player, tag: "trusted" })).status).toBe(401);
+    expect((await board(g.id, stranger, { subject: b!.player, note: "x" })).status).toBe(404);
+    expect((await board(g.id, null as unknown as string, { subject: b!.player, note: "x" })).status).toBe(401);
     for (const id of ["00000000-0000-0000-0000-000000000000", "nope", "'; drop table seats; --", "%00", "..%2F..%2Fhealth"]) {
       expect((await call("GET", `/games/${id}/notes`, a!.who)).status).toBe(404);
       expect((await seen(id, a!.who, { seq: 0 })).status).toBe(404);
-      expect((await board(id, a!.who, { subject: b!.player, tag: "trusted" })).status).toBe(404);
+      expect((await board(id, a!.who, { subject: b!.player, note: "x" })).status).toBe(404);
     }
     // A seat in a game that hasn't started has no notes yet.
     const host = (await call("POST", "/auth/guest", null, { nickname: "Host" })).session!;
     const lobby = (await call("POST", "/games", host, { settings: {} })).body as unknown as LobbyView;
     expect((await seen(lobby.id, host, { seq: 0 })).status).toBe(404);
-    expect((await board(lobby.id, host, { subject: "p2", tag: "trusted" })).status).toBe(404);
+    expect((await board(lobby.id, host, { subject: "p2", note: "x" })).status).toBe(404);
     // Nothing was written by any of it.
     expect(await notes(g.id, a!.who)).toEqual({ lastSeen: -1, board: {}, pins: [] });
   });
@@ -170,7 +170,7 @@ describe("QA: bad bodies are 4xx, never 500 or a write", () => {
       expect(huge).toBe(413);
     }
     for (const seq of [Number.MAX_SAFE_INTEGER + 1, 1e308, -1e308, "1", true, [1], { n: 1 }, 2.000001]) expect((await seen(g.id, a!.who, { seq })).status, String(seq)).toBe(400);
-    for (const p of [{ subject: b!.player, tag: "trusted", note: 7 }, { subject: b!.player, tag: ["trusted"] }, { subject: b!.player, tag: "TRUSTED" }, { subject: [b!.player], tag: "trusted" }, { subject: "__proto__", tag: "trusted" }, { subject: "constructor", tag: "trusted" }, { tag: "trusted" }, {}]) {
+    for (const p of [{ subject: b!.player, note: 7 }, { subject: b!.player, note: ["x"] }, { subject: b!.player, note: null }, { subject: [b!.player], note: "x" }, { subject: "__proto__", note: "x" }, { subject: "constructor", note: "x" }, { note: "x" }, {}]) {
       expect((await board(g.id, a!.who, p)).status, JSON.stringify(p)).toBe(400);
     }
     expect(await notes(g.id, a!.who)).toEqual({ lastSeen: -1, board: {}, pins: [] });
@@ -188,11 +188,11 @@ describe("QA: bad bodies are 4xx, never 500 or a write", () => {
   });
 });
 
-describe("QA: note text (design §12.3)", () => {
+describe("QA: note text (design §15.3)", () => {
   it("huge, invisible, control, accent-stacked notes are refused; scripts and emoji are stored as plain text", async () => {
     const g = await startGame(2, 1);
     const [a, b] = g.humans;
-    const put = (note: unknown, tag: string | null = "unsure") => board(g.id, a!.who, { subject: b!.player, tag, note });
+    const put = (note: unknown) => board(g.id, a!.who, { subject: b!.player, note });
     expect((await put("y".repeat(10_000))).status).toBe(400);
     expect((await put("😈".repeat(BOARD_NOTE_MAX_CHARS + 1))).status).toBe(400);
     expect((await put("😈".repeat(BOARD_NOTE_MAX_CHARS))).status).toBe(200); // counted in characters, not UTF-16 units
@@ -201,20 +201,19 @@ describe("QA: note text (design §12.3)", () => {
       expect(r.status, JSON.stringify(bad)).toBe(400);
     }
     const script = `<script>alert("x")</script><img src=x onerror=alert(1)>`;
-    const r = await put(script, "suspicious");
+    const r = await put(script);
     expect(r.status).toBe(200);
     expect(r.type).toMatch(/^application\/json/);
-    expect((await notes(g.id, a!.who)).board[b!.player]).toEqual({ tag: "suspicious", note: script });
+    expect((await notes(g.id, a!.who)).board[b!.player]).toBe(script);
     // Whitespace around a note is trimmed; CRLF becomes LF.
     await put("  two\r\nlines  ");
-    expect((await notes(g.id, a!.who)).board[b!.player]!.note).toBe("two\nlines");
+    expect((await notes(g.id, a!.who)).board[b!.player]).toBe("two\nlines");
   });
 
-  it("20 racing edits of one mark: no 500s, and one row survives", async () => {
+  it("20 racing edits of one note: no 500s, and one row survives", async () => {
     const g = await startGame(2, 1);
     const [a, b] = g.humans;
-    const tags = ["trusted", "unsure", "suspicious"] as const;
-    const rs = await Promise.all(Array.from({ length: 20 }, (_, i) => board(g.id, a!.who, { subject: b!.player, tag: tags[i % 3], note: `edit ${i}` })));
+    const rs = await Promise.all(Array.from({ length: 20 }, (_, i) => board(g.id, a!.who, { subject: b!.player, note: `edit ${i}` })));
     expect(rs.map((r) => r.status)).toEqual(Array(20).fill(200));
     const rows = await db.query("select * from suspicion_marks where game_id = $1", [g.id]);
     expect(rows).toHaveLength(1);
@@ -227,18 +226,18 @@ describe("QA: 3 and 12 seats; the board and last seen after the game ends", () =
     [3, 0],
     [4, 8],
   ] as const) {
-    it(`${people + bots} seats: every other seat can be tagged, and nobody else sees it`, async () => {
+    it(`${people + bots} seats: every other seat can get a note, and nobody else sees it`, async () => {
       const g = await startGame(people, bots);
       const all = [...g.humans.map((h) => h.player), ...g.bots];
       expect(all).toHaveLength(people + bots);
       const [a] = g.humans;
       const others = all.filter((p) => p !== a!.player);
-      for (const [i, p] of others.entries()) expect((await board(g.id, a!.who, { subject: p, tag: (["trusted", "unsure", "suspicious"] as const)[i % 3], note: `n${i}` })).status).toBe(200);
+      for (const [i, p] of others.entries()) expect((await board(g.id, a!.who, { subject: p, note: `n${i}` })).status).toBe(200);
       expect(Object.keys((await notes(g.id, a!.who)).board).sort()).toEqual([...others].sort());
       for (const h of g.humans.slice(1)) expect((await notes(g.id, h.who)).board).toEqual({});
       // The lobby view (seats) carries none of it.
       const lobby = JSON.stringify((await call("GET", `/games/${g.id}`, g.humans.at(-1)!.who)).body);
-      expect(lobby).not.toMatch(/"n\d+"|suspicious/);
+      expect(lobby).not.toMatch(/"n\d+"/);
     });
   }
 
@@ -246,7 +245,7 @@ describe("QA: 3 and 12 seats; the board and last seen after the game ends", () =
     const g = await startGame(3);
     const [a, b] = g.humans;
     const secret = "QA-OKAPI-91";
-    expect((await board(g.id, a!.who, { subject: b!.player, tag: "suspicious", note: secret })).status).toBe(200);
+    expect((await board(g.id, a!.who, { subject: b!.player, note: secret })).status).toBe(200);
     const mid = await playOn(g.id, (s) => s.round >= 2);
     const midTop = topSeq(mid, a!.player);
     expect((await seen(g.id, a!.who, { seq: midTop })).body).toEqual({ lastSeen: midTop });
@@ -257,7 +256,7 @@ describe("QA: 3 and 12 seats; the board and last seen after the game ends", () =
     // The mark set before the end still points into the same numbering (the reveal is apart).
     expect((await notes(g.id, a!.who)).lastSeen).toBe(midTop);
     expect((await seen(g.id, a!.who, { seq: 1e9 })).body).toEqual({ lastSeen: endTop });
-    expect((await notes(g.id, a!.who)).board[b!.player]!.note).toBe(secret);
+    expect((await notes(g.id, a!.who)).board[b!.player]).toBe(secret);
     expect(JSON.stringify(end)).not.toContain(secret);
     const page = JSON.stringify((await call("GET", `/games/${g.id}`, b!.who)).body);
     expect(page).not.toContain(secret);

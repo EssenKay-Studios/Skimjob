@@ -88,13 +88,13 @@ export async function openLeads(page: Page): Promise<Locator> {
   return leads;
 }
 
-export type PanelName = "Crew" | "Case" | "Notes" | "Chat" | "This round" | "The result";
+export type PanelName = "Crew" | "Case" | "Chat" | "This round" | "The result";
 
 /** The game shell's laptop layout (three columns) starts at 1024 px; below it the panels are bottom sheets. */
 export const isWide = (page: Page): boolean => (page.viewportSize()?.width ?? 0) >= 1024;
 
 /**
- * Brings a game panel on screen. Laptops: "Crew", "Case", "Notes" and "Chat" are side tabs, "This round" and
+ * Brings a game panel on screen. Laptops: "Crew", "Case" and "Chat" are side tabs, "This round" and
  * "The result" are always there. Below 1024 px: opens its bottom sheet from the tab bar (and closes another
  * sheet that is open). Safe to call twice.
  */

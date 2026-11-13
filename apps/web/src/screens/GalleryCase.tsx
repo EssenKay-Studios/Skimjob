@@ -1,19 +1,19 @@
-// /dev/gallery sections for M2-10: the ledger / case file sheet, the "While
-// you were away" recap with its raccoon narrator, and the suspicion board, on
-// a small hand-made view (no server).
+// /dev/gallery sections: the "While you were away" recap with its raccoon
+// narrator, and the case board with the Players strip's private note
+// (design §15.3, §15.4), on a small hand-made view (no server).
 import { useState, type ReactNode } from "react";
 import { RaccoonNarrator } from "../art/Raccoon";
 import { AwayRecap } from "../components/AwayRecap";
 import { Button } from "../components/Button";
 import { BottomSheet } from "../components/BottomSheet";
 import { CaseBoard } from "../components/CaseBoard";
+import { SeatNote } from "../components/SeatNote";
 import { SketchFrame } from "../components/SketchFrame";
-import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
 import { Underline } from "../components/Underline";
 import { togglePin } from "../game/caseBoard";
 import { FIXTURE } from "../game/caseBoard.fixture";
 import { NO_LEADS } from "../game/caseBoard";
-import type { Board, BoardMark, PinsChannel } from "../game/notes";
+import type { Board, BoardChannel, PinsChannel } from "../game/notes";
 
 const people = [
   { id: "p2", name: "Ben", look: 1, isBot: false },
@@ -21,11 +21,26 @@ const people = [
   { id: "p4", name: "Bot · Dot", look: 3, isBot: true },
 ];
 
-/** The case board with pins kept in the page (no server): a fixture adapter's data. */
+/** Notes kept in the page (no server); an empty note clears it, as on the server. */
+function useDemoBoard(): BoardChannel {
+  const [board, setBoard] = useState<Board>({ p2: "Said Lobby, but I saw them in the Vault." });
+  const save = async (subject: string, note: string) => {
+    setBoard((b) => {
+      const next = { ...b };
+      if (note === "") delete next[subject];
+      else next[subject] = note;
+      return next;
+    });
+    return null;
+  };
+  return { board, error: null, save };
+}
+
+/** The case board with pins and notes kept in the page (no server): a fixture adapter's data. */
 export function CaseBoardDemo({ empty = false, seed = "g-case" }: { empty?: boolean; seed?: string }) {
   const [list, setList] = useState<readonly string[]>(["fact:r4.vault.saw"]);
   const pins: PinsChannel = { pins: new Set(list), ready: true, error: null, toggle: (id) => setList((l) => togglePin(l, id)) };
-  return <CaseBoard seed={seed} data={empty ? NO_LEADS : FIXTURE} people={people} pins={pins} marks={{ p2: { tag: "suspicious", note: "" } }} />;
+  return <CaseBoard seed={seed} data={empty ? NO_LEADS : FIXTURE} people={people} pins={pins} board={useDemoBoard()} />;
 }
 
 function Section({ id, title, note, children }: { id: string; title: string; note?: string; children: ReactNode }) {
@@ -42,19 +57,10 @@ function Section({ id, title, note, children }: { id: string; title: string; not
   );
 }
 
-export function NotesSections() {
-  const [board, setBoard] = useState<Board>({ p2: { tag: "suspicious", note: "Said Lobby, but I saw them in the Vault." }, p4: { tag: "trusted", note: "" } });
+export function CaseSections() {
   const [away, setAway] = useState(true);
   const [sheet, setSheet] = useState(false);
-  const save = async (subject: string, mark: BoardMark) => {
-    setBoard((b) => {
-      const next = { ...b };
-      if (mark.tag === null && mark.note === "") delete next[subject];
-      else next[subject] = mark;
-      return next;
-    });
-    return null;
-  };
+  const board = useDemoBoard();
   return (
     <>
       <Section id="away" title="While you were away" note="M2-10 · §13 recap as feed chirps, raccoon narrator">
@@ -74,7 +80,7 @@ export function NotesSections() {
           <RaccoonNarrator size={72} />
         </div>
       </Section>
-      <Section id="caseboard" title="Case board" note="S3b.5 · §15.4 suspect card, Players strip, Pinned, Leads; fixture adapter, pins kept in the page">
+      <Section id="caseboard" title="Case board" note="S3b.5 · §15.4 suspect card, Players strip (tap a seat for its leads and your note), Pinned, Leads; fixture adapter, pins and notes kept in the page">
         <CaseBoardDemo />
         <Button variant="secondary" seed="g-case-sheet-open" onClick={() => setSheet(true)}>
           Open as a phone sheet
@@ -84,14 +90,11 @@ export function NotesSections() {
         </BottomSheet>
         <CaseBoardDemo empty seed="g-case-empty" />
       </Section>
-      <Section id="suspicion" title="Suspicion board" note="M2-10 · §12.3 private tags and notes; seat marks">
-        <SuspicionBoard seed="g-sus" people={people} board={board} onSave={save} />
-        <div className="g-row">
-          <SuspicionMark tag="trusted" />
-          <SuspicionMark tag="unsure" />
-          <SuspicionMark tag="suspicious" />
-        </div>
-        <SuspicionBoard seed="g-sus-load" people={people} board={null} error="Can't reach the hideout." onSave={save} />
+      <Section id="seat-note" title="Your note on a seat" note="§15.3 the Players strip's private note: with a note, without one, loading and unreachable">
+        <SeatNote seed="g-note-ben" person={people[0]!} board={board} />
+        <SeatNote seed="g-note-cy" person={people[1]!} board={board} />
+        <SeatNote seed="g-note-load" person={people[1]!} board={{ board: null, error: null, save: board.save }} />
+        <SeatNote seed="g-note-err" person={people[1]!} board={{ board: null, error: "Can't reach the hideout.", save: board.save }} />
       </Section>
     </>
   );

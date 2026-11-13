@@ -188,7 +188,7 @@ describe("QA: pin races and the write limit (#114)", () => {
     expect(accepted).toContainEqual(await pinsIn(g.id, a!.who));
     // Other seats and the same seat's board edits are not slowed down.
     expect((await pin(g.id, b!.who, { pins: [] })).status).toBe(200);
-    expect((await call("PATCH", `/games/${g.id}/notes/board`, a!.who, { subject: b!.player, tag: "unsure" })).status).toBe(200);
+    expect((await call("PATCH", `/games/${g.id}/notes/board`, a!.who, { subject: b!.player, note: "unsure" })).status).toBe(200);
     expect((await pin(g2.id, g2.humans[0]!.who, { pins: [] })).status).toBe(200);
     // Bad bodies count too (the limit runs first), and the window is exact.
     clock.advance(BOARD_RATE.windowMs - 1);
