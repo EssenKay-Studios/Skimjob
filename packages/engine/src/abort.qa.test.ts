@@ -31,6 +31,7 @@ function next(s: GameState): Command[] {
   if (p.kind === "shakedownPending") return [{ type: "advance", deadline: { kind: "resolveShakedown", meetingId: p.meetingId } }];
   if (s.pendingEmergency) return [{ type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency.meetingId } }];
   if (p.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: p.round } }];
+  if (p.kind === "alibi") return [{ type: "advance", deadline: { kind: "alibi", round: p.round } }];
   if (p.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: p.round } }];
   if (p.kind === "awaitingMeeting") {
     const schedule: Command[] = s.scheduledMeeting ? [] : [{ type: "scheduleMeeting", meetingId: p.meetingId, slot: `slot-${p.meetingId}` }];

@@ -226,7 +226,10 @@ describe("clock jumps (laptop sleep)", () => {
     forcedSeed = "qa-jump";
     const t = TIMINGS["1h"];
     const { id, host } = await startGame(0, { sessionLength: "1h" }, 2);
-    // Long overdue: round 1 fires once; its result window is planned from the wake-up.
+    // Long overdue: round 1 fires once; its alibi window, then its result window, are planned from the wake-up. design §10
+    clock.advance(5 * 3600_000);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect(await deadlines(id)).toEqual([{ key: "alibi:1", due: clock.now() + t.alibiMs, paused: false }]);
     clock.advance(5 * 3600_000);
     expect(await app.scheduler.tick()).toBe(1);
     expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + t.resultMs, paused: false }]);
@@ -256,8 +259,8 @@ describe("clock jumps (laptop sleep)", () => {
     clock.advance(7 * 24 * 3600_000);
     expect(await app.scheduler.tick()).toBe(1);
     expect(await app.scheduler.tick()).toBe(0);
-    expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
-    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + TIMINGS["1w"].resultMs, paused: false }]);
+    expect((await load(id)).phase).toEqual({ kind: "alibi", round: 1 });
+    expect(await deadlines(id)).toEqual([{ key: "alibi:1", due: clock.now() + TIMINGS["1w"].alibiMs, paused: false }]);
   });
 });
 
@@ -308,15 +311,18 @@ describe("early round end once the whole crew has locked in (owner decision, 2 N
     clock.advance(1000);
     expect(await app.scheduler.tick()).toBe(1);
     s = await load(id);
-    expect(s.phase).toEqual({ kind: "result", round: 1 });
+    expect(s.phase).toEqual({ kind: "alibi", round: 1 });
     // The change made in the grace counts: the host's last move, and no new lock-in for it.
     const mine = s.log.filter((e) => e.type === "moveSubmitted" && e.player === hostId);
     expect(mine.at(-1)).toMatchObject({ move: { room: "lobby", duffel: 1, pocket: 0 } });
     expect(count(s, "moveLocked", (e) => e.player === hostId)).toBe(1);
     expect(count(s, "roundResolved")).toBe(1);
     expect(count(s, "defaultMoveAssigned")).toBe(0);
-    // Both round rows are gone with the round; the result window runs its full length.
-    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + t.resultMs, paused: false }]);
+    // Both round rows are gone with the round; the alibi window, then the result window, run their full length. design §10
+    expect(await deadlines(id)).toEqual([{ key: "alibi:1", due: clock.now() + t.alibiMs, paused: false }]);
+    clock.advance(t.alibiMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    if ((await load(id)).phase.kind === "result") expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + t.resultMs, paused: false }]);
   });
 
   it("the grace scales with TIME_SCALE and never outlasts the round", () => {
@@ -336,6 +342,8 @@ describe("an emergency in the result window (design §9.3)", () => {
     const t = TIMINGS["1h"];
     const { id, host } = await startGame(0, { sessionLength: "1h" }, 2);
     clock.advance(t.roundMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    clock.advance(t.alibiMs); // design §10: the alibi window first
     expect(await app.scheduler.tick()).toBe(1);
     expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
     expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + t.resultMs, paused: false }]);

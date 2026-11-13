@@ -42,5 +42,12 @@ export const ROLE_DEAL: Readonly<Record<number, RoleDealCounts>> = {
 /** The most copies of one role a deal may hold (11–12 players). design §11.3 */
 export const MAX_ROLE_COPIES = 2;
 
+/**
+ * The alibi window after every round's result, in every session preset (owner, 13 Nov): each
+ * player may post one alibi for the round until it closes. The server's number (the engine has no
+ * clock), kept here so it is one value. design §4.1, §10
+ */
+export const ALIBI_WINDOW_MS = 20_000;
+
 /** The host is offered "replace with a bot" for a player who missed this many rounds in a row. design §15 */
 export const REPLACE_AFTER_MISSED_ROUNDS = 2;

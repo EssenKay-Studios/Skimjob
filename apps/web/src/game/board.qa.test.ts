@@ -80,7 +80,7 @@ function playAll(cfg: GameConfig, max = 400, roles: readonly string[] = []): Gam
         }
       });
       push({ type: "advance", deadline: { kind: "round", round: p.round } });
-      // design §11.3: alibis any time once the round resolved; here right after it.
+      // design §10: alibis in the round's alibi window, right after it resolves.
       ids(s).forEach((id, i) => {
         if (i % 2 || s.phase.kind === "ended") return;
         const r = handleCommand(s, { type: "postAlibi", player: id, round: p.round, room: s.rooms[i % s.rooms.length] } as PlayerCommand);
@@ -89,6 +89,8 @@ function playAll(cfg: GameConfig, max = 400, roles: readonly string[] = []): Gam
           states.push(s);
         }
       });
+    } else if (p.kind === "alibi") {
+      push({ type: "advance", deadline: { kind: "alibi", round: p.round } });
     } else if (p.kind === "result") {
       push({ type: "advance", deadline: { kind: "result", round: p.round } });
     } else if (p.kind === "awaitingMeeting") {
@@ -152,6 +154,7 @@ describe("QA: board figures come only from the viewer's view (PR #41)", () => {
     for (const id of ["p1", "p2", "p3"]) s = step(s, move(id, "vault"));
     s = step(s, { type: "advance", deadline: { kind: "round", round: 1 } });
     s = step(s, { type: "postAlibi", player: "p2", round: 1, room: "office" } as PlayerCommand);
+    s = step(s, { type: "advance", deadline: { kind: "alibi", round: 1 } });
     // Three Vault grabs raid it: the police briefing (design §9.2), then the result window (§9.3).
     expect(s.phase).toMatchObject({ kind: "awaitingMeeting", meeting: "briefing", meetingId: "meeting-1" });
     s = step(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" });

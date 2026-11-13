@@ -9,7 +9,6 @@
   "apps/server/src/lobby.ts": "@lobby",
   "apps/server/src/migrate.ts": "*",
   "apps/server/src/notes.ts": "@caseboard",
-  "apps/server/src/plan.ts": "@plan",
   "apps/server/src/scheduler.ts": "*",
   "apps/server/src/server.ts": "*",
   "apps/server/src/startup.ts": "*",
@@ -27,7 +26,6 @@
   "apps/web/src/components/InfoTip.tsx": "@infotip",
   "apps/web/src/components/MeetingKit.tsx": "@meeting",
   "apps/web/src/components/MyGames.tsx": "@auth",
-  "apps/web/src/components/PlanBoard.tsx": "@plan",
   "apps/web/src/components/Reveal.tsx": "@reveal",
   "apps/web/src/components/SuspicionBoard.tsx": "@caseboard",
   "apps/web/src/game/board.ts": "@board",
@@ -40,7 +38,6 @@
   "apps/web/src/game/meeting.ts": "@meeting",
   "apps/web/src/game/move.ts": "@move",
   "apps/web/src/game/notes.ts": "@caseboard",
-  "apps/web/src/game/plan.ts": "@plan",
   "apps/web/src/game/reveal.ts": "@reveal",
   "apps/web/src/screens/Gallery.tsx": "@board",
   "apps/web/src/screens/GalleryArt.tsx": "@board",
@@ -48,7 +45,6 @@
   "apps/web/src/screens/GalleryHost.tsx": "@host",
   "apps/web/src/screens/GalleryInfoTip.tsx": "@infotip",
   "apps/web/src/screens/GalleryNotes.tsx": "@caseboard",
-  "apps/web/src/screens/GalleryPlan.tsx": "@plan",
   "apps/web/src/screens/GalleryReveal.tsx": "@reveal",
   "apps/web/src/screens/GalleryShell.tsx": "@shell",
   "apps/web/src/screens/Game.tsx": [
@@ -84,5 +80,9 @@
   "apps/web/src/components/TipsToggle.tsx": [
     "@teaching",
     "@auth"
-  ]
+  ],
+  "apps/web/src/components/AlibiPopup.tsx": "@alibi",
+  "apps/web/src/components/SnapshotCard.tsx": "@alibi",
+  "apps/web/src/game/snapshot.ts": "@alibi",
+  "apps/web/src/screens/GalleryAlibi.tsx": "@alibi"
 }

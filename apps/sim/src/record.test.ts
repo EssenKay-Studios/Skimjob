@@ -60,11 +60,12 @@ function run(state: GameState, ...commands: Command[]): GameState {
     return r.state;
   }, state);
 }
-/** Back to planning: a Bail choice window, a due meeting (server slot, nobody votes) and the result window pass (design §9.3, §9.4, §9.6). */
+/** Back to planning: the alibi window, a Bail choice window, a due meeting (server slot, nobody votes) and the result window pass (design §9.3, §9.4, §9.6, §10). */
 function pass(s: GameState): GameState {
   for (;;) {
     const p = s.phase;
-    if (p.kind === "result") s = apply(s, { type: "advance", deadline: { kind: "result", round: p.round } });
+    if (p.kind === "alibi") s = apply(s, { type: "advance", deadline: { kind: "alibi", round: p.round } });
+    else if (p.kind === "result") s = apply(s, { type: "advance", deadline: { kind: "result", round: p.round } });
     else if (p.kind === "shakedownPending") s = apply(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: p.meetingId } });
     else if (p.kind === "awaitingMeeting") {
       s = apply(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "now" });
@@ -82,9 +83,10 @@ describe("recordGame — a scripted game", () => {
   const lobby = (st: GameState) => run(pass(st), move("p0", "lobby"), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(pass(st)));
   let s = lookouts(3);
   for (let r = 0; r < 3; r++) s = run(pass(s), move("p0", "vault", 6), move("p1", "lobby", 1), move("p2", "lobby"), roundDeadline(pass(s)));
-  // Round 3's result window: p1 spends the crew's emergency (design §9.3).
+  // Round 3's alibi window closes, then in its result window p1 spends the crew's emergency (design §9.3, §10).
   s = run(
     s,
+    { type: "advance", deadline: { kind: "alibi", round: 3 } },
     { type: "callEmergency", player: "p1" },
     { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } },
     { type: "castVote", player: "p1", vote: { kind: "shakedown", target: "p0" } },
@@ -102,17 +104,6 @@ describe("recordGame — a scripted game", () => {
     expect(rec.capWithBankLeft).toBe(true); // at the cap, with over a quarter of the bank left
     expect(rec.meetings).toEqual({ regular: 0, briefing: 0, emergency: 1 }); // the bank never lost a third
     expect(rec.winners).toEqual(["p1"]);
-  });
-
-  it("records the plan spots and how many were kept (design §10)", () => {
-    expect([rec.planSpots, rec.planKept]).toEqual([0, 0]); // nobody used the board
-    const cfg = { ...config(3), contentOverrides: { ...R6, roundCap: 1 } };
-    let t = replay(cfg, setupEvents(cfg).map((e): GameEvent => (e.type === "roleDealt" ? { ...e, role: "lookout" } : e)));
-    const spot = (player: string, room: string | null) => ({ player, placed: null, room, power: null, agreed: true });
-    // p0 keeps its spot, p1 claims the Lobby but goes to the Vault, p2 claims nothing.
-    const plan = { entries: [spot("p0", "lobby"), spot("p1", "lobby"), spot("p2", null)], history: [] };
-    t = run(t, move("p0", "lobby"), move("p1", "vault"), move("p2", "lobby"), { type: "advance", deadline: { kind: "round", round: 1, plan } });
-    expect(recordGame(t, ["honest", "greedy", "honest"])).toMatchObject({ planSpots: 2, planKept: 1 });
   });
 
   it("records a heist sunk by theft (design §8.4)", () => {

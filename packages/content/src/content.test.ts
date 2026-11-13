@@ -14,7 +14,6 @@ import {
   MAX_PLAYERS,
   MAX_ROLE_COPIES,
   MIN_PLAYERS,
-  POWER_CLAIM_TARGET,
   ROLES,
   ROLE_DEAL,
 } from "./index";
@@ -139,11 +138,11 @@ describe("roles — design §11.1, §11.2", () => {
     });
   });
 
-  it("perks: seven in three tiers, each costing its tier in coins — design §12", () => {
-    expect(PERK_IDS).toEqual(["tail", "alibi", "ballot", "softShoes", "blackout", "bail", "plantEvidence"]);
+  it("perks: six in three tiers (Stamped alibi removed, owner 13 Nov), each costing its tier in coins — design §12", () => {
+    expect(PERK_IDS).toEqual(["tail", "ballot", "softShoes", "blackout", "bail", "plantEvidence"]);
     for (const tier of PERK_TIERS) expect(PERK_IDS.some((id) => PERKS[id].tier === tier), `tier ${tier}`).toBe(true);
     for (const id of PERK_IDS) expect(PERKS[id].cost, id).toBe(PERKS[id].tier);
-    expect(PERK_IDS.filter((id) => PERKS[id].tier === 1)).toEqual(["tail", "alibi", "ballot"]);
+    expect(PERK_IDS.filter((id) => PERKS[id].tier === 1)).toEqual(["tail", "ballot"]);
     expect(PERK_IDS.filter((id) => PERKS[id].tier === 2)).toEqual(["softShoes", "blackout"]);
     expect(PERK_IDS.filter((id) => PERKS[id].tier === 3)).toEqual(["bail", "plantEvidence"]);
     // §20.3: every perk has its line.
@@ -188,15 +187,5 @@ describe("events deck content — design §13", () => {
       if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
     }
     expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", extraCoins: 1 }); // design §13: Vault +1 coin
-  });
-});
-
-describe("plan-board power claims — design §10", () => {
-  it("every claimable power is a power some role has, and points at a room or a player", () => {
-    const kinds = new Set(Object.values(ROLES).map((r) => r.power.kind));
-    for (const [kind, aims] of Object.entries(POWER_CLAIM_TARGET)) {
-      expect(kinds.has(kind as never)).toBe(true);
-      expect(["room", "player"]).toContain(aims);
-    }
   });
 });

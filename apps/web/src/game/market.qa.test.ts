@@ -34,6 +34,7 @@ const run = (s: GameState, ...cmds: unknown[]): GameState =>
 const buy = (player: string, perk: unknown) => ({ type: "buyPerk", player, perk });
 const endRound = (round: number) => [
   { type: "advance", deadline: { kind: "round", round } },
+  { type: "advance", deadline: { kind: "alibi", round } },
   { type: "advance", deadline: { kind: "result", round } },
 ];
 

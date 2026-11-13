@@ -37,8 +37,6 @@ export function gameRec(over: Partial<GameRecord> = {}): GameRecord {
     raids: 1,
     stalls: 0,
     cards: 0,
-    planSpots: 0,
-    planKept: 0,
     meetings: { regular: 2, briefing: 1, emergency: 0 },
     shakedowns: [],
     winners: [],

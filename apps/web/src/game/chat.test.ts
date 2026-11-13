@@ -141,12 +141,11 @@ describe("feedFor", () => {
     expect(noticeText(notice("p2", "p3", 1), name)).toBe("Ben is DMing Cyd");
   });
 
-  it("keeps quiet events (alibis, plans, round starts) out of the feed, and only public ones in; role claims show", () => {
+  it("keeps quiet events (alibis, round starts) out of the feed, and only public ones in; role claims show", () => {
     const pub = (e: GameEvent) => feedWorthy(e);
     expect(pub(sampleEvents.roundResolved)).toBe(true);
     expect(pub(sampleEvents.eventFlipped)).toBe(true);
-    expect(pub(sampleEvents.said)).toBe(false); // the plan board's snapshot
-    const said = (statement: object) => ({ type: "said", visibility: { kind: "public" }, statement }) as GameEvent;
+        const said = (statement: object) => ({ type: "said", visibility: { kind: "public" }, statement }) as GameEvent;
     expect(pub(said({ kind: "alibi", player: "p1", round: 1, room: "lobby" }))).toBe(false);
     expect(pub(said({ kind: "role", player: "p1", role: "lookout", stretch: 1 }))).toBe(true);
     expect(pub(sampleEvents.roundStarted)).toBe(false);

@@ -2,7 +2,7 @@
 // target, per-holder charges and the Mole's and Fixer's own win rule; the
 // Smooth Talker's vote and the shakedown window. design §11, §8.4, §9.5
 import { describe, expect, it } from "vitest";
-import { closeResultWindow } from "./result.testkit";
+import { closeAlibiWindow, closeResultWindow } from "./result.testkit";
 import { BANK_JOB, MAX_PLAYERS, MIN_PLAYERS, ROLES } from "@skimjob/content";
 import type { ContentOverrides, GameConfig, GameEvent, GameState, PlayerState, RoleListSetting, VoteVisibility } from "./types";
 import { createGame, setupEvents, validateConfig } from "./setup";
@@ -34,14 +34,18 @@ function game(players: number, roles: string[], overrides: ContentOverrides | nu
 }
 
 /**
- * A command. The result window (design §9.3) stays open until a move or a
- * round deadline closes it, so an emergency can be called in it.
+ * A command. A round's alibi window closes at once with no alibis (design §10);
+ * the result window (design §9.3) stays open until a move or a round deadline
+ * closes it, so an emergency can be called in it.
  */
 function handleThroughResult(state: GameState, command: unknown): CommandResult {
   const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
   const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
   const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
-  return handleCommand(s, command);
+  const r = handleCommand(s, command);
+  if (!r.ok) return r;
+  const closed = closeAlibiWindow(r.state);
+  return closed.ok ? { ok: true, state: closed.state, events: [...r.events, ...closed.events] } : closed;
 }
 const must = (r: CommandResult): GameState => {
   if (!r.ok) throw new Error(r.reason);
@@ -74,7 +78,7 @@ const watch = (player: string, room: string, extra: object = {}) => mv(player, "
 /** The round being planned; from the result window, the next one (closing the window first). */
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.phase.kind === "result" ? s.round + 1 : s.round } });
 /** Resolve the round being planned and stop in its result window (before the next round starts). */
-const resolve = (s: GameState): GameState => must(handleCommand(s.phase.kind === "result" ? must(closeResultWindow(s)) : s, ROUND(s)));
+const resolve = (s: GameState): GameState => must(closeAlibiWindow(must(handleCommand(s.phase.kind === "result" ? must(closeResultWindow(s)) : s, ROUND(s)))));
 const use = (player: string, ability: object) => ({ type: "useAbility", player, ability });
 const vote = (player: string, target: string | null) => ({ type: "castVote", player, vote: target === null ? { kind: "skip" } : { kind: "shakedown", target } });
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });

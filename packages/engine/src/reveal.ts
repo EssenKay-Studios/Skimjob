@@ -45,11 +45,10 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome): Reve
   const drafts: Draft[] = [];
   let current: Draft = { card: null, items: [], resolved: null, split: null, stashes: {} };
   drafts[0] = current;
-  const grabs = new Map<number, Map<PlayerId, Omit<RevealMove, "missed" | "alibi" | "planned">>>();
+  const grabs = new Map<number, Map<PlayerId, Omit<RevealMove, "missed" | "alibi">>>();
   const missed = new Set<string>();
   const satOut = new Set<string>();
   const alibi = new Map<string, RoomId>();
-  const planned = new Map<string, RoomId>();
   const key = (p: PlayerId, round: number) => `${round}\u0000${p}`;
 
   for (let i = 0; i < log.length; i++) {
@@ -78,8 +77,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome): Reve
       case "said": {
         const said = e.statement;
         if (said.kind === "alibi") alibi.set(key(said.player, said.round), said.room);
-        else if (said.kind === "role") items.push({ kind: "claim", player: said.player, claimed: said.role, real: role.get(said.player) ?? said.role });
-        else for (const p of said.plan.entries) if (p.room !== null) planned.set(key(p.player, said.round), p.room);
+        else items.push({ kind: "claim", player: said.player, claimed: said.role, real: role.get(said.player) ?? said.role });
         break;
       }
       case "coinsGrabbed": {
@@ -126,7 +124,7 @@ export function revealSummary(log: readonly GameEvent[], outcome: Outcome): Reve
     const moves: RevealMove[] = byPlayer
       ? seatOrder.flatMap((p) => {
           const m = byPlayer.get(p);
-          return m ? [{ ...m, missed: missed.has(key(p, round)), alibi: alibi.get(key(p, round)) ?? null, planned: planned.get(key(p, round)) ?? null }] : [];
+          return m ? [{ ...m, missed: missed.has(key(p, round)), alibi: alibi.get(key(p, round)) ?? null }] : [];
         })
       : [];
     if (round === 0 && d.items.length === 0) return;

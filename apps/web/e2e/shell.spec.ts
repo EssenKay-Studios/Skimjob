@@ -47,11 +47,8 @@ for (const viewport of VIEWPORTS) {
       const left = await box(page, ".shell__left");
       const centre = await box(page, ".shell__centre");
       const right = await box(page, ".shell__right");
-      const board = await box(page, ".shell__board");
-      const plan = await box(page, ".shell__plan");
       expect(left.x + left.width).toBeLessThanOrEqual(centre.x);
       expect(centre.x + centre.width).toBeLessThanOrEqual(right.x);
-      expect(plan.y).toBeGreaterThanOrEqual(board.y + board.height); // the plan board sits under the bank
       await expect(page.getByRole("heading", { name: "This round" })).toBeVisible();
       await expect(page.getByRole("navigation", { name: "Game panels" })).toHaveCount(0);
       // One screen: the page itself does not scroll.
@@ -69,6 +66,8 @@ for (const viewport of VIEWPORTS) {
       // A tab opens its panel as a sheet that fits the screen, with the focus inside.
       const opener = tabs.getByRole("button", { name: "Case" });
       await opener.click();
+      // Off the sheet: the mouse left on the tab would hover an "i" in the risen sheet, and its tip takes the Esc.
+      await page.mouse.move(0, 0);
       const sheet = page.getByRole("dialog", { name: "Case" });
       await expect(sheet).toBeVisible();
       await settle(page);
@@ -125,26 +124,6 @@ test("bottom sheet: no slide under reduced motion, and the gallery section opens
   await expect(opener).toBeFocused();
   await ctx.close();
 });
-
-// QA round 2: the plan board keeps its size on short laptop windows (the column scrolls instead).
-for (const viewport of [
-  { width: 1366, height: 768 },
-  { width: 1280, height: 600 },
-]) {
-  test(`plan board at ${viewport.width}x${viewport.height} keeps its heading inside its frame @shell`, async ({ browser }) => {
-    const ctx = await browser.newContext({ viewport });
-    const page = await ctx.newPage();
-    await page.goto("/dev/gallery/shell");
-    await expect(page.getByRole("heading", { name: "Plan board" })).toBeAttached();
-    await settle(page);
-    const plan = await box(page, ".shell__plan");
-    const head = (await page.getByRole("heading", { name: "Plan board" }).boundingBox())!;
-    expect(plan.height).toBeGreaterThanOrEqual(160);
-    expect(head.y + head.height).toBeLessThanOrEqual(plan.y + plan.height);
-    expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
-    await ctx.close();
-  });
-}
 
 test("a sheet locks the page behind it and gives the scroll back on close @shell", async ({ browser }) => {
   const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
@@ -321,13 +300,11 @@ for (const viewport of [
       // The top bar shares the shell's column.
       const home = await box(page, ".topbar__home > :first-child");
       expect(Math.abs(home.x - strip.x)).toBeLessThanOrEqual(1);
-      // One screen (design §15.6): the whole board fits in the window and the column, with the Plan board heading below it.
+      // One screen (design §15.6): the whole board fits in the window and the column.
       const board = await box(page, ".shell__board");
       const centre = await box(page, ".shell__centre");
       expect(board.y + board.height, "the board fits in the window").toBeLessThanOrEqual(viewport.height);
       expect(board.y + board.height, "the board fits in its column").toBeLessThanOrEqual(centre.y + centre.height);
-      const plan = await box(page, ".shell__plan h2");
-      expect(plan.y + plan.height, "the Plan board heading is on screen").toBeLessThanOrEqual(centre.y + centre.height);
       await ctx.close();
     });
   }

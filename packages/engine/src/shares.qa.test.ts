@@ -44,6 +44,8 @@ function deadlineFor(state: GameState): Command {
   switch (phase.kind) {
     case "planning":
       return { type: "advance", deadline: { kind: "round", round: phase.round } };
+    case "alibi":
+      return { type: "advance", deadline: { kind: "alibi", round: phase.round } };
     case "result":
       return { type: "advance", deadline: { kind: "result", round: phase.round } };
     case "meeting":
@@ -65,7 +67,7 @@ function must(state: GameState, command: Command): GameState {
   return r.state;
 }
 
-/** Runs past any meeting (nobody votes) and the result window to the next planning phase or the end. */
+/** Runs past the alibi window (nobody posts), any meeting (nobody votes) and the result window to the next planning phase or the end. */
 function settle(state: GameState): GameState {
   let s = state;
   for (let i = 0; s.phase.kind !== "planning" && s.phase.kind !== "ended"; i++) {

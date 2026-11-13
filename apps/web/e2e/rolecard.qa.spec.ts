@@ -79,8 +79,7 @@ for (const list of ["exact", "possible", "hidden"] as const) {
     // design §18: no other seat's role anywhere in the page's markup or ARIA (the bots are named "Bot · …").
     const dom = await page.content();
     expect(dom).not.toMatch(/data-role=|"role":"/);
-    // Plan-board power claims ("Bot · Riya: Server room, Lookout on Vault") are public statements, true or not (design §10), not roles.
-    const tree = (await page.locator("body").ariaSnapshot()).split("\n").filter((l) => !/ on .*Show |→/.test(l)).join("\n");
+    const tree = await page.locator("body").ariaSnapshot();
     expect(tree).not.toMatch(/Bot[^\n]*(Lookout|Locksmith|Detective|Auditor|Smooth Talker|Hacker|Electrician|Priest|Mole|Fixer)/);
 
     for (const width of list === "exact" ? WIDTHS : [360, 1280]) {

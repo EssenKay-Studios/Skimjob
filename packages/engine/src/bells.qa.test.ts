@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createGame, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
-import { handleThroughResult } from "./result.testkit";
+import { closeAlibiWindow, closeResultWindow, handleThroughResult } from "./result.testkit";
 import { viewFor } from "./view";
 import { canSee } from "./types";
 import type { Command, GameConfig, GameEvent, GameState } from "./types";
@@ -344,10 +344,16 @@ describe("QA: crew sizes and invalid or out-of-phase commands — design §3.2, 
     const g = game(3, ["mole"]);
     const r = handleCommand(run(g, mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1)), { type: "advance", deadline: { kind: "round", round: 1 } });
     if (!r.ok) throw new Error(r.reason);
-    expect(r.state.phase.kind).toBe("result");
-    expect(handleCommand(r.state, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } })).ok).toBe(false);
-    // A stale round deadline is refused too.
-    expect(handleCommand(r.state, { type: "advance", deadline: { kind: "round", round: 1 } }).ok).toBe(false);
+    // design §10: the alibi window opens first, then the result window; both refuse a move and a stale round deadline.
+    expect(r.state.phase.kind).toBe("alibi");
+    const closed = closeAlibiWindow(r.state);
+    if (!closed.ok) throw new Error(closed.reason);
+    expect(closed.state.phase.kind).toBe("result");
+    for (const s of [r.state, closed.state]) {
+      expect(handleCommand(s, mv("p0", "lobby", 1, 0, { ability: { kind: "ring", room: "vault" } })).ok).toBe(false);
+      // A stale round deadline is refused too.
+      expect(handleCommand(s, { type: "advance", deadline: { kind: "round", round: 1 } }).ok).toBe(false);
+    }
   });
 
   it("a Mole's ring that was refused is not spent", () => {
@@ -499,10 +505,20 @@ describe("QA: a missed move into a taped-off Lobby sits the round out — design
       for (const e of v.ledger) expect(e.event.visibility.kind).toBe("public");
       expect(JSON.stringify(v.caseFile)).not.toContain('"p3"');
     }
-    // Nothing public tells a sit-out from a silent Security watcher (bar the lock-in mark, which is public by design).
-    const watched = run(g, mv("p0", "office", 2), mv("p1", "office", 0, 2), mv("p2", "vault", 1), mv("p3", "security", 0, 0, { watch: "rooftop" }), ROUND);
+    // Nothing public tells a sit-out from a silent Security watcher (bar the lock-in mark, which is public by design),
+    // when both post the same alibi in the window (design §10: one who posts none is shown in their real room).
+    const alibied = (...moves: Command[]): GameState => {
+      const resolved = handleCommand(run(g, ...moves), ROUND(g));
+      if (!resolved.ok) throw new Error(resolved.reason);
+      const posted = handleCommand(resolved.state, { type: "postAlibi", player: "p3", round: 1, room: "security" });
+      if (!posted.ok) throw new Error(posted.reason);
+      const closed = closeResultWindow(posted.state);
+      if (!closed.ok) throw new Error(closed.reason);
+      return closed.state;
+    };
+    const moves = [mv("p0", "office", 2), mv("p1", "office", 0, 2), mv("p2", "vault", 1)];
     const pub = (s: GameState) => viewFor(s, "p0").ledger.map((e) => e.event).filter((e) => e.type !== "moveLocked");
-    expect(pub(sat)).toEqual(pub(watched));
+    expect(pub(alibied(...moves))).toEqual(pub(alibied(...moves, mv("p3", "security", 0, 0, { watch: "rooftop" }))));
   });
 
   it("replays deterministically, and the reveal still builds", () => {

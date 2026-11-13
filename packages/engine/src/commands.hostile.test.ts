@@ -69,8 +69,11 @@ function scenarioStates(): GameState[] {
   keep(s); // planning round 1
   s = keep(run(s, ...s.playerOrder.map((id) => mv(id, "lobby"))));
   s = keep(run(s, { type: "proposeMeeting", player: "p0", slot: "slot-a" }));
-  s = keep(run(s, round(s))); // the result window after round 1 (design §9.3)
+  s = keep(run(s, round(s))); // round 1's alibi window (design §10)
+  expect(s.phase.kind).toBe("alibi");
   s = keep(run(s, { type: "postAlibi", player: "p8", round: 1, room: "lobby" }));
+  s = keep(run(s, { type: "advance", deadline: { kind: "alibi", round: 1 } })); // the result window after round 1 (design §9.3)
+  s = keep(run(s, { type: "markAlibi", player: "p0", round: 1, target: "p1", mark: "trusted" })); // design §10
   s = keep(run(s, { type: "useAbility", player: "p5", ability: { kind: "audit", room: "lobby" } }));
   expect(s.phase.kind).toBe("result");
   s = keep(run(s, { type: "callEmergency", player: "p1" })); // waiting to open
@@ -81,6 +84,8 @@ function scenarioStates(): GameState[] {
   s = keep(run(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "emergency-1" } })); // planning round 2
   // Round 2: everyone in the Vault rings it past its last bulb: the raid calls a police briefing (design §9.2).
   s = keep(run(s, ...s.playerOrder.map((id) => mv(id, "vault")), round(s)));
+  expect(s.phase.kind).toBe("alibi");
+  s = keep(run(s, { type: "advance", deadline: { kind: "alibi", round: 2 } }));
   expect(s.phase.kind).toBe("awaitingMeeting");
   s = keep(run(s, (s.phase.kind === "awaitingMeeting" ? { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: "server" } : null)));
   // A Lockdown card forged onto planning (design §13).
@@ -123,7 +128,6 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
     // Perks, bought while planning, and Bail's choice. design §9.6, §12
     for (const perk of [
       { kind: "tail", room },
-      { kind: "alibi" },
       { kind: "ballot", target: other(player) },
       { kind: "softShoes" },
       { kind: "blackout", room },
@@ -134,6 +138,9 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
     }
     out.push({ type: "chooseBail", player, use: true });
     out.push({ type: "postAlibi", player, round: s.resolvedRound, room });
+    // design §10: a trust mark on another player's alibi, and clearing one.
+    out.push({ type: "markAlibi", player, round: s.resolvedRound, target: other(player), mark: "liar" });
+    out.push({ type: "markAlibi", player, round: s.resolvedRound, target: other(player), mark: null });
     out.push({ type: "claimRole", player, role: "lookout" }); // design §11.3
     out.push({ type: "proposeMeeting", player, slot: `slot-${s.log.length}` });
     for (const proposal of s.proposals) out.push({ type: "acceptMeeting", player, proposalId: proposal.id });
@@ -145,12 +152,7 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
   }
   const meetingIds = [s.scheduledMeeting?.meetingId, s.pendingEmergency?.meetingId, s.meeting?.id, s.pendingShakedown?.meetingId];
   out.push({ type: "advance", deadline: { kind: "round", round: s.round } });
-  // design §10: the round deadline with the plan board as it resolves (every field fuzzed).
-  const plan = {
-    entries: [{ player: "p0", placed: "lobby", room: "lobby", power: { role: "hacker", target: "vault" }, agreed: true }],
-    history: [{ actor: "p1", kind: "place", subject: "p0", value: "lobby", target: null, msBeforeDeadline: 1000 }],
-  };
-  out.push({ type: "advance", deadline: { kind: "round", round: s.round, plan } });
+  out.push({ type: "advance", deadline: { kind: "alibi", round: s.resolvedRound } });
   out.push({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
   for (const kind of ["openMeeting", "closeMeeting", "resolveShakedown"]) {
     for (const meetingId of meetingIds) if (meetingId) out.push({ type: "advance", deadline: { kind, meetingId } });
@@ -164,14 +166,15 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
 /** Fields whose strings are free text the engine only stores and compares (`slot`, design §9.4): any short string is fine there. */
 const FREE_TEXT = new Set(["slot"]);
 /** Fields a command may leave out (a move without a power). */
-const OPTIONAL = new Set(["move.ability", "deadline.plan"]);
-/** Hostile values that are valid in these fields (design §10: nobody placed, no claim, no deadline, an empty board or history). */
+const OPTIONAL = new Set(["move.ability"]);
+/** Hostile values that are valid in these fields (design §10: nobody placed, no claim, no deadline, an empty board or history, a cleared trust mark). */
 const isEmptyList = (h: unknown) => Array.isArray(h) && h.length === 0;
 const ALSO_VALID: ReadonlyMap<string, (h: unknown) => boolean> = new Map([
   ...["placed", "room", "power"].map((k) => [`deadline.plan.entries.${k}`, (h: unknown) => h === null] as const),
   ...["value", "msBeforeDeadline"].map((k) => [`deadline.plan.history.${k}`, (h: unknown) => h === null] as const),
   ["deadline.plan.entries", isEmptyList],
   ["deadline.plan.history", isEmptyList],
+  ["mark", (h: unknown) => h === null],
 ]);
 /** Stands for "the field is left out". */
 const ABSENT = Symbol("absent");

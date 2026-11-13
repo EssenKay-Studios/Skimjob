@@ -224,13 +224,23 @@
   gap: 2px 12px;
   min-width: 0;
 }
-.reveal__move.is-lie .reveal__alibi {
-  color: var(--bad);
-  font-weight: 650;
+/* Under the round's card told true (SnapshotCard): the round's lies. design §18 board 5 */
+.reveal__lies ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.reveal__changed {
-  color: var(--bad);
-  font-weight: 650;
+.reveal__lies {
+  display: grid;
+  gap: 4px;
+}
+.reveal__lies h5 {
+  margin: 0;
+  font: 400 16px/1.2 var(--font-hand);
+}
+.reveal__lies li {
   overflow-wrap: anywhere;
 }
 .reveal__sat-out {

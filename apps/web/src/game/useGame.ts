@@ -6,7 +6,6 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { PlayerCommand, PlayerView } from "@skimjob/engine";
 import { asChatMessage, asDmNotice, chatReducer, EMPTY_CHAT, type ChatAction, type ChatMessage, type ChatRequest, type ChatState, type DmNotice } from "./chat";
 import { controlOf, NO_CONTROL, type Control } from "./host";
-import { asPlanBoard, type PlanBoard, type PlanEdit } from "./plan";
 import { formatCountdown, remainingMs, timerFor, type Presence, type SeatPresence, type Timer } from "./hud";
 
 /** A command as the client sends it: the server fills in `player` from the session. */
@@ -27,10 +26,6 @@ export interface GameChannel {
   readonly chat: ChatState;
   /** Posts a chat message or evidence card; replied to like a command. */
   readonly sendChat: (req: ChatRequest) => Promise<Reply>;
-  /** The latest round's plan board, live (S3b.4). Null until the server sends it. */
-  readonly plan: PlanBoard | null;
-  /** Places anyone's avatar and edits your own claims on the plan board; replied to like a command. */
-  readonly sendPlan: (edit: PlanEdit) => Promise<Reply>;
   /** Each person's seat: online now or last seen (owner decision, 2 Nov). Null until the server sends it. */
   readonly presence: Presence | null;
   /** The host's pause, stand-in bots and idle seats (M2-13), sent with each view. */
@@ -89,7 +84,6 @@ export function useGame(gameId: string, enabled = true): GameChannel {
   const [offset, setOffset] = useState(0);
   const [presence, setPresence] = useState<Presence | null>(null);
   const [control, setControl] = useState<Control>(NO_CONTROL);
-  const [plan, setPlan] = useState<PlanBoard | null>(null);
   const [connection, setConnection] = useState<Connection>("connecting");
   const [chat, dispatchChat] = useReducer(chatReducer, EMPTY_CHAT);
   const socket = useRef<WebSocket | null>(null);
@@ -131,11 +125,6 @@ export function useGame(gameId: string, enabled = true): GameChannel {
         }
         const seats = presenceOf(msg as Record<string, unknown>);
         if (seats) return setPresence(seats);
-        if ("plan" in msg) {
-          const board = asPlanBoard(msg.plan);
-          if (board) setPlan(board);
-          return;
-        }
         const chatAction = chatActionOf(msg as Record<string, unknown>);
         if (chatAction) return dispatchChat(chatAction);
         const id = "id" in msg ? String(msg.id) : null;
@@ -177,7 +166,7 @@ export function useGame(gameId: string, enabled = true): GameChannel {
   }, [gameId, enabled]);
 
   /** Sends `body` with a fresh id and resolves with the server's reply to it. */
-  const request = useCallback((body: { cmd: ClientCommand } | { chat: ChatRequest } | { plan: PlanEdit }): Promise<Reply> => {
+  const request = useCallback((body: { cmd: ClientCommand } | { chat: ChatRequest }): Promise<Reply> => {
     const ws = socket.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve({ ok: false, reason: "not connected; reconnecting" });
     const id = `c${nextId.current++}`;
@@ -188,9 +177,8 @@ export function useGame(gameId: string, enabled = true): GameChannel {
   }, []);
   const send = useCallback((cmd: ClientCommand) => request({ cmd }), [request]);
   const sendChat = useCallback((chat: ChatRequest) => request({ chat }), [request]);
-  const sendPlan = useCallback((edit: PlanEdit) => request({ plan: edit }), [request]);
 
-  return { view, timers, offset, connection, send, chat, sendChat, plan, sendPlan, presence, control };
+  return { view, timers, offset, connection, send, chat, sendChat, presence, control };
 }
 
 /** The current time, re-rendering every `ms`. */

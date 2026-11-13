@@ -155,7 +155,7 @@ export async function showResult(page: Page, timeout?: number): Promise<void> {
 }
 
 /**
- * For a loop that plays a whole game: below 1024 px keeps the "This round" sheet (move panel, alibis, "The result")
+ * For a loop that plays a whole game: below 1024 px keeps the "This round" sheet (move panel, the snapshot card, "The result")
  * open, as one tap on the tab bar when it isn't (nothing happens while another dialog, the vote window, is open).
  */
 export async function keepRoundOpen(page: Page): Promise<void> {

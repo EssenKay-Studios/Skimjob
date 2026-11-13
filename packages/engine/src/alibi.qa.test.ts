@@ -1,4 +1,4 @@
-// QA (PR #5): alibis and the round-named deadline. design §11.3, §5
+// QA (PR #5): alibis and the round-named deadline. design §10, §5
 import { NO_RAIDS } from "./v01-numbers.testkit";
 import { describe, expect, it } from "vitest";
 import type { GameConfig, GameState } from "./types";
@@ -40,8 +40,11 @@ const run = (s: GameState, ...cs: Cmd[]) => cs.reduce<GameState>(ok, s);
 const alibi = (player: string, room: unknown, extra: object = {}) => ({ type: "postAlibi", player, round: 1, room, ...extra });
 const deadline = (round: unknown) => ({ type: "advance", deadline: { kind: "round", round } });
 const ROUND = (s: GameState) => deadline(s.round);
-/** design §9.3: the result window closes with no emergency called; the next round's planning starts. */
+/** design §10: the round's alibi window closes. */
+const ALIBI = (s: GameState) => ({ type: "advance", deadline: { kind: "alibi", round: s.resolvedRound } });
+/** design §9.3: the alibi window, then the result window, close with no emergency called; the next round's planning starts. */
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
+const NEXT = [ALIBI, RESULT];
 /** A bank of 9 for 3 players: round 1's missed moves (3 coins) leave 6, a third gone (design §9.1). */
 const SMALL_BANK = { ...NO_RAIDS, bank: { coinsPerPlayer: 3 } };
 
@@ -54,7 +57,7 @@ function refused(s: GameState, command: unknown): string {
   return r.ok ? "" : r.reason;
 }
 
-describe("QA alibis — design §11.3", () => {
+describe("QA alibis — design §10", () => {
   it("one per player per round at 3 and 12 players; every player can post once", () => {
     for (const n of [3, 12]) {
       let s = run(createGame(config(n)), ROUND);
@@ -65,17 +68,20 @@ describe("QA alibis — design §11.3", () => {
     }
   });
 
-  it("no window: round N's alibi is taken in every later phase, during round N+1's planning and around a meeting (owner, 6 Nov)", () => {
-    let s = run(createGame(config(3)), ROUND); // round 1 resolved: the result window
-    s = run(s, alibi("p0", "vault"), RESULT); // planning 2
-    s = run(s, alibi("p1", "lobby"), { type: "submitMove", player: "p0", move: fullGrab("office") }, ROUND);
+  it("only in the round's own window: round N's alibi is refused in round N+1's planning, its window and around a meeting (owner, 13 Nov)", () => {
+    let s = run(createGame(config(3)), ROUND); // round 1 resolved: its alibi window
+    s = run(s, alibi("p0", "vault"), ...NEXT); // planning 2
+    expect(refused(s, alibi("p1", "lobby"))).toMatch(/not open/);
+    s = run(s, { type: "submitMove", player: "p0", move: fullGrab("office") }, ROUND);
+    expect(refused(s, alibi("p1", "lobby"))).toMatch(/alibi window for round 1 is not open/);
     const r = handleCommand(s, alibi("p2", "lobby", { round: 2 }));
     expect(r.ok && r.events).toEqual([{ type: "said", visibility: PUBLIC, statement: { kind: "alibi", player: "p2", round: 2, room: "lobby" } }]);
-    let m = run(createGame({ ...config(3), contentOverrides: SMALL_BANK }), ROUND);
+    let m = run(createGame({ ...config(3), contentOverrides: SMALL_BANK }), ROUND, alibi("p0", "rooftop"), ALIBI);
     expect(m.phase.kind).toBe("awaitingMeeting");
-    m = run(m, alibi("p0", "rooftop"), { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } });
-    m = run(m, alibi("p1", "lobby"), { type: "advance", deadline: { kind: "closeMeeting", meetingId: "meeting-1" } }, alibi("p2", "lobby"));
-    expect(m.log.filter((e) => e.type === "said")).toHaveLength(3);
+    expect(refused(m, alibi("p1", "lobby"))).toMatch(/not open/);
+    m = run(m, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } });
+    expect(refused(m, alibi("p1", "lobby"))).toMatch(/not open/);
+    expect(m.log.filter((e) => e.type === "said")).toHaveLength(1);
   });
 
   it("lies are allowed: an alibi naming a room nobody visited is accepted", () => {
@@ -103,6 +109,7 @@ describe("QA alibis — design §11.3", () => {
     // A bust (design §5.5): a one-bulb bell and one star, everyone in the Vault.
     let g = createGame({ ...config(3), contentOverrides: { alarm: { bulbs: 1, bustStars: 1 } } });
     for (let i = 0; i < 12 && g.phase.kind !== "ended"; i++) {
+      if (g.phase.kind === "alibi") g = run(g, ALIBI);
       if (g.phase.kind === "result") g = run(g, RESULT);
       g = run(g, ...g.playerOrder.map((p) => ({ type: "submitMove", player: p, move: fullGrab("vault") })), ROUND);
     }
@@ -112,7 +119,7 @@ describe("QA alibis — design §11.3", () => {
 
   it("is public and carries nothing but player, round and room (extra fields dropped, no RNG draw)", () => {
     const s = run(createGame(config(3)), ROUND);
-    const r = handleCommand(s, alibi("p1", "office", { secret: "mole", pocket: 9, visibility: { kind: "private", player: "p1" }, statement: { kind: "plan" } }));
+    const r = handleCommand(s, alibi("p1", "office", { secret: "mole", pocket: 9, visibility: { kind: "private", player: "p1" }, statement: { kind: "role" } }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.events).toEqual([{ type: "said", visibility: PUBLIC, statement: { kind: "alibi", player: "p1", round: 1, room: "office" } }]);
@@ -125,22 +132,25 @@ describe("QA alibis — design §11.3", () => {
 
 describe("QA round-named deadline — design §5", () => {
   it("duplicate, stale, future and malformed rounds are refused with no state change", () => {
-    let s = run(createGame(config(3)), ROUND, RESULT);
-    s = run(s, ROUND, RESULT); // planning 3
+    let s = run(createGame(config(3)), ROUND, ...NEXT);
+    s = run(s, ROUND, ...NEXT); // planning 3
     for (const round of [2, 1, 0, 4, 99, -3, "3", 3.5, NaN, Infinity, null, [3], { valueOf: () => 3 }]) refused(s, deadline(round));
     expect(ok(s, deadline(3)).resolvedRound).toBe(3);
   });
 
   it("a round's deadline can't be repeated while the meeting it called is awaited", () => {
     const s = run(createGame({ ...config(3), contentOverrides: SMALL_BANK }), ROUND);
-    expect(s.phase.kind).toBe("awaitingMeeting");
+    expect(s.phase.kind).toBe("alibi");
     for (const round of [1, 2]) refused(s, deadline(round));
+    const awaiting = run(s, ALIBI);
+    expect(awaiting.phase.kind).toBe("awaitingMeeting");
+    for (const round of [1, 2]) refused(awaiting, deadline(round));
   });
 
   it("determinism: same seed + same commands give an identical log, and replay matches", () => {
     const play = () => {
       let s = run(createGame(config(5, "det")), ROUND, alibi("p3", "depositBoxes"), alibi("p0", "vault"));
-      s = run(s, RESULT, { type: "submitMove", player: "p1", move: fullGrab("office", s.players.p1?.role === "priest" ? 0 : 1) }, ROUND, alibi("p1", "lobby", { round: 2 }));
+      s = run(s, ...NEXT, { type: "submitMove", player: "p1", move: fullGrab("office", s.players.p1?.role === "priest" ? 0 : 1) }, ROUND, alibi("p1", "lobby", { round: 2 }));
       return s;
     };
     const a = play();

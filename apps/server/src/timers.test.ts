@@ -76,8 +76,12 @@ describe("timers on the live channel", () => {
     await b.send({}); // a barrier through the game's lock
     expect(b.raw.slice(before).some((t) => "view" in JSON.parse(t))).toBe(false);
 
-    // The round's deadline passes: the result window's timer replaces it. design §9.3
+    // The round's deadline passes: the alibi window's timer replaces it, then the result window's. design §10, §9.3
     clock.advance(TIMINGS["15m"].roundMs);
+    await app.scheduler.tick();
+    await vi.waitFor(() => expect(b.view().phase.kind).toBe("alibi"), quick);
+    expect(b.views().at(-1)!.timers).toEqual([{ key: "alibi:1", dueAt: clock.now() + TIMINGS["15m"].alibiMs, pausedAt: null }]);
+    clock.advance(TIMINGS["15m"].alibiMs);
     await app.scheduler.tick();
     await vi.waitFor(() => expect(b.view().phase.kind).toBe("result"), quick);
     const result = b.views().at(-1)!;
@@ -94,6 +98,8 @@ describe("timers on the live channel", () => {
     await open(app, id, guest);
     const t = TIMINGS["15m"];
     clock.advance(t.roundMs);
+    await app.scheduler.tick();
+    clock.advance(t.alibiMs); // design §10
     await app.scheduler.tick();
     await vi.waitFor(() => expect(a.view().phase.kind).toBe("result"), quick);
     expect(a.views().at(-1)!.timers).toEqual([{ key: "result:1", dueAt: clock.now() + t.resultMs, pausedAt: null }]);

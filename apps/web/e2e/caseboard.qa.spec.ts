@@ -38,8 +38,8 @@ for (const width of WIDTHS) {
       await leads.getByRole("button", { name, exact: true }).first().click();
     }
     await expect(leads.getByRole("button", { name: /^Pin: / })).toHaveCount(0);
-    // 4 leads + 6 facts pinned (the demo's one starting pin included).
-    await expect(board.getByRole("group", { name: "Pinned" }).locator("li")).toHaveCount(10);
+    // 4 leads + 8 facts and marks pinned (the demo's one starting pin included).
+    await expect(board.getByRole("group", { name: "Pinned" }).locator("li")).toHaveCount(12);
     expect(await overflowing(page)).toEqual([]);
     // The Players strip scrolls inside the board: the strip itself stays within its edge.
     expect(await board.locator(".cb__players").evaluate((el) => el.getBoundingClientRect().right <= el.closest(".cb")!.getBoundingClientRect().right)).toBe(true);

@@ -32,12 +32,11 @@ describe("reveal summary — design §13", () => {
   });
 
   // design §3.3, §15.5: a missed move into a taped-off Lobby has no `coinsGrabbed`; the reveal still says who sat out.
-  it("names who sat a round out, apart from a default move that was played, and plan against move (design §3.3, §10, §15.5)", () => {
+  it("names who sat a round out, apart from a default move that was played, (design §3.3, §15.5)", () => {
     const grab = (p: string, room: string): GameEvent => ({ type: "coinsGrabbed", visibility: privateTo(p), player: p, round: 2, room, duffel: 1, pocket: 0, seized: 0 });
     const log: GameEvent[] = [
       ...SETUP,
       started(2),
-      { type: "said", visibility: PUBLIC, statement: { kind: "plan", round: 2, plan: { entries: [{ player: "p0", placed: null, room: "vault", power: null, agreed: false }, { player: "p1", placed: null, room: null, power: null, agreed: false }], history: [] } } },
       { type: "defaultMoveAssigned", visibility: privateTo("p1"), player: "p1", round: 2, move: null },
       { type: "defaultMoveAssigned", visibility: privateTo("p2"), player: "p2", round: 2, move: { room: "lobby", duffel: 1, pocket: 0 } },
       grab("p0", "office"),
@@ -45,9 +44,9 @@ describe("reveal summary — design §13", () => {
     ];
     const round = revealSummary(log, success([rank("p0", "mole", 0)])).rounds.find((r) => r.round === 2);
     expect(round?.satOut).toEqual(["p1"]);
-    expect(round?.moves.map((m) => [m.player, m.room, m.planned, m.missed])).toEqual([
-      ["p0", "office", "vault", false],
-      ["p2", "lobby", null, true],
+    expect(round?.moves.map((m) => [m.player, m.room, m.missed])).toEqual([
+      ["p0", "office", false],
+      ["p2", "lobby", true],
     ]);
   });
 

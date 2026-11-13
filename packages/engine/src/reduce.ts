@@ -252,10 +252,9 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       };
     case "roundResolved": {
       // The bank is a public total. Crossing a third of the bank calls a regular meeting (§9.1; crossing
-      // both in one round, one meeting); the meeting the round called is awaited, else the result window
-      // (§4.2 steps 9–10).
+      // both in one round, one meeting). The alibi window opens first (§4.1, §10).
       const thirds = thirdsGone(state.bankStart, event.bank);
-      const resolved: GameState = {
+      return {
         ...state,
         bank: event.bank,
         thirds,
@@ -263,12 +262,18 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         moves: {},
         card: null,
         resolvedRound: event.round,
-      };
-      return {
-        ...resolved,
-        phase: resolved.meetingDue ? { kind: "awaitingMeeting", meeting: resolved.meetingDue, meetingId: nextMeetingId(resolved) } : resultWindow(resolved),
+        phase: { kind: "alibi", round: event.round },
       };
     }
+    case "alibiWindowClosed":
+      // design §4.2 steps 9–10, §10: once the alibi window closes, the meeting the round called is awaited, else the result window.
+      return {
+        ...state,
+        phase: state.meetingDue ? { kind: "awaitingMeeting", meeting: state.meetingDue, meetingId: nextMeetingId(state) } : resultWindow(state),
+      };
+    case "alibiMarked":
+      // design §10: the marker's own notes; nothing in the game changes.
+      return state;
     case "gameAborted":
       return { ...state, phase: { kind: "aborted" } };
     case "gameEnded":
@@ -364,8 +369,6 @@ function applyChange(state: GameState, event: GameEvent): GameState {
       if (!pending) throw new Error("bailChosen: no shakedown is pending");
       return { ...state, pendingShakedown: { ...pending, useBail: event.use } };
     }
-    case "alibiVerified":
-      return state;
     default: {
       const unknown: never = event;
       throw new Error(`applyEvent: unknown event ${JSON.stringify(unknown)}`);

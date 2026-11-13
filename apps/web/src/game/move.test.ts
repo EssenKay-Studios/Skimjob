@@ -2,7 +2,7 @@
 import { type RoleId } from "@skimjob/content";
 import { handleCommand, viewFor, type GameConfig, type PlayerView } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
-import { createGame } from "./deal.testkit";
+import { createGame, pastAlibi } from "./deal.testkit";
 import { roomOptions } from "./hud";
 import { abilityOf, bagsOf, bellPreview, grabOf, mayRunShort, moveCoin, powerControl, sameMove, shareEach } from "./move";
 
@@ -157,7 +157,7 @@ describe("the move powers (design §11.1)", () => {
     const go = (c: Parameters<typeof handleCommand>[1]) => {
       const r = handleCommand(s, c);
       if (!r.ok) throw new Error(r.reason);
-      s = r.state;
+      s = pastAlibi(r.state);
     };
     go({ type: "submitMove", player: "p1", move: { room: "lobby", duffel: 1, pocket: 0, ability: { kind: "absolve", target: "p2" } } });
     go({ type: "advance", deadline: { kind: "round", round: 1 } });

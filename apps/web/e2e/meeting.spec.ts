@@ -165,7 +165,7 @@ test("a player a shakedown passed against is left off the next vote's list (desi
   test.skip(info.project.name !== "desktop", "one viewport is enough");
   test.setTimeout(90_000);
   // This seed's round 1 ends in a raid: the police briefing's shakedown passes against a bot (design §9.2), who is then protected.
-  const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: "hiddenThenRevealed", seed: "meeting-7" });
+  const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: "hiddenThenRevealed", seed: "meeting-4" });
   await page.goto(`/game/${game.id}`);
   await expect(page.getByRole("heading", { name: "Police briefing" })).toBeVisible({ timeout: 45_000 });
   // The briefing's cards, then round 1's result window: held while we call, so its 6 s can't run out between the two taps.

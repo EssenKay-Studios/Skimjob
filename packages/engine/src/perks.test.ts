@@ -60,15 +60,17 @@ const buy = (p: string, perk: unknown) => ({ type: "buyPerk", player: p, perk })
 const mv = (p: string, room: string, pocket = 0, extra: object = {}) => ({ type: "submitMove", player: p, move: { ...fullGrab(room, pocket), ...extra } });
 const watch = (p: string, room: string) => mv(p, "security", 0, { watch: room });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+const ALIBI = (s: GameState) => ({ type: "advance", deadline: { kind: "alibi", round: s.resolvedRound } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
-/** The round being planned resolves and nobody calls an emergency: the next round is being planned. */
-const NEXT = [ROUND, RESULT];
+/** The round being planned resolves, its alibi window closes (design §10) and nobody calls an emergency: the next round is being planned. */
+const NEXT = [ROUND, ALIBI, RESULT];
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 const vote = (p: string, target: string) => ({ type: "castVote", player: p, vote: { kind: "shakedown", target } });
-/** The round being planned resolves and, in its result window, `by` calls the crew's emergency, which opens at once. design §9.3 */
+/** The round being planned resolves, its alibi window closes and, in its result window, `by` calls the crew's emergency, which opens at once. design §9.3 */
 const emergency = (by: string): Cmd[] => [
   ROUND,
+  ALIBI,
   { type: "callEmergency", player: by },
   (s: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } }),
 ];
@@ -82,13 +84,16 @@ describe("the black market — design §12", () => {
     expect(ofType(setupEvents(config(3, { seed: "shop-7" })), "shopDealt")).toEqual([{ type: "shopDealt", visibility: PUBLIC, perks: shops[7] }]);
   });
 
-  it("in Open vote mode the deal leaves out the Check ballot; tier 1 is Tail or Stamped alibi (owner, 9 Nov, #187)", () => {
+  it("in Open vote mode the deal leaves out the Check ballot; tier 1 is always Tail (owner, 9 Nov, #187; 13 Nov)", () => {
     const deal = (voteVisibility: GameConfig["voteVisibility"]) =>
       Array.from({ length: 60 }, (_, i) => ofType(setupEvents(config(3, { seed: `shop-${i}`, voteVisibility })), "shopDealt")[0]?.perks ?? []);
     const open = deal("open");
     for (const shop of open) expect(shop.map((p) => PERKS[p].tier)).toEqual([1, 2, 3]);
-    expect(new Set(open.map((s) => s[0]))).toEqual(new Set(["tail", "alibi"]));
-    expect(new Set(deal("secret").map((s) => s[0]))).toEqual(new Set(["tail", "alibi", "ballot"]));
+    // design §12 (owner, 13 Nov): no Stamped alibi is ever dealt; tier 1 is Tail or Check ballot, and with Open votes always Tail.
+    const secret = deal("secret");
+    expect([...shops, ...open, ...secret].flat()).not.toContain("alibi");
+    expect(open.every((s) => s[0] === "tail")).toBe(true);
+    expect(new Set(secret.map((s) => s[0]))).toEqual(new Set(["tail", "ballot"]));
   });
 
   it("costs come from content (1, 2 or 3 coins by tier) and can be overridden; every view shows them", () => {
@@ -134,19 +139,21 @@ describe("buying a perk — design §7.6, §7.7, §12", () => {
       return ledger(run(planned, ROUND));
     };
     const tail = { kind: "tail", room: "vault" };
-    const alibi = { kind: "alibi" };
-    const seen = play([["p0", alibi], ["p1", tail]]);
-    expect(play([["p1", alibi], ["p0", tail]])).toEqual(seen);
-    expect(play([["p2", tail], ["p0", alibi]])).toEqual(seen);
-    expect(ofType(seen, "perkSold").map((e) => e.perk)).toEqual(["tail", "alibi"]);
+    const ballot = { kind: "ballot", target: "p2" };
+    const seen = play([["p0", ballot], ["p1", tail]]);
+    expect(play([["p1", ballot], ["p0", tail]])).toEqual(seen);
+    expect(play([["p2", tail], ["p0", ballot]])).toEqual(seen);
+    expect(ofType(seen, "perkSold").map((e) => e.perk)).toEqual(["tail", "ballot"]);
   });
 
   it("one perk per player per round, bought while planning; refused outside planning", () => {
     let s = withStash(game(), "p0", 9);
     s = run(s, buy("p0", { kind: "tail", room: "vault" }));
     expect(reason(s, buy("p0", { kind: "softShoes" }))).toBe("you have already bought a perk this round");
-    expect(handleCommand(withStash(s, "p1", 1), buy("p1", { kind: "alibi" })).ok).toBe(true);
+    expect(handleCommand(withStash(s, "p1", 1), buy("p1", { kind: "tail", room: "office" })).ok).toBe(true);
     s = run(s, ROUND);
+    expect(reason(s, buy("p0", { kind: "softShoes" }))).toBe("perks are bought while a round is being planned");
+    s = run(s, ALIBI);
     expect(reason(s, buy("p0", { kind: "softShoes" }))).toBe("perks are bought while a round is being planned");
     s = run(s, RESULT);
     expect(handleCommand(s, buy("p0", { kind: "softShoes" })).ok).toBe(true);
@@ -187,24 +194,6 @@ describe("Tail: next round, also see who was in one more room — design §12", 
     expect(ofType(since(before, s), "roomWatched")).toEqual([
       { type: "roomWatched", visibility: privateTo("p0"), player: "p0", round: 2, source: "tail", room: "vault", seen: ["p1"], offline: false },
     ]);
-  });
-});
-
-describe("Stamped alibi: a true alibi for this round is stamped \"verified\" — design §12", () => {
-  const posted = (buyer: string | null, alibi: string): GameEvent[] => {
-    let s = withStash(game(), "p0", 1);
-    if (buyer) s = run(s, buy(buyer, { kind: "alibi" }));
-    s = run(s, mv("p0", "office"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND);
-    return since(s, run(s, { type: "postAlibi", player: "p0", round: 1, room: alibi }));
-  };
-
-  it("only if the alibi is true and the poster bought one that round; the stamp is public", () => {
-    expect(posted("p0", "office")).toEqual([
-      { type: "said", visibility: PUBLIC, statement: { kind: "alibi", player: "p0", round: 1, room: "office" } },
-      { type: "alibiVerified", visibility: PUBLIC, player: "p0", round: 1, room: "office" },
-    ]);
-    expect(posted("p0", "lobby").map((e) => e.type)).toEqual(["said"]);
-    expect(posted(null, "office").map((e) => e.type)).toEqual(["said"]);
   });
 });
 
@@ -293,7 +282,7 @@ describe("Plant evidence: one player appears in one room's feeds this round — 
       ["p3", "vault", []],
     ]);
     // The next round, the feed shows only who was there.
-    s = run(s, RESULT, mv("p0", "lobby"), mv("p1", "lobby"), watch("p2", "vault"), mv("p3", "vault"), ROUND);
+    s = run(s, ALIBI, RESULT, mv("p0", "lobby"), mv("p1", "lobby"), watch("p2", "vault"), mv("p3", "vault"), ROUND);
     expect(ofType(s.log, "roomWatched").at(-1)?.seen).toEqual(["p3"]);
   });
 
@@ -373,7 +362,7 @@ describe("Bail: held until a shakedown passes, then a private choice — design 
 
   it("after a regular meeting the result window follows once the window ends (design §9.3)", () => {
     let s = run(game(3, {}, ["tail", "softShoes", "bail"]), mv("p1", "vault", 3), ...NEXT);
-    while (s.phase.kind === "planning") s = run(s, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND, (x: GameState) => (x.phase.kind === "result" ? RESULT(x) : []));
+    while (s.phase.kind === "planning") s = run(s, mv("p0", "lobby"), mv("p1", "lobby"), mv("p2", "lobby"), ROUND, ALIBI, (x: GameState) => (x.phase.kind === "result" ? RESULT(x) : []));
     expect(s.phase.kind).toBe("awaitingMeeting");
     const meetingId = s.phase.kind === "awaitingMeeting" ? s.phase.meetingId : "";
     const round = s.resolvedRound;

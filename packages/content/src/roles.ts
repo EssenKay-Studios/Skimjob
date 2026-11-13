@@ -32,21 +32,6 @@ export type RolePower =
   /** Fixer: `perGame` times per game, a move may tear the tape off a taped-off room; it reopens next round. design §5.3 */
   | { readonly kind: "reopen"; readonly perGame: number };
 
-/**
- * What a plan-board power claim points at (design §10: "Hacker → Vault", "Detective → Eli"):
- * a room or a player. A passive power can't be claimed.
- */
-export const POWER_CLAIM_TARGET: Readonly<Partial<Record<RolePower["kind"], "room" | "player">>> = {
-  lookout: "room",
-  detect: "player",
-  audit: "room",
-  hide: "room",
-  blackout: "room",
-  absolve: "player",
-  ring: "room",
-  reopen: "room",
-};
-
 export interface RoleDef {
   readonly id: RoleId;
   readonly name: string;

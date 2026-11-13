@@ -324,7 +324,10 @@ function runPair(kind: Kind, n: number, mode: VoteVisibility, seed: number): Pai
   for (let round = 1; round <= BANK_JOB.roundCap && !over(); round++) {
     planRound(round);
     step([{ type: "advance", deadline: { kind: "round", round } }]);
-    for (const id of ids) if (!over() && rand() < 0.7) step([{ type: "postAlibi", player: id, round, room: pick(A.rooms) }]);
+    // design §10: alibis go up in the round's alibi window. An involved player always posts one, as one who
+    // posts none is shown in their real room when the window closes (public by design, and a changed room would show).
+    for (const id of ids) if (!over() && (rand() < 0.7 || involved.has(id))) step([{ type: "postAlibi", player: id, round, room: pick(A.rooms) }]);
+    if (!over() && A.phase.kind === "alibi") step([{ type: "advance", deadline: { kind: "alibi", round } }]);
     // design §4.2 steps 9–10: the meeting the round called, then the result window, where an emergency may be called.
     while (!over() && (A.phase.kind === "awaitingMeeting" || A.phase.kind === "result")) {
       const p = A.phase;
@@ -454,6 +457,12 @@ describe("QA: viewFor edges — design §13, §9.5", () => {
       check();
       s = apply(s, { type: "advance", deadline: { kind: "round", round } }, "A");
       check();
+      if (s.phase.kind === "alibi") {
+        s = apply(s, { type: "postAlibi", player: "p1", round, room: "lobby" }, "A");
+        check();
+        s = apply(s, { type: "advance", deadline: { kind: "alibi", round } }, "A");
+        check();
+      }
       if (s.phase.kind === "awaitingMeeting") {
         s = apply(s, { type: "scheduleMeeting", meetingId: s.phase.meetingId, slot: "x" }, "A");
         s = apply(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting?.meetingId } }, "A");

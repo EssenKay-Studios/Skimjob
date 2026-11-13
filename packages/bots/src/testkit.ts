@@ -64,11 +64,16 @@ export function emergencyMeeting(state: GameState, caller: PlayerId): GameState 
 }
 
 /**
- * One round: everyone's move, the deadline, then the alibis (default the truth;
- * null = none posted, design §11.3). The round's result window is left open
+ * One round: everyone's move, the deadline, then the alibis in the alibi window (default the truth;
+ * null = none posted, design §10), and the window closes. The round's result window is left open
  * (design §9.3); the next `round` closes it first.
  */
 export function round(state: GameState, plan: Plan): GameState {
+  return closeAlibi(alibiWindow(state, plan));
+}
+
+/** `round`, but the alibi window is left open after the scripted alibis (design §10). */
+export function alibiWindow(state: GameState, plan: Plan): GameState {
   const open = closeResult(state);
   const r = open.phase.kind === "planning" ? open.phase.round : 0;
   let s = run(
@@ -83,7 +88,12 @@ export function round(state: GameState, plan: Plan): GameState {
   );
   for (const [player, m] of Object.entries(plan)) {
     const alibi = m.alibi === undefined ? m.room : m.alibi;
-    if (alibi !== null) s = run(s, { type: "postAlibi", player, round: r, room: alibi });
+    if (alibi !== null && s.phase.kind === "alibi") s = run(s, { type: "postAlibi", player, round: r, room: alibi });
   }
   return s;
+}
+
+/** Close the alibi window, if it is open (design §10). */
+export function closeAlibi(state: GameState): GameState {
+  return state.phase.kind === "alibi" ? run(state, { type: "advance", deadline: { kind: "alibi", round: state.phase.round } }) : state;
 }

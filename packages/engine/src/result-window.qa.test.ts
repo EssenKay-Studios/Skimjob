@@ -10,6 +10,7 @@ import { canSee } from "./types";
 import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
+import { closeAlibiWindow } from "./result.testkit";
 import { viewFor } from "./view";
 
 const NO_BAIL: readonly PerkId[] = ["tail", "softShoes", "plantEvidence"];
@@ -43,7 +44,10 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
     if (Array.isArray(command)) return run(s, ...(command as Cmd[]));
     const r = handleCommand(s, command);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
-    return r.state;
+    // design §10: a round's alibi window closes at once (nobody posts); these tests are about what follows it.
+    const closed = closeAlibiWindow(r.state);
+    if (!closed.ok) throw new Error(closed.reason);
+    return closed.state;
   }, state);
 }
 function reason(state: GameState, command: unknown): string {

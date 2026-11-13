@@ -65,7 +65,7 @@ export function meetingTime(view: PlayerView): boolean {
 
 /**
  * Suspicion of every player, me included, from public data only: the ledger's
- * plan spots, alibis and round summaries (each round's shortfall against the claimed
+ * alibis and round summaries (each round's shortfall against the claimed
  * rooms, shared by how much each claimant could have taken), missing alibis,
  * shakedown results and double role claims. What the crew can see of me.
  */

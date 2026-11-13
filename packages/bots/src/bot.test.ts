@@ -1,12 +1,12 @@
 // Bot decisions from a view: moves, alibis, meeting scheduling, votes, role
 // powers, and determinism. design §19.3 (and §5.1, §9, §10, §11.1, §11.2, §11.3)
 import { describe, expect, it } from "vitest";
-import { jobFor, ringsOf, roomDef, viewFor, jobById, type GameEvent, type GameState, type Move, type PlayerCommand } from "@skimjob/engine";
+import { jobFor, ringsOf, roomDef, viewFor, jobById, type GameEvent, type GameState, type PlayerCommand } from "@skimjob/engine";
 import { PERSONALITIES, type Personality } from "./personalities";
-import { botRandom, chooseAlibi, chooseMove, chooseSpot, chooseVote, createBot, crewHunch, decide, misjudged, type Random } from "./bot";
+import { botRandom, chooseAlibi, chooseMove, chooseVote, createBot, crewHunch, decide, misjudged, type Random } from "./bot";
 import { runBotGame } from "./run";
 import { suspicion } from "./suspicion";
-import { closeResult, config, emergencyMeeting, game, round, run } from "./testkit";
+import { alibiWindow, closeAlibi, closeResult, config, emergencyMeeting, game, round, run } from "./testkit";
 
 /** A personality with no noise or misreading at votes, so a test can pin its behaviour. */
 const exact = (base: Personality, change: Partial<Personality> = {}): Personality => ({ ...base, noise: 0, misread: 0, hunch: 0, ...change });
@@ -15,10 +15,6 @@ const rolls = (...values: number[]): Random => () => values.shift() ?? 0.5;
 const seeded = botRandom;
 
 const bank = jobById("bank");
-const submitted = (cmds: PlayerCommand[]): Move | undefined => {
-  const c = cmds.find((x) => x.type === "submitMove");
-  return c?.type === "submitMove" ? c.move : undefined;
-};
 
 describe("Agent — design §17.3", () => {
   it("same seed and same view give the same commands, every time", () => {
@@ -141,17 +137,9 @@ describe("moves — design §5.1, §6, §7, §8", () => {
 });
 
 describe("alibis — design §11.3", () => {
-  it("a board line with no room claim (only a placement, or \"I agree\") is no spot: Honest still posts the truth — design §10 (QA #179)", () => {
-    const s0 = game(3);
-    const mv = (p: string, room: string): PlayerCommand => ({ type: "submitMove", player: p, move: { room, duffel: jobFor(s0.config).rooms[room]?.coins ?? 0, pocket: 0 } });
-    const plan = { entries: [{ player: "ana", placed: "office", room: null, power: null, agreed: true }], history: [] };
-    const s = run(s0, mv("ana", "vault"), mv("ben", "office"), mv("carl", "lobby"), { type: "advance", deadline: { kind: "round", round: 1, plan } });
-    expect(chooseAlibi(viewFor(s, "ana"), PERSONALITIES.honest, () => 0)).toBe("vault");
-  });
-
   // Ana pockets 4 of the Vault's 6, handing in 2; whether anyone saw her decides the cover-up.
   const pocketed = (withWitness: boolean): GameState =>
-    round(game(3), {
+    alibiWindow(game(3), {
       ana: { room: "vault", pocket: 4, alibi: null },
       ben: { room: withWitness ? "vault" : "office" },
       carl: { room: "lobby" },
@@ -173,9 +161,43 @@ describe("alibis — design §11.3", () => {
   });
 
   it("tells the truth when it handed everything in, and posts only once per round", () => {
-    const s = round(game(3), { ana: { room: "vault", alibi: null }, ben: { room: "office" }, carl: { room: "lobby" } });
+    const s = alibiWindow(game(3), { ana: { room: "vault", alibi: null }, ben: { room: "office" }, carl: { room: "lobby" } });
     expect(chooseAlibi(viewFor(s, "ana"), exact(PERSONALITIES.greedy, { lie: 1 }), rolls(0))).toBe("vault");
     expect(chooseAlibi(viewFor(s, "ben"), PERSONALITIES.honest, rolls(0))).toBeNull(); // the script posted it
+  });
+
+  // design §10, §19.3
+  it("posts its alibi in the alibi window from its own view: for the window's round, once; none in planning or after the window", () => {
+    const alibis = (st: GameState) => decide(viewFor(st, "ana"), exact(PERSONALITIES.honest), seeded("a"), "test-crew").filter((c) => c.type === "postAlibi");
+    const s0 = game(3);
+    expect(alibis(s0)).toEqual([]); // planning round 1: nothing resolved yet
+    const s = alibiWindow(s0, { ana: { room: "vault", alibi: null }, ben: { room: "office" }, carl: { room: "lobby" } });
+    expect(s.phase).toEqual({ kind: "alibi", round: 1 });
+    const posted = alibis(s);
+    expect(posted).toEqual([{ type: "postAlibi", player: "ana", round: 1, room: "vault" }]);
+    const after = run(s, ...posted);
+    expect(alibis(after)).toEqual([]); // never a second one
+    const result = closeAlibi(after);
+    expect(result.phase.kind).toBe("result");
+    expect(alibis(result)).toEqual([]);
+    const planning = closeResult(result);
+    expect(planning.phase).toEqual({ kind: "planning", round: 2 });
+    expect(alibis(planning)).toEqual([]);
+  });
+
+  it("never sends markAlibi (trust marks are for people) — design §10, §19.3", () => {
+    for (const personality of Object.values(PERSONALITIES)) {
+      const c = config(5, `marks-${personality.name}`);
+      const sent: PlayerCommand[] = [];
+      const agents = c.players.map((p) => {
+        const bot = createBot({ player: p.id, personality, seed: p.id, crewSeed: "crew" });
+        return { ...bot, act: (v: Parameters<typeof bot.act>[0]) => { const out = bot.act(v); sent.push(...out); return out; } };
+      });
+      const { state } = runBotGame(c, agents);
+      expect(sent.some((x) => x.type === "postAlibi")).toBe(true);
+      expect(sent.filter((x) => x.type === "markAlibi")).toEqual([]);
+      expect(state.log.some((e) => e.type === "alibiMarked")).toBe(false);
+    }
   });
 });
 
@@ -304,49 +326,5 @@ describe("role habits — design §11.1, §19.3", () => {
     const taped = { ...s, bells, taped: { vault: 3 } } satisfies GameState;
     for (const m of moves(taped)) expect(m.ability).toEqual({ kind: "reopen", room: "vault" });
     expect(moves(withRole(taped, "ana", "fixer", { usedThisGame: 1 })).every((m) => m.ability === undefined)).toBe(true);
-  });
-});
-
-describe("the plan board — design §10", () => {
-  const view = viewFor(game(5, { ben: "mole" }), "ana");
-  const skim: Move = { room: "vault", duffel: 1, pocket: 2 };
-
-  it("takes a sensible spot: the room it goes to, pledging its power where its move aims it", () => {
-    const move: Move = { room: "office", duffel: 2, pocket: 0, ability: { kind: "lookout", rooms: ["vault"] } };
-    expect(chooseSpot(view, PERSONALITIES.greedy, rolls(0), move)).toEqual({ room: "office", power: { role: "lookout", target: "vault" } });
-    // The Mole keeps quiet about its power.
-    const mole = viewFor(game(5, { ben: "mole" }), "ben");
-    expect(chooseSpot(mole, PERSONALITIES.honest, rolls(0), { room: "lobby", duffel: 1, pocket: 0, ability: { kind: "ring", room: "vault" } })).toEqual({ room: "lobby", power: null });
-  });
-
-  it("sometimes breaks it: pocketing, a liar claims a quieter room its hand-in adds up to", () => {
-    const spot = chooseSpot(view, PERSONALITIES.greedy, rolls(0), skim);
-    expect(spot.room).not.toBe("vault");
-    expect(roomDef(bank, spot.room).coins).toBeLessThanOrEqual(skim.duffel);
-    expect(chooseSpot(view, PERSONALITIES.greedy, rolls(0.99), skim).room).toBe("vault"); // not this time
-    expect(chooseSpot(view, PERSONALITIES.honest, rolls(0), skim).room).toBe("vault"); // Honest never lies
-    expect(chooseSpot(view, exact(PERSONALITIES.opportunist, { lie: 1 }), rolls(0), skim).room).toBe("vault"); // can't know yet if it'll be seen
-  });
-
-  it("an agent's spot is the one it took with its move, only while that round is planned", () => {
-    const bot = createBot({ player: "ana", personality: PERSONALITIES.honest, seed: "spot", crewSeed: "test-crew" });
-    const s = game(5);
-    expect(bot.spot(viewFor(s, "ana"))).toBeNull();
-    const move = submitted(bot.act(viewFor(s, "ana")));
-    expect(bot.spot(viewFor(s, "ana"))?.room).toBe(move?.room);
-    expect(bot.spot(viewFor(closeResult(round(s, {})), "ana"))).toBeNull();
-  });
-
-  it("in bot games each round's board goes into the log, and bots read it back — design §10, §19.3", () => {
-    const c = config(6, "plan-board");
-    const { state, rejections } = runBotGame(c, c.players.map((p) => createBot({ player: p.id, personality: PERSONALITIES.greedy, seed: p.id, crewSeed: "crew" })));
-    expect(rejections).toEqual([]);
-    const plans = state.log.flatMap((e) => (e.type === "said" && e.statement.kind === "plan" ? [e.statement] : []));
-    const rounds = state.log.filter((e) => e.type === "roundResolved").length;
-    expect(plans).toHaveLength(rounds);
-    for (const p of plans) expect(p.plan.entries.map((e) => e.player)).toEqual(state.playerOrder);
-    const real = new Map(state.log.flatMap((e) => (e.type === "coinsGrabbed" ? [[`${e.player}/${e.round}`, e.room] as const] : [])));
-    const broken = plans.flatMap((p) => p.plan.entries.filter((e) => e.room !== real.get(`${e.player}/${p.round}`)));
-    expect(broken.length).toBeGreaterThan(0); // Greedy breaks the plan now and then
   });
 });

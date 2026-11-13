@@ -5,7 +5,7 @@
 // text players read is `PERK_TEXT` (text.ts, §20.3).
 
 /** A perk on the black market. Ids match `PERK_TEXT`. design §12, §20.3 */
-export type PerkId = "tail" | "alibi" | "ballot" | "softShoes" | "blackout" | "bail" | "plantEvidence";
+export type PerkId = "tail" | "ballot" | "softShoes" | "blackout" | "bail" | "plantEvidence";
 
 /** The black market's three tiers: one perk of each is dealt per game. design §12 */
 export type PerkTier = 1 | 2 | 3;
@@ -20,7 +20,6 @@ export interface PerkDef {
 /** Every perk, in the order the rulebook lists them. design §12 */
 export const PERKS: Readonly<Record<PerkId, PerkDef>> = {
   tail: { id: "tail", tier: 1, cost: 1 },
-  alibi: { id: "alibi", tier: 1, cost: 1 },
   ballot: { id: "ballot", tier: 1, cost: 1 },
   softShoes: { id: "softShoes", tier: 2, cost: 2 },
   blackout: { id: "blackout", tier: 2, cost: 2 },

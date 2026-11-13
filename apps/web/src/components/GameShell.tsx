@@ -1,6 +1,6 @@
 // The one-screen game layout (design §15.6): the status strip, the bank board in
 // the middle, and the panels around it. Laptops (1024 px and up) show three
-// columns (side tabs, board with plan board under it, "This round"); phones and
+// columns (side tabs, the board, "This round"); phones and
 // tablets show the board with a dock and a tab bar, and each panel opens as a
 // bottom sheet. The shell only places things: what goes inside comes from the
 // caller. Each panel is rendered once, for the layout in use.
@@ -11,7 +11,7 @@ import { Button } from "./Button";
 import { SketchFrame } from "./SketchFrame";
 
 /** Where a panel lives on laptops. `sheet` panels exist only as phone sheets (pick a room, grab and split). */
-export type ShellPlace = "left" | "centre" | "right" | "sheet";
+export type ShellPlace = "left" | "right" | "sheet";
 
 export interface ShellPanel {
   readonly id: string;
@@ -87,9 +87,6 @@ function WideShell({ status, board, panels }: GameShellProps) {
         <section className="shell__board" aria-label="Bank board">
           {board}
         </section>
-        {at(panels, "centre").map((p) => (
-          <WidePanel key={p.id} panel={p} className="shell__plan" />
-        ))}
       </main>
       <div className="shell__right">
         {at(panels, "right").map((p) => (

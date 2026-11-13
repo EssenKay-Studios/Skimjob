@@ -1,7 +1,8 @@
-// The case board (design §15.4): the suspect card, the Players strip, your pins
-// and one Leads list, newest first. It only draws what the adapter
+// The case board (design §15.4): the suspect card, the Players strip, your pins,
+// a round picker (a round's snapshot card and its leads, design §10) and one
+// Leads list, newest first. It only draws what the adapter
 // (game/caseLeads.ts) gave it; pins are private to the seat. Few words, "i" InfoTips.
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import type { PlayerId } from "@skimjob/engine";
 import { CrookAvatar } from "../art/Crook";
 import { leadsNaming, newestFirst, pinnedItems, playerStat, TRUST_LABELS, type CaseData, type Fact, type Lead } from "../game/caseBoard";
@@ -21,12 +22,15 @@ export interface CaseBoardProps {
   readonly pins: PinsChannel;
   /** Your tags (the suspicion board); null while loading. */
   readonly marks: Board | null;
+  /** The picked round's snapshot card (components/SnapshotCard.tsx), drawn above its leads. */
+  readonly card?: (round: number) => ReactNode;
   readonly seed?: string;
 }
 
-export function CaseBoard({ data, people, pins, marks, seed = "case" }: CaseBoardProps) {
+export function CaseBoard({ data, people, pins, marks, card, seed = "case" }: CaseBoardProps) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [who, setWho] = useState<PlayerId | null>(null);
+  const [round, setRound] = useState<number | null>(null);
   const toggleOpen = (id: string) =>
     setOpen((o) => {
       const next = new Set(o);
@@ -34,7 +38,10 @@ export function CaseBoard({ data, people, pins, marks, seed = "case" }: CaseBoar
       return next;
     });
   const selected = people.find((p) => p.id === who) ?? null;
-  const leads = useMemo(() => (selected ? leadsNaming(data.leads, selected.id) : newestFirst(data.leads)), [data.leads, selected]);
+  const leads = useMemo(() => {
+    const all = selected ? leadsNaming(data.leads, selected.id) : newestFirst(data.leads);
+    return round === null ? all : all.filter((l) => l.round === round);
+  }, [data.leads, selected, round]);
   const pinned = useMemo(() => pinnedItems(data.leads, pins.pins), [data.leads, pins.pins]);
   const suspect = data.suspect && people.find((p) => p.id === data.suspect!.player);
   const uid = useId();
@@ -131,6 +138,16 @@ export function CaseBoard({ data, people, pins, marks, seed = "case" }: CaseBoar
         </div>
       )}
 
+      <div className="cb__picker" role="group" aria-label="Round">
+        <span className="cb__h">Round:</span>
+        {Array.from({ length: data.roundCap }, (_, i) => i + 1).map((r) => (
+          <button key={r} type="button" className="cb__rbtn num" aria-pressed={round === r} disabled={r > data.played} onClick={() => setRound(round === r ? null : r)}>
+            {r}
+          </button>
+        ))}
+      </div>
+      {round !== null && card?.(round)}
+
       <div className="cb__group" role="group" aria-label="Leads">
         <h3 className="cb__h">
           Leads
@@ -147,7 +164,7 @@ export function CaseBoard({ data, people, pins, marks, seed = "case" }: CaseBoar
           </p>
         )}
         {leads.length === 0 ? (
-          <p className="meta">{selected ? "Nothing about them yet." : "Nothing yet."}</p>
+          <p className="meta">{selected ? "Nothing about them yet." : round !== null ? `Nothing in round ${round}.` : "Nothing yet."}</p>
         ) : (
           <ul className="cb__list cb__card-list">
             {leads.map((l) => (

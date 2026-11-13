@@ -55,27 +55,22 @@ export function saidOf<K extends Statement["kind"]>(view: PlayerView, kind: K): 
   return ofType(view.ledger, "said").flatMap((e) => (e.statement.kind === kind ? [e.statement as Extract<Statement, { kind: K }>] : []));
 }
 
-/**
- * Where each player said they were, per round: their room claim on the round's
- * plan board (design §10), replaced by an alibi if they posted one (§11.3).
- */
+/** Where each player said they were, per round: their alibi (design §10). */
 export function saidRooms(view: PlayerView): Map<number, Map<PlayerId, RoomId>> {
   const out = new Map<number, Map<PlayerId, RoomId>>();
   const set = (round: number, player: PlayerId, room: RoomId) => {
     if (!out.has(round)) out.set(round, new Map());
     out.get(round)?.set(player, room);
   };
-  for (const p of saidOf(view, "plan")) for (const e of p.plan.entries) if (e.room !== null) set(p.round, e.player, e.room);
   for (const a of saidOf(view, "alibi")) set(a.round, a.player, a.room);
   return out;
 }
 
 /**
- * Has the crew had its say about `round`: a later round has resolved, or the
- * next round's planning has started. Before that, silence is no evidence yet
- * (bots post their alibis as the round resolves). Alibis have no window (design §11.3).
+ * Has the crew had its say about `round`: its alibi window has closed (design §10). Before that,
+ * silence is no evidence yet.
  */
-export const settled = (view: PlayerView, round: number): boolean => round < lastResolvedRound(view) || view.phase.kind === "planning";
+export const settled = (view: PlayerView, round: number): boolean => ofType(view.ledger, "alibiWindowClosed").some((e) => e.round === round);
 
 /** Every player's role claims, oldest first (me included). design §11.3; v2 §4 */
 export function claimsOf(view: PlayerView): Map<PlayerId, RoleId[]> {

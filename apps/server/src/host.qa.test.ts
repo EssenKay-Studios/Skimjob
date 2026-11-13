@@ -239,7 +239,7 @@ async function pauseAcross(id: string, host: string, on: FastifyInstance = app) 
 }
 
 describe("a pause keeps every clock's time left exactly (design §15)", () => {
-  it("across roundEarly, the result window and an open meeting", async () => {
+  it("across roundEarly, the alibi window, the result window and an open meeting", async () => {
     const { id, seats } = await startGame(3);
     const host = seats[0]!.who;
     const clients = await Promise.all(seats.map((s) => Client.open(id, s.who)));
@@ -249,8 +249,14 @@ describe("a pause keeps every clock's time left exactly (design §15)", () => {
     // Planning: round and roundEarly.
     const planning = await pauseAcross(id, host);
     expect([...planning.keys()].sort()).toEqual(["round:1", "roundEarly:1"]);
-    // To the result window (design §9.3), then an open meeting (an emergency called in it).
+    // To the alibi window (design §10): its clock stops too.
     while ((await load(id)).phase.kind === "planning") await step(id);
+    expect((await load(id)).phase).toEqual({ kind: "alibi", round: 1 });
+    clock.advance(500);
+    const alibi = await pauseAcross(id, host);
+    expect([...alibi.keys()]).toEqual(["alibi:1"]);
+    // To the result window (design §9.3), then an open meeting (an emergency called in it).
+    while ((await load(id)).phase.kind === "alibi") await step(id);
     expect((await load(id)).phase.kind).toBe("result");
     clock.advance(250);
     const result = await pauseAcross(id, host);

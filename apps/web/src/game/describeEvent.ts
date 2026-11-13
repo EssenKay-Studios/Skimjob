@@ -2,7 +2,7 @@
 // the reveal timeline and chat toasts read through this. Pure; the switches are
 // exhaustive, so a new event, ability, perk or meeting-result kind fails
 // typecheck until it has a line here. docs/m2-plan.md M2-6; design §13
-import { BANK_JOB, EVENTS, JOBS, PERK_TEXT, POWER_CLAIM_TARGET, ROLES, lineWords } from "@skimjob/content";
+import { BANK_JOB, EVENTS, JOBS, PERK_TEXT, ROLES, lineWords } from "@skimjob/content";
 import { MEETING_TITLE } from "./meeting";
 import type { GameEvent, MeetingResult, PerkUse, PlayerId, ResolvedAbility, RoomId, VoteChoice } from "@skimjob/engine";
 
@@ -21,11 +21,8 @@ const ALL_ROOMS = Object.fromEntries(Object.values(JOBS).flatMap((j) => Object.v
 export const roomName = (room: RoomId): string => ALL_ROOMS[room] ?? room;
 /** A role's display name, e.g. "Smooth Talker". */
 export const roleName = (role: string): string => ROLES[role]?.name ?? role;
-/** A power claim names a player (Detective, Priest) rather than a room. design §10 */
-const aimsAtPlayer = (role: string): boolean => {
-  const kind = ROLES[role]?.power.kind;
-  return kind !== undefined && POWER_CLAIM_TARGET[kind] === "player";
-};
+/** "the Vault", but "Security". */
+export const the = (room: RoomId): string => (roomName(room) === "Security" ? "Security" : `the ${roomName(room)}`);
 /** An event card's display name, e.g. "Shift change". */
 export const cardName = (card: string): string => EVENTS[card]?.name ?? card;
 export const perkName = (perk: string): string => PERK_TEXT[perk]?.name ?? perk;
@@ -144,12 +141,7 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       // design §10, §11.3: what people said.
       const s = e.statement;
       if (s.kind === "alibi") return `${verb(s.player, "say", "says")} ${you(s.player) ? "you were" : "they were"} in the ${roomName(s.room)} in round ${s.round}.`;
-      if (s.kind === "role") return `${verb(s.player, "claim", "claims")} to be the ${roleName(s.role)}.`;
-      const spots = s.plan.entries.flatMap((p) => [
-        ...(p.room === null ? [] : [`${who(p.player)} ${roomName(p.room)}`]),
-        ...(p.power === null ? [] : [`${who(p.player)} ${roleName(p.power.role)} → ${aimsAtPlayer(p.power.role) ? who(p.power.target) : roomName(p.power.target)}`]),
-      ]);
-      return spots.length === 0 ? `The plan for round ${s.round} had no claims.` : `The plan for round ${s.round}: ${list(spots)}.`;
+      return `${verb(s.player, "claim", "claims")} to be the ${roleName(s.role)}.`;
     }
     case "meetingProposed":
       return `${verb(e.by, "proposed", "proposed")} the next meeting for ${slot(e.slot)}.`;
@@ -181,8 +173,14 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `Round ${e.round}: ${verb(e.player, "bought", "bought")} ${perkName(e.perk.kind)} for ${e.cost} coin${e.cost === 1 ? "" : "s"}${perk(e.perk, who)}.`;
     case "bailChosen":
       return `${verb(e.player, "chose", "chose")} ${e.use ? "to use Bail" : "not to use Bail"}.`;
-    case "alibiVerified":
-      return `Verified: ${who(e.player)} really ${you(e.player) ? "were" : "was"} in the ${roomName(e.room)} in round ${e.round}.`;
+    case "alibiWindowClosed":
+      // design §10: the round's card is out; who posted no alibi is a fact, on the case board.
+      return `Round ${e.round}'s alibis are in.`;
+    case "alibiMarked":
+      // design §10: secret to the marker, so only ever "you".
+      return e.mark === null
+        ? `You cleared your mark on ${whose(e.target)} alibi for round ${e.round}.`
+        : `You marked ${whose(e.target)} alibi for round ${e.round}: ${e.mark === "liar" ? "Liar" : "Trusted"}.`;
     case "gameAborted":
       return "The host ended the game.";
     case "gameEnded": {
@@ -246,7 +244,6 @@ function perk(p: PerkUse, who: (p: PlayerId) => string): string {
       return `: the ${roomName(p.room)} goes dark next round`;
     case "plantEvidence":
       return `: ${who(p.target)} on the ${roomName(p.room)}'s cameras this round`;
-    case "alibi":
     case "softShoes":
     case "bail":
       return "";

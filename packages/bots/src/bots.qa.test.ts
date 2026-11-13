@@ -46,7 +46,6 @@ function recording(agents: readonly Agent[]) {
       for (const command of out) sent.push({ view, command });
       return out;
     },
-    spot: (view) => a.spot?.(view) ?? null,
   }));
   return { sent, wrapped };
 }
@@ -165,7 +164,6 @@ describe("QA: bots never read the state, only their view — design §17.3", () 
         createBots(c.players, rotate(1), "json").map((a): Agent => ({
           player: a.player,
           act: (v) => a.act(JSON.parse(JSON.stringify(v)) as PlayerView),
-          spot: (v) => a.spot?.(JSON.parse(JSON.stringify(v)) as PlayerView) ?? null,
         })),
       );
       expect(JSON.stringify(detached.state.log)).toBe(JSON.stringify(normal.state.log));
@@ -189,7 +187,7 @@ describe("QA: bots never read the state, only their view — design §17.3", () 
   });
 });
 
-/** A game stopped in round 2's planning, after round 1 resolved with bots playing. */
+/** A game stopped in round 2's planning, after round 1 resolved (and its alibi window closed) with bots playing. */
 function midGame(c: GameConfig): GameState {
   let state = createGame(c);
   const bots = createBots(c.players, rotate(2), "mid");
@@ -199,6 +197,9 @@ function midGame(c: GameConfig): GameState {
   };
   for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
   apply({ type: "advance", deadline: { kind: "round", round: 1 } });
+  for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
+  // design §10: the bots posted their alibis; the window closes and they have their say in the result window.
+  if (state.phase.kind === "alibi") apply({ type: "advance", deadline: { kind: "alibi", round: 1 } });
   for (const b of bots) for (const cmd of b.act(viewFor(state, b.player))) apply(cmd);
   // design §9.3: an emergency a bot called in the result window, then the window's close.
   while (state.phase.kind !== "planning") {
@@ -237,11 +238,6 @@ describe("QA: vandalising a view doesn't touch the game — design §17.3", () =
         player: a.player,
         act: (view) => {
           const out = a.act(view);
-          vandalise(view);
-          return out;
-        },
-        spot: (view) => {
-          const out = a.spot?.(view) ?? null;
           vandalise(view);
           return out;
         },

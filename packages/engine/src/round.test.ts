@@ -197,7 +197,7 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
     });
   });
 
-  it("events follow the resolution order: bells, grabs, the split, cooling, sightings and watches, the summary, then the next round (design §4.2)", () => {
+  it("events follow the resolution order: bells, grabs, the split, cooling, sightings and watches, the summary, the alibi window, then the next round (design §4.2, §10)", () => {
     const before = run(game(3), submit("p0", { room: "security", watch: "vault" }));
     const types = lastEvents(before, run(before, ROUND)).map((e) => e.type);
     expect(types).toEqual([
@@ -214,6 +214,8 @@ describe("resolution — design §3.2, §4.2 step 1", () => {
       "roomSighting",
       "roomWatched",
       "roundResolved",
+      // design §10: the alibi window (here closed at once by the test helper, nobody posting: everyone's real room is shown).
+      "alibiWindowClosed",
       // design §9.3: the result window (here closed at once by the test helper), then the next round.
       "roundStarted",
     ]);

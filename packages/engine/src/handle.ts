@@ -13,9 +13,9 @@ import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, shuffle } from "./rng";
 import { applyEvent } from "./reduce";
 import { isOver } from "./end";
-import { checkMove, resolveRound } from "./round";
+import { checkMove, closeAlibi, resolveRound } from "./round";
 import { isObject, playerFor, show } from "./check";
-import { claimRole, planSaid, postAlibi } from "./said";
+import { claimRole, markAlibi, postAlibi } from "./said";
 import { buyPerk, chooseBail } from "./perks";
 import {
   acceptMeeting,
@@ -85,12 +85,6 @@ const submitMove: Handler = (state, command) => {
   return Object.hasOwn(state.moves, player.id) ? [submitted] : [{ type: "moveLocked", visibility: PUBLIC, player: player.id, round }, submitted];
 };
 
-/** design §10: the round's plan board goes into the log as it resolves, before what really happened. */
-function withPlan(state: GameState, round: number, plan: unknown, draw: Draw): HandlerResult {
-  const said = planSaid(state, round, plan);
-  return typeof said === "string" ? said : [...said, ...resolveRound(state, round, draw)];
-}
-
 /** The scheduler says a deadline has passed. design §4.1, §9 */
 const advance: Handler = (state, command, draw) => {
   const deadline = command.deadline;
@@ -100,7 +94,9 @@ const advance: Handler = (state, command, draw) => {
       if (state.phase.kind !== "planning") return "no round deadline is pending";
       // Named round, so a retried or late deadline is refused instead of resolving the next round.
       if (deadline.round !== state.phase.round) return `the round ${show(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
-      return withPlan(state, state.phase.round, deadline.plan, draw);
+      return resolveRound(state, state.phase.round, draw);
+    case "alibi":
+      return closeAlibi(state, deadline.round, draw);
     case "result":
       return closeResult(state, deadline.round, draw);
     case "openMeeting":
@@ -118,6 +114,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   abortGame: () => [{ type: "gameAborted", visibility: PUBLIC }],
   submitMove,
   postAlibi,
+  markAlibi,
   claimRole,
   proposeMeeting,
   acceptMeeting,

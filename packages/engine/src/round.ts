@@ -1,5 +1,5 @@
-// The round loop: checking a submitted move, and resolving a round when its
-// deadline passes. design §3 (rooms, coins and grabs), §4.2, §5 (bells, raids,
+// The round loop: checking a submitted move, resolving a round when its
+// deadline passes, and closing its alibi window. design §3 (rooms, coins and grabs), §4.2, §5 (bells, raids,
 // Wanted, the bust, cooling), §6.2 (the end check), §7 (the split, missing and
 // honesty), §11 (role powers as the round resolves), §12 (perks that act then)
 //
@@ -119,7 +119,7 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
  * a use the other already did is "already done" and not spent (§11.4).
  * Otherwise the fold of `roundResolved` notes the meeting the round called
  * (§4.2 step 9: a raid calls a briefing, a third of the bank a regular
- * meeting) and awaits it; else the result window opens, or the next round starts (§9.3).
+ * meeting) and opens the alibi window (§10); what follows waits for it (`closeAlibi`).
  */
 export function resolveRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const job = roundJob(jobFor(state.config), state.card, eventsFor(state.config));
@@ -345,7 +345,22 @@ export function resolveRound(state: GameState, round: number, draw: Draw): GameE
   // §4.2 step 8: the end check (a bust has already ended the game).
   const ended = busted ? gameEnded(state, events, "bust", lyingLow) : endCheck(state, events, round);
   if (ended) return [...events, ended];
-  // §4.2 steps 9–10: the meeting the round called is awaited; else the result window, or with the pool empty the next round (§9.3).
-  const settled = events.reduce(applyEvent, state);
-  return settled.meetingDue ? events : [...events, ...afterResult(settled, draw)];
+  // §4.1, §10: the alibi window opens; the meeting the round called, the result window or the next round wait for it to close.
+  return events;
+}
+
+/**
+ * design §4.1, §10: `round`'s alibi window closes. Everyone who played it and posted no alibi is
+ * shown in their real room, as a fact; then the meeting the round called is awaited, else the
+ * result window opens, or with the crew's pool empty the next round starts (§4.2 steps 9–10, §9.3).
+ */
+export function closeAlibi(state: GameState, round: unknown, draw: Draw): GameEvent[] | string {
+  if (state.phase.kind !== "alibi" || round !== state.phase.round) return `the round ${show(round)} alibi window is not open`;
+  const posted = new Set(state.log.flatMap((e) => (e.type === "said" && e.statement.kind === "alibi" && e.statement.round === round ? [e.statement.player] : [])));
+  const real = new Map(state.log.flatMap((e) => (e.type === "coinsGrabbed" && e.round === round ? [[e.player, e.room] as const] : [])));
+  // Seat order; a player who sat the round out (§3.3) was in no room, so has no fact.
+  const noAlibi = state.playerOrder.flatMap((p) => (!posted.has(p) && real.has(p) ? [{ player: p, room: real.get(p) as string }] : []));
+  const closed: GameEvent = { type: "alibiWindowClosed", visibility: PUBLIC, round, noAlibi };
+  const settled = applyEvent(state, closed);
+  return settled.meetingDue ? [closed] : [closed, ...afterResult(settled, draw)];
 }

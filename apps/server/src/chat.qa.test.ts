@@ -112,6 +112,8 @@ function nextDeadline(state: GameState): Command[] {
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
   // design §9.3: the result window closes when nobody called an emergency.
+  // design §10: the alibi window closes after every round that goes on.
+  if (phase.kind === "alibi") return [{ type: "advance", deadline: { kind: "alibi", round: phase.round } }];
   if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
     const schedule: Command[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` }];

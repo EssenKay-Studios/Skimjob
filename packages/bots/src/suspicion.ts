@@ -1,5 +1,5 @@
 // The bots' suspicion model: a score for every other player, worked out from
-// the view alone. design §19.3 (and §5.3 shortfalls, §10 plan spots, §11.3 alibis, §3.4 Security
+// the view alone. design §19.3 (and §5.3 shortfalls, §10 alibis, §3.4 Security
 //, §11.1 powers, §13 the Audit card, §9.6 shakedown results)
 //
 // Rebuilt from the ledger and case file each time it's needed, so a bot keeps
@@ -12,11 +12,11 @@ import { claimantsOf, claimsOf, copiesOf, jobOf, ofType, saidRooms, settled, win
 export interface SuspicionWeights {
   /** Per loot of unexplained shortfall, shared among the players who could have taken it. design §5.3 */
   readonly shortfall: number;
-  /** A plan spot or alibi that contradicts what I saw (a sighting, Security or Lookout). design §10, §11.3 */
+  /** An alibi that contradicts what I saw (a sighting, Security or Lookout). design §10, §11.3 */
   readonly lie: number;
   /** I saw them where they said they were. */
   readonly verified: number;
-  /** No plan spot and no alibi once the crew has had its say about the round (`settled`; saying nothing is suspicious in itself). */
+  /** No alibi once the crew has had its say about the round (`settled`; saying nothing is suspicious in itself). */
   readonly noAlibi: number;
   /** Score after a shakedown found them clean. design §11.3 */
   readonly afterClean: number;
@@ -62,7 +62,7 @@ export function suspicion(view: PlayerView, w: SuspicionWeights = SUSPICION_WEIG
     const s = score.get(id);
     if (s !== undefined) score.set(id, s + n);
   };
-  // design §10, §11.3: where each said they were (plan spot, or alibi).
+  // design §10: where each said they were (their alibi).
   const alibis = saidRooms(view);
   const coins = (room: RoomId): number => roomDef(job, room).coins;
   const maxCoins = Math.max(...view.rooms.map(coins));

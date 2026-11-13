@@ -30,16 +30,6 @@ export function Door() {
   );
 }
 
-/** A power claim (a pledge) on the plan board; the Door is a room claim. design §10 */
-export function Bolt() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M12.4 3.4 6 11.2h4.4l-1 5.6 6.2-8h-4.4z" fill="var(--gold)" transform="translate(.8 .8)" />
-      <path d="M11.6 2.2 4.6 11.2h4.6l-1.2 6.6 7.4-9.2h-4.6z" {...S} />
-    </svg>
-  );
-}
-
 export function ArrowBack() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -114,6 +104,15 @@ export function Close() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
       <path d="M5.2 5c3.3 3.2 6.5 6.6 9.6 10.2M14.9 4.9c-3.4 3.2-6.6 6.6-9.8 10" {...S} strokeWidth={2.1} />
+    </svg>
+  );
+}
+
+/** A trust mark: Trusted. */
+export function Tick() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M4.4 10.6c1.6 1.4 3 2.9 4.2 4.6 2.2-4 4.6-7.3 7.2-10" {...S} strokeWidth={2.3} />
     </svg>
   );
 }

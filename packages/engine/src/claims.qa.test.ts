@@ -57,7 +57,7 @@ describe("claimRole — QA PR #37, design §11.3", () => {
     expect(first.log.filter((e) => e.type === "said")).toHaveLength(1);
   });
 
-  it("allowed in every live phase (planning, awaitingMeeting, meeting, result) and in each stretch, once — design §11.3", () => {
+  it("allowed in every live phase (planning, alibi, awaitingMeeting, meeting, result) and in each stretch, once — design §11.3, §10", () => {
     // A bank of 12: round 1's default moves take a third of it, so a regular meeting follows (design §9.1).
     let s = createGame(cfg(4, { contentOverrides: { bank: { coinsPerPlayer: 3 } } }));
     const phases: string[] = [];
@@ -67,15 +67,17 @@ describe("claimRole — QA PR #37, design §11.3", () => {
     };
     tryClaim("p0", "lookout"); // planning, stretch 1
     s = step(s, { type: "advance", deadline: { kind: "round", round: 1 } }).state;
-    expect(s.phase.kind).toBe("awaitingMeeting");
+    expect(s.phase.kind).toBe("alibi");
     tryClaim("p1", "auditor");
+    s = step(s, { type: "advance", deadline: { kind: "alibi", round: 1 } }).state;
+    expect(s.phase.kind).toBe("awaitingMeeting");
     tryClaim("p2", "fixer");
     s = step(s, { type: "scheduleMeeting", meetingId: "meeting-1", slot: "now" }).state;
     s = step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } }).state;
     tryClaim("p3", "lookout"); // stretch 2 from here
     s = step(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: "meeting-1" } }).state;
     tryClaim("p0", "detective");
-    expect(phases).toEqual(["planning", "awaitingMeeting", "awaitingMeeting", "meeting", "result"]);
+    expect(phases).toEqual(["planning", "alibi", "awaitingMeeting", "meeting", "result"]);
     expect(roleClaims(s.log).map((c) => c.stretch)).toEqual([1, 1, 1, 2, 2]);
   });
 

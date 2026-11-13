@@ -50,7 +50,7 @@ type ExpectedVisibility = {
   eventFlipped: "public"; // design §13: the card is shown to everyone
   insideTip: "private"; // design §13: private to the recipient
   auditReport: "public"; // design §13: per-room coins that reached the duffel, on the ledger
-  said: "public"; // design §18, §19.2 seam 5: plans, pledges, alibis and claims are public talk
+  said: "public"; // design §18, §19.2 seam 5: alibis and claims are public talk
   meetingProposed: "public";
   meetingProposalAccepted: "public";
   meetingScheduled: "public";
@@ -65,7 +65,8 @@ type ExpectedVisibility = {
   perkSold: "public"; // design §12: every purchase is logged without a name as planning closes
   perkBought: "private"; // design §12: who bought it opens at the reveal
   bailChosen: "private"; // design §9.6: the Bail choice is private until the reveal
-  alibiVerified: "public"; // design §12: the "verified" stamp is in the ledger
+  alibiWindowClosed: "public"; // design §10: the "no alibi" facts are public
+  alibiMarked: "secret"; // design §10: only the marker ever sees a trust mark
   gameAborted: "public";
   gameEnded: "public";
 };

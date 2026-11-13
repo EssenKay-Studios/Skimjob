@@ -12,6 +12,7 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand } from "./handle";
 import { fullGrab } from "./grab.testkit";
+import { closeAlibiWindow } from "./result.testkit";
 
 /** One perk per tier and no Bail, whatever the seed: Bail in the shop opens a Bail choice window after every passed shakedown (design §9.6). */
 const SHOP_NO_BAIL: readonly PerkId[] = ["tail", "softShoes", "plantEvidence"];
@@ -52,7 +53,10 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
     if (Array.isArray(command)) return run(s, ...(command as Cmd[]));
     const r = handleCommand(s, command);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
-    return r.state;
+    // design §10: a round's alibi window closes at once (nobody posts); these tests are about what follows it.
+    const closed = closeAlibiWindow(r.state);
+    if (!closed.ok) throw new Error(closed.reason);
+    return closed.state;
   }, state);
 }
 function reason(state: GameState, command: unknown): string {
@@ -186,7 +190,10 @@ describe("QA: emergency meetings — design §9.3", () => {
   });
 
   it("during the notice period: proposals and sealing go on; a second call, the window's deadline and moves are refused", () => {
-    let s = run(game(7), ...lobby(game(7)), ROUND, { type: "postAlibi", player: "p0", round: 1, room: "lobby" }, emergency("p3"));
+    let s = run(game(7), ...lobby(game(7)), ROUND);
+    // design §10: the alibi window has closed, so the result window takes no alibi.
+    expect(reason(s, { type: "postAlibi", player: "p0", round: 1, room: "lobby" })).toMatch(/alibi window for round 1 is not open/);
+    s = run(s, emergency("p3"));
     expect(s.phase).toEqual({ kind: "result", round: 1 });
     s = run(s, propose("p1", "x"), seal("p2", "p3"));
     expect(reason(s, emergency("p0"))).toMatch(/already been called/);

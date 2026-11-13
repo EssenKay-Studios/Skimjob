@@ -1,14 +1,13 @@
 // QA for M2-6 (PR #31): the game screen under abuse. Full 15-min games with 12
 // seats and 24-character names at 390×844 touch and 1280×800; reloads mid-round
-// and between rounds; a killed socket; a client clock an hour off; an alibi
-// posted from a stale screen (alibis have no window); and nothing on screen giving away another
+// and between rounds; a killed socket; a client clock an hour off; the alibi
+// pop-up back after a reload in its window; and nothing on screen giving away another
 // player's hidden move, split, role or "submitted" status.
 import { mkdirSync } from "node:fs";
 import { closePanel, gameOver, keepRoundOpen, openPanel, showResult, settle, DEFAULT_SEED } from "./setupGame";
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
 import { openLeads } from "./setupGame";
 import { grabAll, pickOtherRoom, pickRoom, tapMove } from "./move";
-import { clickAfterCards, showsAfterCards } from "./meetingCards";
 
 const SHOTS = process.env.SHOTS_DIR;
 const LONG_HOST = "WWWWWWWWWWWWWWWWWWWWWWWW"; // 24, the cap; the widest glyph, no break points
@@ -95,14 +94,14 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   // At the fast clock a round is 3.75 s and a result window 1 s (× 0.05): under
   // CI load a round of taps outlasts them, so the test could miss them all. Until
   // the host has changed a move, and then posted an alibi, it pauses the game from
-  // the push that opens the phase it needs (between rounds for the alibi panel; a pause stops every deadline and players
+  // the push that opens the phase it needs (the alibi window for the pop-up; a pause stops every deadline and players
   // can still plan and post, design §15) and resumes once that is done. Both steps
   // are counted from the host's own view, not from a tap's promise: under load a
   // tap can time out after its click went through.
   let changed = 0; // rounds where the host resubmitted its move (design §5.1)
-  let alibis = 0; // alibis the host posted (design §11.3)
+  let alibis = 0; // alibis the host posted (design §10)
   let phase = "";
-  const holding = () => (phase === "planning" && changed === 0) || ((phase === "result" || phase === "awaitingMeeting") && alibis === 0);
+  const holding = () => (phase === "planning" && changed === 0) || (phase === "alibi" && alibis === 0);
   let pausing: ReturnType<APIRequestContext["post"]> | null = null;
   let pausedAt = 0;
   type Logged = { event: { type: string; player?: string; round?: number; statement?: { kind: string; player?: string } } };
@@ -140,10 +139,10 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
   };
   const over = host.getByRole("list", { name: "Final ranking" });
   let round = 0;
-  const post = host.getByRole("button", { name: "Post alibi" });
+  const popup = host.getByRole("dialog", { name: "Psst. Where were you?" });
   try {
     while (!(await gameOver(host).isVisible())) {
-      await keepRoundOpen(host); // below 1024 px the move panel and the alibi panel are in the "This round" sheet
+      await keepRoundOpen(host); // below 1024 px the move panel is in the "This round" sheet
       const heading = await host.locator("#move-h").textContent({ timeout: 200 }).catch(() => null);
       const lock = host.getByRole("button", { name: /Lock it in|Update move/ });
       if (heading && (await host.locator(".move__lock").isVisible().catch(() => false))) {
@@ -180,10 +179,10 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
         const card = p.getByRole("button", { name: "Back to the bank" });
         if (await card.isVisible().catch(() => false)) await tap(p, card).catch(() => {});
       }
-      if (await post.isVisible().catch(() => false)) {
+      if (await popup.isVisible().catch(() => false)) {
         await once("alibi-open", host);
-        await tap(host, host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Vault" })).catch(() => {});
-        await tap(host, post).catch(() => {});
+        await tap(host, popup.getByRole("group", { name: "Where you say you were" }).getByRole("button", { name: /^Vault/ })).catch(() => {});
+        await tap(host, popup.getByRole("button", { name: "I was in the Vault" })).catch(() => {});
         await once("alibi-posted", host);
       }
       // A step that never lands fails here, readably, instead of holding the game paused.
@@ -195,8 +194,8 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
         await ok(await host.request.post(`/api/games/${game.id}/resume`, { data: {} }));
       }
       if (await host.locator(".panel[aria-live=polite]").isVisible().catch(() => false)) await once("waiting", host);
-      // Wake as soon as the alibi panel shows rather than on a fixed 120 ms tick.
-      await post.waitFor({ state: "visible", timeout: 120 }).catch(() => {});
+      // Wake as soon as the alibi pop-up shows rather than on a fixed 120 ms tick.
+      await popup.waitFor({ state: "visible", timeout: 120 }).catch(() => {});
     }
   } finally {
     // Never leave the game paused, even when a step above throws (set in the frame handler, so TS can't see it).
@@ -226,7 +225,7 @@ const clock = (t: string | null) => {
   return m ? Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : NaN;
 };
 
-test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 s rounds) @move", async ({ browser }, info) => {
+test("reloads, a killed socket, a skewed clock and the alibi pop-up after a reload (3h preset: 102 s rounds) @move", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the channel behaviour");
   test.setTimeout(360_000); // round 1 (~102 s), then a meeting's vote window and Bail window may come before round 2 on a slow runner
   const { hostCtx, guestCtx, host, guest } = await contexts(browser, false);
@@ -235,8 +234,7 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
     const real = Date.now.bind(Date);
     Date.now = () => real() + 3_600_000;
   });
-  // The host's game socket goes through a route the test can freeze (drop views) or kill.
-  let freeze = false;
+  // The host's game socket goes through a route the test can kill.
   const routes: WebSocketRoute[] = [];
   /** Every entry of each view the host's socket delivered (public and private), by seq. */
   const views: number[][] = [];
@@ -244,7 +242,6 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
     routes.push(ws);
     const server = ws.connectToServer();
     server.onMessage((m) => {
-      if (freeze && typeof m === "string" && m.startsWith('{"view"')) return;
       if (typeof m === "string" && m.startsWith('{"view"')) {
         const { view } = JSON.parse(m) as { view: { ledger: { seq: number }[]; caseFile: { seq: number }[] } };
         views.push([...view.ledger, ...view.caseFile].map((e) => e.seq));
@@ -290,29 +287,19 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
   expect(seqs.length).toBeGreaterThanOrEqual(entriesBefore);
   await expect(status).toHaveText(before!);
 
-  // Round 1 resolves (≈102 s). The guest reloads between rounds and the alibi panel comes back.
-  await expect(guest.getByRole("button", { name: "Post alibi" })).toBeVisible({ timeout: 150_000 });
-  freeze = true; // the host's screen now keeps the alibi panel
+  // Round 1 resolves (≈102 s): the alibi pop-up. The host pauses the game (the 2 s window stops too), the guest
+  // reloads in the window and the pop-up comes back, as for anyone arriving late (design §10), and posts.
+  const popup = guest.getByRole("dialog", { name: "Psst. Where were you?" });
+  await expect(popup).toBeVisible({ timeout: 150_000 });
+  await ok(await host.request.post(`/api/games/${game.id}/pause`, { data: {} }));
   await guest.reload();
-  await expect(guest.getByRole("button", { name: "Post alibi" })).toBeVisible({ timeout: 4000 });
-  // A meeting after round 1 can open over the guest's screen: its vote window, then its result card, are modal (design §9.6).
-  await clickAfterCards(guest, guest.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }), 150_000);
-  await clickAfterCards(guest, guest.getByRole("button", { name: "Post alibi" }), 150_000);
-  await expect(guest.getByText("You told the crew you were in the")).toBeVisible();
+  await expect(popup).toBeVisible();
+  await popup.getByRole("group", { name: "Where you say you were" }).getByRole("button", { name: /^Lobby/ }).click();
+  await popup.getByRole("button", { name: "I was in the Lobby" }).click();
+  await expect(guest.locator(".toast").filter({ hasText: "Alibi posted." })).toBeVisible();
+  await expect(popup).toBeHidden();
   await shot(guest, "alibi-posted-after-reload");
-
-  // The host posts once round 2 is being planned (their screen is stale): alibis have no window, so it is
-  // still taken for round 1 (design §11.3, owner 6 Nov). A briefing (after a raid) or the result window may come first (§9.2, §9.3).
-  // A meeting before it leaves its modal result card up, and the board behind a modal is out of the accessibility tree until it is closed (design §9.6).
-  await showsAfterCards(guest, guest.getByRole("heading", { name: "Round 2 · Pick your room", level: 2 }), 150_000);
-  // The host's screen may have frozen on a meeting's vote: back to the board, where the alibi panel waits.
-  const back = host.getByRole("button", { name: "Back to the board" });
-  if (await back.isVisible()) await back.click();
-  await host.getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Office" }).click();
-  await host.getByRole("button", { name: "Post alibi" }).click();
-  await expect(host.locator(".toast").filter({ hasText: "Alibi posted." })).toBeVisible();
-  await shot(host, "alibi-late");
-  freeze = false;
+  await ok(await host.request.post(`/api/games/${game.id}/resume`, { data: {} }));
   await host.reload();
   await expect(host.locator(".hud__kicker")).toBeVisible();
   await hostCtx.close();

@@ -1,9 +1,9 @@
 // Plain lines for the end-of-game reveal (design §15.5): which roles also win a
 // heist sunk by theft (★), who won and why, and the worked-out timeline items.
 // Pure; the switches are exhaustive. design §8
-import { BANK_JOB, BUST_ROLE_TEXT, lineWords, type RoleId } from "@skimjob/content";
-import { roleHandler, type RevealEnding, type RevealItem, type RevealMove, type RevealRound, type RevealSummary } from "@skimjob/engine";
-import { describeEvent, roleName, roomName, type DescribeContext } from "./describeEvent";
+import { BANK_JOB, BUST_ROLE_TEXT, lineWords, type RoleId, type RoomId } from "@skimjob/content";
+import { roleHandler, type AlibiMark, type PlayerId, type RevealEnding, type RevealItem, type RevealRound, type RevealSummary } from "@skimjob/engine";
+import { describeEvent, roleName, the, type DescribeContext } from "./describeEvent";
 
 /** "★ Also wins if the heist is sunk by theft" for the Mole and the Fixer (their handlers, design §8.4), else "". */
 export function starText(role: RoleId): string {
@@ -74,13 +74,29 @@ export function endingText(outcome: Ending): { title: string; badge: string; los
     : { title: "Sunk by theft: too many coins went missing", badge: "Wins a heist sunk by theft", loss };
 }
 
-/** Plan against move (design §10, §15.5): the plan spot the player held as the round resolved, and whether they went elsewhere. */
-export const planOf = (m: RevealMove): { spot: string; broken: boolean } =>
-  m.planned === null ? { spot: "no plan spot", broken: false } : { spot: roomName(m.planned), broken: m.planned !== m.room };
+/** A lie in a round, with the viewer's own mark on it, if they made one. */
+export interface Lie {
+  readonly player: PlayerId;
+  readonly said: RoomId;
+  readonly real: RoomId;
+  readonly mark: AlibiMark | null;
+}
 
-/** design §15.4 "Changed story", told in the reveal: the plan spot and the alibi posted later differ. Null when either is missing or they agree. */
-export const changedStory = (m: RevealMove): string | null =>
-  m.planned !== null && m.alibi !== null && m.planned !== m.alibi ? `Changed story: planned ${roomName(m.planned)}, later said ${roomName(m.alibi)}.` : null;
+/**
+ * design §15.5, §18 board 5: `round`'s lies (an alibi for a room the player wasn't in), in seat
+ * order. `marks`: the viewer's own trust marks by "round/target" (engine `marksOf` over their
+ * case file; secret to them even now).
+ */
+export function roundLies(round: RevealRound, marks: ReadonlyMap<string, AlibiMark>): Lie[] {
+  return round.moves.flatMap((m) => (m.alibi !== null && m.alibi !== m.room ? [{ player: m.player, said: m.alibi, real: m.room, mark: marks.get(`${round.round}/${m.player}`) ?? null }] : []));
+}
+
+/** "Ben said the Vault; really the Office. You had marked Ben a liar." */
+export function lieText(lie: Lie, ctx: DescribeContext): string {
+  const name = ctx.name(lie.player);
+  const mark = lie.mark === "liar" ? ` You had marked ${name} a liar.` : lie.mark === "trusted" ? ` You had trusted ${name}.` : "";
+  return `${lie.player === ctx.me ? "You" : name} said ${the(lie.said)}; really ${the(lie.real)}.${mark}`;
+}
 
 /** design §3.3: a missed move into a taped-off Lobby has no move at all, so the reveal says so. */
 export const satOutText = (player: string, ctx: DescribeContext): string =>

@@ -83,7 +83,8 @@ const onPileTap = (pile: Pile, open: boolean, onDrop: (to: Pile) => void) => (e:
   if (open && !(e.target as Element).closest("button")) onDrop(pile);
 };
 
-function BagArt({ bag }: { bag: Bag }) {
+/** The duffel or pocket, drawn small (the bags here, the snapshot card's duffel line). */
+export function BagArt({ bag }: { bag: Bag }) {
   return bag === "duffel" ? (
     <svg width="34" height="27" viewBox="0 0 50 40" aria-hidden="true">
       <path d="M14 12c0-6 22-6 22 0" fill="none" stroke="var(--art-ink)" strokeWidth="2.4" strokeLinecap="round" />

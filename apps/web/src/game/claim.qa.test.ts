@@ -3,7 +3,7 @@
 // offer is a claim the engine accepts. design §8, §12.1
 import { ROLES } from "@skimjob/content";
 import { handleCommand, viewFor, type GameConfig, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
-import { createGame } from "./deal.testkit";
+import { createGame, pastAlibi } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import { claimState } from "./meeting";
 
@@ -19,7 +19,7 @@ const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
 function step(s: GameState, c: PlayerCommand | SystemCommand): GameState {
   const r = handleCommand(s, c);
   if (!r.ok) throw new Error(`${c.type}: ${r.reason}`);
-  return r.state;
+  return pastAlibi(r.state);
 }
 const claim = (player: string, role: string) => ({ type: "claimRole", player, role }) as PlayerCommand;
 

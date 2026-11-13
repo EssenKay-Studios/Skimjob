@@ -300,7 +300,7 @@ export const chatTime = (iso: string): string => {
 
 /**
  * Public events worth a line in the crew feed (ui-style "Chat": game events as
- * compact rows). Setup and per-player chatter (alibis, plan boards, proposals)
+ * compact rows). Setup and per-player chatter (alibis, proposals)
  * stay in the ledger only, so the feed doesn't drown the talk; role claims show.
  */
 const QUIET_EVENTS: ReadonlySet<string> = new Set(["gameCreated", "roomsSet", "bankFilled", "roundStarted", "meetingProposed", "meetingProposalAccepted", "moveLocked"]);

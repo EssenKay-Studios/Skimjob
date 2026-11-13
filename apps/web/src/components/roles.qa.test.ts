@@ -25,6 +25,7 @@ import { RoleCardDialog, RolesInPlay } from "./RoleCard";
 import { Rulebook } from "./Rulebook";
 import { GameOver } from "../screens/Game";
 import { RoleCard } from "../screens/Meetings";
+import { pastAlibi } from "../game/deal.testkit";
 
 const html = (el: ReactElement) => renderToStaticMarkup(el);
 
@@ -66,7 +67,7 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
     const cmd = typeof c === "function" ? c(s) : c;
     const r = handleCommand(s, cmd);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(cmd)}: ${r.reason}`);
-    return r.state;
+    return pastAlibi(r.state);
   }, state);
 }
 const refused = (s: GameState, cmd: object) => !handleCommand(s, cmd).ok;

@@ -4,10 +4,10 @@
 // revealed, only shown better. Ids are stable between views (a lead is its round
 // and subject; a fact adds its seq in your view), so pins survive new events.
 import type { RoleId, RoomId } from "@skimjob/content";
-import { eventsFor, type CaseFileEvent, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView, type PublicEvent } from "@skimjob/engine";
+import { eventsFor, marksOf, type CaseFileEvent, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView, type PublicEvent } from "@skimjob/engine";
 import { suspectOf, type CaseData, type Fact, type Lead, type Trust, type Warning } from "./caseBoard";
 import { bellChecks, overClaimed, storyChecks, type CheckContext, type RoomRound, type RoundFacts } from "./caseChecks";
-import { cardName, describeEvent, perkName, roleName, roomName } from "./describeEvent";
+import { cardName, describeEvent, perkName, roomName, the } from "./describeEvent";
 import { jobOf, namesOf, seatsOf, setupOf } from "./hud";
 import { MEETING_TITLE, slotText } from "./meeting";
 
@@ -38,8 +38,8 @@ interface MutableRoom {
 interface MutableRound {
   card: RoundFacts["card"];
   readonly rooms: Map<RoomId, MutableRoom>;
-  readonly plan: Map<PlayerId, RoomId>;
   readonly alibis: Map<PlayerId, RoomId>;
+  readonly noAlibi: Map<PlayerId, RoomId>;
   bankEmptied: boolean;
 }
 
@@ -70,7 +70,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
   const rounds = new Map<number, MutableRound>();
   const roundOf = (r: number): MutableRound => {
     let x = rounds.get(r);
-    if (!x) rounds.set(r, (x = { card: null, rooms: new Map(), plan: new Map(), alibis: new Map(), bankEmptied: false }));
+    if (!x) rounds.set(r, (x = { card: null, rooms: new Map(), alibis: new Map(), noAlibi: new Map(), bankEmptied: false }));
     return x;
   };
   const roomOf = (r: number, room: RoomId): MutableRoom => {
@@ -90,6 +90,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
   /** Your own Plant evidence: "round:room" → the player you put on its feeds. You know that sighting is fake. */
   const myPlants = new Map<string, PlayerId>();
   let round = 0;
+  let played = 0;
 
   const all: LoggedEvent<PublicEvent | CaseFileEvent>[] = [...view.ledger, ...view.caseFile].sort((a, b) => a.seq - b.seq);
   for (const { seq, event: e } of all) {
@@ -127,6 +128,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         fact(lead(`r${e.round}.haul`, e.round, "Haul"), `${seq}`, text(), trust);
         break;
       case "roundResolved": {
+        played = e.round;
         roundOf(e.round).bankEmptied = e.bank === 0;
         const d = lead(`r${e.round}.haul`, e.round, "Haul");
         if (e.missing > 0) {
@@ -190,31 +192,23 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         fact(roomLead(e.round, e.room), `${seq}`, text(), trust, e.seen);
         break;
       }
-      case "alibiVerified":
-        fact(roomLead(e.round, e.room), `${seq}`, text(), trust, [e.player]);
+      case "alibiWindowClosed":
+        // design §10: each player with no alibi is shown in their real room, as a fact.
+        for (const { player, room } of e.noAlibi) {
+          roundOf(e.round).noAlibi.set(player, room);
+          fact(roomLead(e.round, room), `${seq}.${player}`, `${player === me ? "You" : name(player)} had no alibi: in ${the(room)}, round ${e.round}`, trust, [player]);
+        }
         break;
+      case "alibiMarked":
+        break; // your marks, latest of each, are added below (marksOf)
       case "said": {
         const s = e.statement;
         if (s.kind === "alibi") {
           roundOf(s.round).alibis.set(s.player, s.room);
           fact(roomLead(s.round, s.room), `${seq}`, text(), trust, [s.player]);
-        } else if (s.kind === "role") {
+        } else {
           if (s.player !== me) claims.set(s.player, { role: s.role, round });
           fact(crewLead(round), `${seq}`, text(), trust, [s.player]);
-        } else {
-          // design §10: the plan snapshot, one said line per spot and per pledge.
-          for (const p of s.plan.entries) {
-            if (p.room !== null) {
-              roundOf(s.round).plan.set(p.player, p.room);
-              fact(roomLead(s.round, p.room), `${seq}.${p.player}`, `Plan: ${who(p.player)} → ${roomName(p.room)}`, trust, [p.player]);
-            }
-            if (p.power !== null) {
-              const target = p.power.target;
-              const onRoom = Object.hasOwn(job.rooms, target);
-              const d = onRoom ? roomLead(s.round, target) : crewLead(s.round);
-              fact(d, `${seq}.${p.player}.power`, `Plan: ${who(p.player)} ${roleName(p.power.role)} → ${onRoom ? roomName(target) : who(target)}`, trust, onRoom ? [p.player] : [p.player, target]);
-            }
-          }
         }
         break;
       }
@@ -301,6 +295,15 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
     if (rr?.seen.get(target) === "feed") rr.seen.delete(target);
   }
 
+  // design §10: your own trust marks (secret to you), the latest of each, on the lead of the room the alibi named.
+  for (const [key, mark] of marksOf(view.caseFile.map((l) => l.event), me)) {
+    const [r, target] = [Number(key.slice(0, key.indexOf("/"))), key.slice(key.indexOf("/") + 1)];
+    const at = rounds.get(r)?.alibis.get(target) ?? rounds.get(r)?.noAlibi.get(target);
+    const where = at === undefined ? `round ${r}` : `${the(at)}, round ${r}`;
+    const text = mark === "liar" ? `${name(target)} lied about ${where}` : `You trust ${name(target)}'s alibi: ${where}`;
+    fact(at === undefined ? crewLead(r) : roomLead(r, at), `mark.${target}`, text, "mark", [target]);
+  }
+
   // design §15.4: the ⚠ checks, each round as your view shows it.
   const setup = setupOf(view);
   const ctx: CheckContext = {
@@ -317,8 +320,8 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
       round: r,
       card: x.card,
       rooms: new Map<RoomId, RoomRound>(x.rooms),
-      plan: x.plan,
       alibis: x.alibis,
+      noAlibi: x.noAlibi,
       softShoes: n(sold, r - 1, "softShoes") - n(bought, r - 1, "softShoes"),
       planted: n(sold, r, "plantEvidence") - n(bought, r, "plantEvidence"),
       mySoftShoes: n(bought, r - 1, "softShoes") > 0,
@@ -338,7 +341,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
       const d = drafts.get(`r${r}.room.${room}`);
       if (!d) continue;
       const seen = [...rr.seen.keys()].map(who);
-      const claimed = [...new Set([...x.plan, ...x.alibis].filter(([, at]) => at === room).map(([p]) => p))].map(who);
+      const claimed = [...x.alibis].filter(([, at]) => at === room).map(([p]) => who(p));
       d.summary = [
         rr.raided ? `raid · ${rr.seized} seized` : rr.hidden ? "bell ?" : rr.rings ? `rang ${rr.rings === 1 ? "once" : rr.rings}` : null,
         // design §11.1, §18: the announcement's own form, never a bare "power cut" (the dropped R6 card's name).
@@ -358,5 +361,5 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
     names: [...d.names],
     facts: d.facts,
   }));
-  return { leads, suspect: suspectOf(leads, pins, me, seatsOf(view).map((s) => s.id)) };
+  return { leads, suspect: suspectOf(leads, pins, me, seatsOf(view).map((s) => s.id)), roundCap: job.roundCap, played };
 }

@@ -33,20 +33,3 @@ export async function showsAfterCards(page: Page, target: Locator, timeout: numb
     )
     .toBe(true);
 }
-
-/** Clicks `target`, closing any meeting result card that covers it first and waiting out a vote window (modal too). */
-export async function clickAfterCards(page: Page, target: Locator, timeout: number): Promise<void> {
-  const card = page.getByRole("button", { name: "Back to the bank" });
-  await expect
-    .poll(
-      async () => {
-        if (await card.isVisible()) await card.click();
-        return target.click({ timeout: 1_500 }).then(
-          () => true,
-          () => false,
-        );
-      },
-      { message: "the click lands once a meeting's cards are out of the way", timeout },
-    )
-    .toBe(true);
-}

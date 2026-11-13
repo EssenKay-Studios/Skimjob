@@ -68,7 +68,7 @@ describe("the black market's offers — design §12, §20.3", () => {
 
   it("Bail is the one held item: holding one blocks a second (design §12)", () => {
     let s = run(game(["tail", "softShoes", "bail"]), buy("p1", { kind: "bail" }), resolve);
-    s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
+    s = run(s, { type: "advance", deadline: { kind: "alibi", round: 1 } }, { type: "advance", deadline: { kind: "result", round: 1 } });
     const v = viewFor(s, "p1");
     expect(v.phase).toEqual({ kind: "planning", round: 2 });
     expect(marketOf(v).offers.find((o) => o.perk === "bail")?.blocked).toBe("You already hold a Bail.");
@@ -93,8 +93,6 @@ describe("the black market's offers — design §12, §20.3", () => {
       "This is the last round: Blackout works next round, so it would do nothing.",
       "This is the last round: Bail needs a meeting, and none follows, so it would do nothing.",
     ]);
-    // Stamped alibi and Plant evidence act this round.
-    expect(wasted(["alibi", "softShoes", "plantEvidence"])).toEqual([null, expect.any(String), null]);
   });
 
   it("no meeting can follow the last round: the game ends as it resolves (design §6.2, §9.3)", () => {
@@ -148,7 +146,7 @@ describe("the 'Someone bought' notices, as the engine releases them — design �
   });
 
   it("shows only the latest round that had purchases", () => {
-    let s = run(game(["tail", "softShoes", "bail"]), buy("p1", { kind: "bail" }), resolve, { type: "advance", deadline: { kind: "result", round: 1 } });
+    let s = run(game(["tail", "softShoes", "bail"]), buy("p1", { kind: "bail" }), resolve, { type: "advance", deadline: { kind: "alibi", round: 1 } }, { type: "advance", deadline: { kind: "result", round: 1 } });
     s = run(s, buy("p2", { kind: "tail", room: "vault" }), { type: "advance", deadline: { kind: "round", round: 2 } });
     expect(latestSales(viewFor(s, "p1")).map((e) => [e.round, e.perk])).toEqual([[2, "tail"]]);
   });

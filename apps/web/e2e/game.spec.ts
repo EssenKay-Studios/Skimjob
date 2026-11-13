@@ -25,16 +25,16 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   const guest = await guestCtx.newPage();
   const game = await startGame(page.request, { bots: 2, guests: [guest.request] });
 
-  // The result window, where the alibi panel sits, is about a second of real time at this clock, shorter than a loaded runner's
-  // click round trips, so the host's alibi is posted from inside the page (no round trips): pick the
-  // Lobby, post, and note that the confirmation ("You told the crew ...") was shown (issue #127).
+  // The alibi window (design §10) is about a second of real time at this clock, shorter than a loaded runner's
+  // click round trips, so the host's alibi is posted from inside the page (no round trips): in the pop-up pick the
+  // Lobby, post, and note that the confirmation ("Alibi posted.") was shown (issue #127).
   await page.addInitScript(() => {
     const w = window as unknown as { __alibiShown?: boolean };
     setInterval(() => {
-      const btn = (t: string, root: ParentNode = document) => [...root.querySelectorAll("button")].find((b) => b.textContent?.trim() === t);
-      const post = btn("Post alibi");
-      if (post) (post.disabled ? btn("Lobby", document.querySelector('[aria-label="Alibi room"]') ?? document) : post)?.click();
-      if (document.body.innerText.includes("You told the crew you were in the")) w.__alibiShown = true;
+      const post = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "I was in the Lobby");
+      const lobby = [...document.querySelectorAll(".alibi__tile")].find((b) => b.querySelector(".alibi__name")?.textContent?.trim() === "Lobby");
+      (post && !post.disabled ? post : (lobby as HTMLButtonElement | undefined))?.click();
+      if (document.body.innerText.includes("Alibi posted.")) w.__alibiShown = true;
     }, 25);
   });
   await page.goto(`/game/${game.id}`);
@@ -51,7 +51,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
   let votes = 0;
   while (!(await gameOver(page).isVisible())) {
     // Every interaction below waits generously for its click and counts only what the UI confirms ("Vote cast",
-    // "Locked in: Office", "You told the crew ..."), never the click itself. A click that fails under load (the
+    // "Locked in: Office", "Alibi posted."), never the click itself. A click that fails under load (the
     // sheet still animating, the round gone) is retried on the next pass. The three steps run side by side:
     // one that stalls on a vanished button (a 5 s click timeout) must not eat the result or vote window.
     // Issue #127: 1 s clicks that were counted, or followed by "Back to the board", left votes/alibis at 0.
@@ -247,9 +247,8 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await expect(card.getByText("You claimed to be the Lookout. One claim between meetings")).toBeVisible();
   await expect(card.getByRole("button", { name: "Claim role" })).toHaveCount(0);
 
-  // The result window (6 s): the board shows the resolved round, with you in the Office; the plan board offers the alibi for it.
-  const alibi = page.locator(".plan__alibi");
-  await expect(alibi).toBeVisible({ timeout: 45_000 });
+  // The alibi window: the board shows the resolved round, with you in the Office, under the alibi pop-up (design §10).
+  await expect(page.getByRole("dialog", { name: "Psst. Where were you?" })).toBeVisible({ timeout: 45_000 });
   await expect(board.getByText(/as you saw it/)).toBeVisible();
   await expect(board.locator(".bank-room.is-selected[data-room=office]")).toBeVisible();
   await expect(card.getByText("You claimed to be the Lookout. One claim between meetings")).toBeVisible();

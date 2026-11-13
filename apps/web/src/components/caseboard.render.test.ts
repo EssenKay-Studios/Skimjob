@@ -92,6 +92,26 @@ describe("the case board shell (design §15.4)", () => {
     expect(on).toContain('aria-pressed="true"');
   });
 
+  it("has a round picker: square buttons up to the round cap, the rounds not played yet disabled, none picked at first (design §10, §15.4)", () => {
+    const out = html();
+    expect(out).toContain('role="group" aria-label="Round"');
+    expect(out).toContain("Round:");
+    const btns = [...out.matchAll(/<button type="button" class="cb__rbtn num"([^>]*)>(\d+)<\/button>/g)];
+    expect(btns.map((m) => m[2])).toEqual(Array.from({ length: 12 }, (_, i) => `${i + 1}`));
+    expect(btns.map((m) => m[1]!.includes("disabled"))).toEqual(Array.from({ length: 12 }, (_, i) => i >= 4));
+    expect(out).not.toContain('class="cb__rbtn num" aria-pressed="true"');
+    const css = readFileSync(new URL("./caseboard.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.cb__rbtn \{[^}]*width: 44px;[^}]*height: 44px;/);
+    expect(css).toMatch(/\.cb__rbtn\[aria-pressed="true"\] \{[^}]*background: var\(--gold\);/);
+    expect(css).toMatch(/\.cb__rbtn:disabled \{[^}]*border-style: dashed;/);
+  });
+
+  it("labels your own trust marks \"Your mark\" and a no-alibi fact as a Fact (design §10)", () => {
+    const out = renderToStaticMarkup(createElement(CaseBoard, { data: FIXTURE, people, pins: pins(["fact:r4.vault.mark", "fact:r4.vault.noalibi"]), marks: null }));
+    expect(out).toContain('<span class="cb__trust">Your mark</span> You trust Cy&#x27;s alibi: the Vault, round 4');
+    expect(out).toContain('<span class="cb__trust">Fact</span> Dot had no alibi: in the Vault, round 4');
+  });
+
   it("keeps ids unique when two boards are drawn, and a lead's repeated warning kind doesn't repeat a key", () => {
     const two = renderToStaticMarkup(createElement("div", null, createElement(CaseBoard, { data: FIXTURE, people, pins: pins([]), marks: null }), createElement(CaseBoard, { data: FIXTURE, people, pins: pins([]), marks: null })));
     const ids = [...two.matchAll(/aria-controls="([^"]+)"/g)].map((m) => m[1]!);

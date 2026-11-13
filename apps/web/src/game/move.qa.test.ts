@@ -14,7 +14,7 @@ import {
   type PlayerView,
 } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
-import { createGame } from "./deal.testkit";
+import { createGame, pastAlibi } from "./deal.testkit";
 import { roomOptions } from "./hud";
 import {
   abilityOf,
@@ -54,7 +54,7 @@ const option = (v: PlayerView, id: string) =>
 function run(s: GameState, cmd: unknown): GameState {
   const r = handleCommand(s, cmd);
   if (!r.ok) throw new Error(r.reason);
-  return r.state;
+  return pastAlibi(r.state);
 }
 const submit = (s: GameState, move: Move) =>
   run(s, { type: "submitMove", player: "p1", move });
@@ -334,7 +334,7 @@ describe("QA re-check: the two FAIL findings of the first round", () => {
   it("after absolving P2, the Priest is offered everyone but P2, and the engine accepts each one (design §11.1)", () => {
     let s = game("priest");
     s = submit(s, { room: "lobby", duffel: 1, pocket: 0, ability: { kind: "absolve", target: "p2" } });
-    s = resolve(s).state;
+    s = pastAlibi(resolve(s).state);
     s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
     const p1 = s.players.p1!;
     s = { ...s, players: { ...s.players, p1: { ...p1, roleState: { ...p1.roleState, usedThisStretch: 0 } } } };

@@ -37,7 +37,7 @@ export interface RevealEnding {
   readonly why: "success" | "failedTopWins" | "failedNobody";
 }
 
-/** One player's real move in a round: room, the coins grabbed into each bag, their plan spot and the alibi they posted. design §3.2, §15.5 */
+/** One player's real move in a round: room, the coins grabbed into each bag, and the alibi they posted. design §3.2, §15.5 */
 export interface RevealMove {
   readonly player: PlayerId;
   readonly room: RoomId;
@@ -47,8 +47,6 @@ export interface RevealMove {
   readonly missed: boolean;
   /** The room in their posted alibi for this round, or null if they posted none. design §11.3 */
   readonly alibi: RoomId | null;
-  /** Their room claim on this round's plan board as it resolved, or null if they made none. design §10, §15.5 */
-  readonly planned: RoomId | null;
 }
 
 /**

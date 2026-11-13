@@ -9,7 +9,7 @@ import { ArtSections, BankSection } from "./GalleryArt";
 import { NotesSections } from "./GalleryNotes";
 import { RolesGallery } from "./GalleryRoles";
 import { HostSection } from "./GalleryHost";
-import { PlanDemo } from "./GalleryPlan";
+import { AlibiSection } from "./GalleryAlibi";
 import { RevealSection } from "./GalleryReveal";
 import { InfoTipSection } from "./GalleryInfoTip";
 import { MarketSection } from "./GalleryMarket";
@@ -320,9 +320,7 @@ export function Gallery() {
 
             <NotesSections />
 
-            <Section id="plan" title="Plan board" note="S4.3 · tap a head, then a room, or tap a room to claim it · claims, pledge, I agree · last round's plan with its history, and an alibi">
-              <PlanDemo />
-            </Section>
+            <AlibiSection />
 
             <RevealSection />
 

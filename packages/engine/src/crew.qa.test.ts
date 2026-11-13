@@ -2,7 +2,7 @@
 // dirty and clean at exactly the share, a view-diff leak check with them
 // dealt, determinism. design §9.6, §11.1, §11.2, §18
 import { describe, expect, it } from "vitest";
-import { closeResultWindow } from "./result.testkit";
+import { closeAlibiWindow, closeResultWindow } from "./result.testkit";
 import { handleCommand, type CommandResult } from "./handle";
 import { ROLES } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState } from "./types";
@@ -59,8 +59,10 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
     return passWindow(r.state);
   }, state);
 }
-/** The shop may hold Bail, so a passed shakedown waits for its Bail choice window; nobody here uses one. */
-function passWindow(s: GameState): GameState {
+/** The alibi window closes; the shop may hold Bail, so a passed shakedown waits for its Bail choice window; nobody here uses one. */
+function passWindow(state: GameState): GameState {
+  // design §10: a round's alibi window closes at once (nobody posts); the result window stays open.
+  const s = must(closeAlibiWindow(state));
   if (s.phase.kind !== "shakedownPending") return s;
   const r = handleThroughResult(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.phase.meetingId } });
   if (!r.ok) throw new Error(r.reason);

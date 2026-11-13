@@ -57,8 +57,9 @@ function darkGame(cfg: GameConfig): GameState {
  * proposals, briefings and regular meetings, an emergency in round 2's result
  * window, sealed and changed ballots (Smooth Talker weight), Bail choice windows,
  * shakedowns and their protection, the end check (design §6.2), and the event cards (Lockdown avoided), and every perk
- * (design §12: all seven on the black market and coins to buy them, a Tail, a Check ballot, a stamped alibi, Soft shoes,
- * a Blackout, Plant evidence, and a Bail used on the first meeting's shakedown). Returns the state after every command.
+ * (design §12: every perk on the black market and coins to buy them, a Tail, a Check ballot, Soft shoes,
+ * a Blackout, Plant evidence, and a Bail used on the first meeting's shakedown), alibis posted in each
+ * round's alibi window and secret trust marks on them (design §10). Returns the state after every command.
  * (The script reads the full state to pick moves, as a scheduler would; views are what's checked.)
  */
 function playGame(players: number, voteVisibility: VoteVisibility, dark = false): GameState[] {
@@ -107,8 +108,8 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
     const buys: Record<number, [PlayerId, object][]> = {
       // A Tail, and a Bail for the first meeting's target.
       1: [["p0", { kind: "tail", room: s.rooms[0] }], [ids[1] as PlayerId, { kind: "bail" }]],
-      // A Check ballot on p1 for the next meeting (Soft shoes in Open mode, where ballots are public), and a Stamped alibi.
-      2: [["p0", voteVisibility === "open" ? { kind: "softShoes" } : { kind: "ballot", target: ids[1] }], [last, { kind: "alibi" }]],
+      // A Check ballot on p1 for the next meeting (Soft shoes in Open mode, where ballots are public).
+      2: [["p0", voteVisibility === "open" ? { kind: "softShoes" } : { kind: "ballot", target: ids[1] }]],
       3: [["p0", { kind: "softShoes" }], [ids[2] as PlayerId, { kind: "blackout", room: "office" }]],
       4: [[ids[2] as PlayerId, { kind: "plantEvidence", target: "p0", room: "vault" }]],
     };
@@ -151,22 +152,26 @@ function playGame(players: number, voteVisibility: VoteVisibility, dark = false)
       if (i === 0) step({ type: "submitMove", player: id, move: fullGrab("lobby") }); // later changed
       step({ type: "submitMove", player: id, move });
     });
-    // design §10: the plan board as the round resolves: two seats' claims and pledges (a bluff among them) and the edits.
-    const plan = {
-      entries: ids.slice(0, 2).map((id, i) => ({ player: id, placed: s.rooms[i], room: s.rooms[round % s.rooms.length], power: i ? { role: "hacker", target: "vault" } : null, agreed: i === 0 })),
-      history: [{ actor: ids[1], kind: "place", subject: ids[0], value: s.rooms[0], target: null, msBeforeDeadline: 60_000 * round }],
-    };
-    step({ type: "advance", deadline: { kind: "round", round, plan } });
+    step({ type: "advance", deadline: { kind: "round", round } });
     // design §11.3: a role claim (a bluff, maybe) once in the game.
     if (round === 1 && !over()) step({ type: "claimRole", player: ids[1], role: "lookout" });
-    ids.forEach((id, i) => {
-      // design §12: in round 2 the last player posts a true alibi, stamped "verified" by its Stamped alibi.
-      if (round === 2 && id === last) {
-        const split = s.log.find((e) => e.type === "coinsGrabbed" && e.player === id && e.round === round);
-        if (split?.type !== "coinsGrabbed") throw new Error("no split");
-        step({ type: "postAlibi", player: id, round, room: split.room });
-      } else if (i % 4 !== 3) step({ type: "postAlibi", player: id, round, room: s.rooms[i % s.rooms.length] });
-    });
+    // design §10: alibis only in the round's alibi window; a few seats post none and are shown in their real room as it closes.
+    if (s.phase.kind === "alibi") {
+      ids.forEach((id, i) => {
+        // In round 2 the last player posts a true alibi.
+        if (round === 2 && id === last) {
+          const split = s.log.find((e) => e.type === "coinsGrabbed" && e.player === id && e.round === round);
+          if (split?.type !== "coinsGrabbed") throw new Error("no split");
+          step({ type: "postAlibi", player: id, round, room: split.room });
+        } else if (i % 4 !== 3) step({ type: "postAlibi", player: id, round, room: s.rooms[i % s.rooms.length] });
+      });
+      step({ type: "advance", deadline: { kind: "alibi", round } });
+    }
+    // design §10: secret trust marks once the card is out: p0 marks p1 a liar, changes it, and later clears it; p1 marks the last seat.
+    if (round <= 3 && !over()) {
+      step({ type: "markAlibi", player: "p0", round: 1, target: ids[1], mark: (["liar", "trusted", null] as const)[round - 1] });
+      step({ type: "markAlibi", player: ids[1], round, target: last, mark: "trusted" });
+    }
     // design §4.2 steps 9–10: the meeting the round called, then the result window (an emergency in round 2's).
     while (!over() && (s.phase.kind === "awaitingMeeting" || s.phase.kind === "result")) {
       const p = s.phase;
@@ -231,6 +236,8 @@ function scrub(state: GameState, viewer: PlayerId): GameState {
           { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 3, seized: 0 },
           { type: "coinsGrabbed", visibility: privateTo(other), player: other, round: 1, room: "vault", duffel: 0, pocket: 0, seized: 3 },
         ] satisfies GameEvent[])),
+    // design §10: others' trust marks are secret for good, so they are scrubbed after the game too.
+    { type: "alibiMarked", visibility: secretTo(other), player: other, round: 1, target: viewer, mark: "liar" },
   ];
   const log = state.log.filter((e) => canSee(e.visibility, viewer, gameOver)).flatMap((e) => [e, ...junk]);
 
@@ -329,6 +336,10 @@ function checkView(state: GameState, viewer: PlayerId, view: PlayerView): void {
     expect(reveal.filter((e) => e.event.type === "roleDealt").length).toBe(state.playerOrder.length);
   }
 
+  // design §10: no other player's trust mark ever reaches you, during or after the game.
+  const seenMarks = [...view.ledger, ...view.caseFile, ...(view.reveal?.log ?? [])].filter((e) => e.event.type === "alibiMarked" && e.event.player !== viewer);
+  expect(seenMarks).toEqual([]);
+
   // design §9.5: in Secret mode no other player's ballot ever reaches you, during or after.
   if (state.config.voteVisibility === "secret") {
     const all = [...view.ledger, ...view.caseFile, ...(view.reveal?.log ?? [])].map((e) => e.event);
@@ -405,7 +416,8 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
   it("the games above reach every info, vote, role and event-card event (design §11, §13)", () => {
     for (const t of ["shakedownPending", "shakedownCancelled", "said", "roleListShown", "shopDealt"]) expect(seenTypes, t).toContain(t);
     // design §10, §11.3: every kind of said statement.
-    for (const k of ["plan", "alibi", "role"]) expect(seenSaid, k).toContain(k);
+    for (const k of ["alibi", "role"]) expect(seenSaid, k).toContain(k);
+    for (const t of ["alibiWindowClosed", "alibiMarked"]) expect(seenTypes, t).toContain(t);
     // design §5: bells, raids and cooling.
     for (const t of ["bellsRung", "roomRaided", "bellsCooled"]) expect(seenTypes, t).toContain(t);
     // design §7.2, §7.4: the split and the round summary.
@@ -416,7 +428,7 @@ describe("no leaks in real games — design §17.2, §13, §9.5", () => {
     for (const c of EVENT_DECK) expect(seenCards, c).toContain(c);
     for (const k of ["lookout", "hide", "audit", "detect", "absolve"]) expect(seenAbilities, k).toContain(k);
     // design §9.6, §12: every perk event and every perk bought.
-    for (const t of ["perkSold", "perkBought", "bailChosen", "alibiVerified"]) expect(seenTypes, t).toContain(t);
+    for (const t of ["perkSold", "perkBought", "bailChosen"]) expect(seenTypes, t).toContain(t);
     for (const k of PERK_IDS) expect(seenPerks, k).toContain(k);
     expect(seenWatch, "a Tail watch").toContain("tail");
     // design §9: every kind of meeting, the pool spent and protection given.

@@ -5,6 +5,7 @@ import type { GameConfig, GameEvent, GameState } from "./types";
 import { canSee } from "./types";
 import { createGame } from "./setup";
 import { handleCommand } from "./handle";
+import { closeAlibiWindow } from "./result.testkit";
 import { viewFor } from "./view";
 import { fullGrab } from "./grab.testkit";
 
@@ -23,7 +24,10 @@ function run(state: GameState, ...commands: unknown[]): GameState {
   for (const c of commands) {
     const r = handleCommand(s, c);
     if (!r.ok) throw new Error(`refused ${JSON.stringify(c)}: ${r.reason}`);
-    s = r.state;
+    // design §10: a round's alibi window closes at once (nobody posts); these tests are about what follows it.
+    const closed = closeAlibiWindow(r.state);
+    if (!closed.ok) throw new Error(closed.reason);
+    s = closed.state;
   }
   return s;
 }

@@ -9,7 +9,7 @@
 // 2. Edge cases per role: limits, wrong phase / wrong role, vote maths at ties
 //    and quorum edges in every vote mode, threshold and stash edges.
 import { describe, expect, it } from "vitest";
-import { closeResultWindow } from "./result.testkit";
+import { closeAlibiWindow, closeResultWindow } from "./result.testkit";
 import { BANK_JOB } from "@skimjob/content";
 import type { GameConfig, GameEvent, GameState, PlayerId, PlayerState, PlayerView, VoteVisibility } from "./types";
 import { privateTo } from "./types";
@@ -46,14 +46,18 @@ function game(players: number, roles: string[], extra: Partial<GameConfig> = {})
 }
 
 /**
- * A command. The result window (design §9.3) stays open, so an emergency can
- * be called in it, until a move or a round deadline closes it.
+ * A command. A round's alibi window closes at once with no alibis (design §10);
+ * the result window (design §9.3) stays open, so an emergency can be called in
+ * it, until a move or a round deadline closes it.
  */
 function handleThroughResult(state: GameState, command: unknown): CommandResult {
   const c = command as { type?: unknown; deadline?: { kind?: unknown } } | null;
   const planning = c?.type === "submitMove" || c?.deadline?.kind === "round";
   const s = state.phase.kind === "result" && !state.pendingEmergency && planning ? must(closeResultWindow(state)) : state;
-  return handleCommand(s, command);
+  const r = handleCommand(s, command);
+  if (!r.ok) return r;
+  const closed = closeAlibiWindow(r.state);
+  return closed.ok ? { ok: true, state: closed.state, events: [...r.events, ...closed.events] } : closed;
 }
 const must = (r: CommandResult): GameState => {
   if (!r.ok) throw new Error(r.reason);

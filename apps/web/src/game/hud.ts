@@ -1,5 +1,5 @@
-// Pure helpers behind the game screen: what the HUD, seats, move and alibi
-// panels show, read only from the player's own view (and the public timers).
+// Pure helpers behind the game screen: what the HUD, seats, move panel and alibi
+// pop-up show, read only from the player's own view (and the public timers).
 // docs/m2-plan.md M2-6; design §5, §5.4, §6, §11.5, §13
 import type { JobDef, RoomId } from "@skimjob/content";
 import {
@@ -134,6 +134,9 @@ export function phaseInfo(view: PlayerView): PhaseInfo {
         timerKey: view.scheduledMeeting ? `openMeeting:${view.scheduledMeeting.meetingId}` : null,
         timerLabel: "opens in",
       };
+    case "alibi":
+      // design §10: the alibi window after a round resolves.
+      return { title: "Alibis", timerKey: `alibi:${p.round}`, timerLabel: "closes in" };
     case "result":
       // design §9.3: the result window, when an emergency can be called.
       return { title: `Round ${p.round} result`, timerKey: view.pendingEmergency ? null : `result:${p.round}`, timerLabel: "next round in" };
@@ -219,7 +222,7 @@ export function roomOptions(view: PlayerView): RoomOption[] {
 export const defaultRoom = (view: PlayerView): RoomId => jobOf(view).defaultRoom;
 
 /** The latest round that has resolved (0 before the first). */
-const lastResolved = (view: PlayerView): number => (view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "result" ? view.phase.round : view.round);
+const lastResolved = (view: PlayerView): number => (view.phase.kind === "planning" ? view.phase.round - 1 : view.phase.kind === "result" || view.phase.kind === "alibi" ? view.phase.round : view.round);
 
 /** The latest round you missed, if it is the round that just resolved (shown on the move panel); room null when you sat it out. design §3.3 */
 export function justMissed(view: PlayerView): { readonly round: number; readonly room: RoomId | null } | null {
@@ -228,17 +231,12 @@ export function justMissed(view: PlayerView): { readonly round: number; readonly
   return latest.round === lastResolved(view) ? { round: latest.round, room: latest.move?.room ?? null } : null;
 }
 
-/**
- * The latest resolved round and the room you already claimed for it (if any),
- * in every phase until the game ends: alibis have no window (design §11.3), so
- * the plan panel offers one for as long as the game runs.
- */
-export function alibiState(view: PlayerView): { readonly round: number; readonly posted: RoomId | null } | null {
-  const round = lastResolved(view);
-  if (view.phase.kind === "setup" || view.phase.kind === "ended" || round < 1) return null;
-  let posted: RoomId | null = null;
-  for (const { event: e } of view.ledger) if (e.type === "said" && e.statement.kind === "alibi" && e.statement.player === view.me.id && e.statement.round === round) posted = e.statement.room;
-  return { round, posted };
+/** The round whose alibi window is open while you have posted none for it, else null. design §10 */
+export function alibiDue(view: PlayerView): number | null {
+  const p = view.phase;
+  if (p.kind !== "alibi") return null;
+  const posted = view.ledger.some(({ event: e }) => e.type === "said" && e.statement.kind === "alibi" && e.statement.player === view.me.id && e.statement.round === p.round);
+  return posted ? null : p.round;
 }
 
 /** The final outcome once the game has ended. design §3, §13 */

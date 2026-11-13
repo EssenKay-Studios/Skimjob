@@ -5,6 +5,7 @@
 // The names can switch to 24-character ones (the cap; "W" is the widest glyph
 // and has no break points) to check nothing pushes past a phone's edge.
 import { useMemo, useState, type ReactNode } from "react";
+import { BANK_JOB, type RoomId } from "@skimjob/content";
 import { PUBLIC, privateTo, revealSummary, type GameEvent, type Outcome, type RankEntry } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { ArrowBack } from "../components/icons";
@@ -13,6 +14,7 @@ import { Segmented } from "../components/Segmented";
 import { SketchFrame } from "../components/SketchFrame";
 import { Underline } from "../components/Underline";
 import { navigate } from "../router";
+import type { Snapshot } from "../game/snapshot";
 import { TopBar } from "./TopBar";
 
 const NAMES: Record<string, string> = {
@@ -37,6 +39,36 @@ const looks = new Map([
   ["p3", { look: 2, bot: false }],
   ["p4", { look: 3, bot: true }],
 ]);
+/** Ana's own trust marks (design §10): Ben marked a liar in round 1, trusted in round 2. */
+const marks = new Map([
+  ["1/p2", "liar" as const],
+  ["2/p2", "trusted" as const],
+]);
+
+/**
+ * The snapshot cards of rounds 1 and 2, as the log below plays them (round 3 ends the game, so it
+ * has no alibi window and no card). Each room: its bell and who says, or was shown, there.
+ */
+const FLOORS: RoomId[][] = [["rooftop"], ["security", "office", "managersOffice", "serverRoom"], ["lobby"], ["vault", "depositBoxes"]];
+const snapCard = (round: number, missing: number, at: Partial<Record<RoomId, { bell?: number; raided?: number; crooks?: [string, "says" | "fact"][] }>>): Snapshot => ({
+  round,
+  floors: FLOORS.map((f) =>
+    f.map((id) => ({
+      id,
+      name: BANK_JOB.rooms[id]!.name,
+      bell: at[id]?.bell ?? 0,
+      raided: at[id]?.raided ?? null,
+      quiet: false,
+      crooks: (at[id]?.crooks ?? []).map(([player, kind]) => ({ player, kind })),
+    })),
+  ),
+  card: null,
+  missing,
+});
+const CARDS = new Map([
+  [1, snapCard(1, 5, { security: { crooks: [["p1", "fact"]] }, office: { bell: 1, crooks: [["p3", "says"]] }, lobby: { crooks: [["p2", "says"]] }, vault: { bell: 4, crooks: [["p4", "fact"]] } })],
+  [2, snapCard(2, 5, { office: { bell: 2, crooks: [["p1", "fact"], ["p2", "says"]] }, lobby: { bell: 5, raided: 4, crooks: [["p4", "fact"]] }, vault: { bell: 3, crooks: [["p3", "says"]] } })],
+]);
 
 /** `player` grabbed `coins` in `room`, pocketing `pocket` of them. design §3.2 */
 const split = (player: string, round: number, room: string, coins: number, pocket: number, seized = 0): GameEvent => ({
@@ -57,25 +89,6 @@ const resolved = (round: number, bank: number, taken: number, missing: number, r
   taken,
   missing,
   honesty: { reached, taken: 64 - bank },
-});
-/** The plan board as the round resolved: each seat's room claim. design §10 */
-const plan = (round: number, claims: Record<string, string>): GameEvent => ({
-  type: "said",
-  visibility: PUBLIC,
-  statement: {
-    kind: "plan",
-    round,
-    plan: {
-      entries: Object.entries(claims).map(([player, room]) => ({
-        player,
-        placed: null,
-        room,
-        power: null,
-        agreed: false,
-      })),
-      history: [],
-    },
-  },
 });
 const alibi = (player: string, round: number, room: string): GameEvent => ({
   type: "said",
@@ -129,7 +142,6 @@ const LOG: GameEvent[] = [
     perks: ["tail", "softShoes", "bail"],
   },
   { type: "roundStarted", visibility: PUBLIC, round: 1 },
-  plan(1, { p1: "security", p2: "vault", p3: "office", p4: "vault" }),
   split("p1", 1, "security", 0, 0),
   split("p2", 1, "vault", 6, 3),
   split("p3", 1, "office", 4, 0),
@@ -148,7 +160,6 @@ const LOG: GameEvent[] = [
   alibi("p2", 1, "lobby"),
   alibi("p3", 1, "office"),
   { type: "roundStarted", visibility: PUBLIC, round: 2 },
-  plan(2, { p1: "office", p2: "vault", p3: "lobby", p4: "vault" }),
   {
     type: "abilityResolved",
     visibility: privateTo("p2"),
@@ -169,6 +180,8 @@ const LOG: GameEvent[] = [
   split("p4", 2, "lobby", 4, 0, 4),
   raided(2, "lobby", 4, 1),
   resolved(2, 32, 12, 5, 22),
+  alibi("p2", 2, "office"),
+  alibi("p3", 2, "vault"),
   {
     type: "meetingOpened",
     visibility: PUBLIC,
@@ -215,7 +228,6 @@ const LOG: GameEvent[] = [
     perk: { kind: "tail", room: "vault" },
     cost: 1,
   },
-  plan(3, { p1: "rooftop", p2: "depositBoxes", p3: "vault", p4: "lobby" }),
   // design §3.3: the Lobby is taped off through round 3, so Dot's missed move sits the round out.
   {
     type: "defaultMoveAssigned",
@@ -294,7 +306,7 @@ export function RevealDemo() {
           Gallery
         </Button>
       </TopBar>
-      <Section id="reveal" title="End-of-game reveal" note="S4.9 · every role, who won and why, and each round's plan against what everyone really did">
+      <Section id="reveal" title="End-of-game reveal" note="S4.9 · every role, who won and why, and each round's card told true: TRUE or LIE, where each liar really was, and your own marks">
         <Segmented
           label="Ending"
           seed="g-reveal-ending"
@@ -317,7 +329,7 @@ export function RevealDemo() {
             { value: true, label: "24 characters" },
           ]}
         />
-        <Reveal key={ending} summary={summary} ctx={ctx} looks={looks} />
+        <Reveal key={ending} summary={summary} ctx={ctx} looks={looks} marks={marks} cards={CARDS} bulbs={BANK_JOB.alarm.bulbs} />
       </Section>
     </div>
   );
@@ -326,7 +338,7 @@ export function RevealDemo() {
 /** The gallery's entry for the reveal: a link to its page. */
 export function RevealSection() {
   return (
-    <Section id="reveal-link" title="End-of-game reveal" note="S4.9 · design §15.5 · plan against moves, sat-out rounds, the Hacker's hidden bell">
+    <Section id="reveal-link" title="End-of-game reveal" note="S4.9 · design §15.5 · each round's card told true, sat-out rounds, the Hacker's hidden bell">
       <Button variant="primary" seed="g-reveal-open" onClick={() => navigate("/dev/gallery/reveal")}>
         Open the reveal demo
       </Button>
