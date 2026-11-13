@@ -21,10 +21,10 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   return state;
 }
 
-/** Round 1's result window, before anyone calls a meeting. */
+/** Round 1's result window (after its alibi window, design §10), before anyone calls a meeting. */
 function resultWindow(): GameState {
   const s: GameState = { ...createGame({ seed: "qa218-shell", players, job: "bank", eventsEnabled: false, voteVisibility: "open" }), shop: ["bail", "tail", "softShoes"] as GameState["shop"] };
-  return run(s, { type: "advance", deadline: { kind: "round", round: 1 } });
+  return run(s, { type: "advance", deadline: { kind: "round", round: 1 } }, { type: "advance", deadline: { kind: "alibi", round: 1 } });
 }
 
 /** A bell rang in round 1, so the bell lesson (design §15.6) is due in its result window. */
@@ -35,7 +35,7 @@ const rang = (s: GameState): GameState =>
 function deciding(resolved: boolean, open = false, bell = false): GameState {
   let s: GameState = { ...createGame({ seed: "qa218-shell", players, job: "bank", eventsEnabled: false, voteVisibility: "open" }), shop: ["bail", "tail", "softShoes"] as GameState["shop"] };
   s = applyEvent(s, { type: "perkBought", visibility: privateTo("p1"), player: "p1", round: 1, perk: { kind: "bail" }, cost: 0 });
-  s = run(s, { type: "advance", deadline: { kind: "round", round: 1 } });
+  s = run(s, { type: "advance", deadline: { kind: "round", round: 1 } }, { type: "advance", deadline: { kind: "alibi", round: 1 } });
   if (bell) s = rang(s);
   s = run(s, { type: "callEmergency", player: "p3" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } });
   for (const p of players.slice(1)) s = run(s, { type: "castVote", player: p.id, vote: { kind: "shakedown", target: "p1" } });

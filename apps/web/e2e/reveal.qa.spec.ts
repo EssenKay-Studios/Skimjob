@@ -23,7 +23,7 @@ test.describe("the reveal demo, every ending", () => {
       const wanted: number[] = [];
       for (let i = 0; i < 3; i++) {
         await chips.nth(i).click();
-        await expect(sheet.getByRole("heading", { name: `Round ${i + 1}` })).toBeVisible();
+        await expect(sheet.getByRole("heading", { name: `Round ${i + 1}`, exact: true })).toBeVisible();
         const box = await chips.nth(i).boundingBox();
         expect(box!.width).toBeGreaterThanOrEqual(44);
         expect(box!.height).toBeGreaterThanOrEqual(44);

@@ -69,6 +69,8 @@ for (const viewport of VIEWPORTS) {
       // A tab opens its panel as a sheet that fits the screen, with the focus inside.
       const opener = tabs.getByRole("button", { name: "Case" });
       await opener.click();
+      // Off the sheet: the mouse left on the tab would hover an "i" in the risen sheet, and its tip takes the Esc.
+      await page.mouse.move(0, 0);
       const sheet = page.getByRole("dialog", { name: "Case" });
       await expect(sheet).toBeVisible();
       await settle(page);
