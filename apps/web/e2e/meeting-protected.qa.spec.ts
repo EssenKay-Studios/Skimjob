@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { clearMeeting } from "./meetingCards";
 import { callEmergency, openPanel, startGame, settle } from "./setupGame";
 
-// QA (PR #226, the lost vote): seed meeting-6's round 1 ends in a raid whose police briefing shakes a bot down, so that
+// QA (PR #226, the lost vote): seed meeting-7's round 1 ends in a raid whose police briefing shakes a bot down, so that
 // bot is protected (design §9.2, §9.7). The sealed picker in the result window still lists them (a sealed vote may name
 // a protected player, §9.5); the live emergency vote that follows leaves them off, and the vote cast is the one shown.
 // Both widths. QA_SHOTS=… saves the pickers as qa226-<what>-<width>.png.
@@ -19,7 +19,7 @@ test("a briefing's protected bot: on the sealed picker, off the live one, and th
     await settle(page);
     await page.screenshot({ path: `${DIR}/qa226-${what}-${page.viewportSize()!.width}.png` });
   };
-  const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: "hiddenThenRevealed", seed: "meeting-6" });
+  const game = await startGame(page.request, { bots: 3, sessionLength: "1h", voteVisibility: "hiddenThenRevealed", seed: "meeting-7" });
   const hold = async (what: "pause" | "resume") => expect((await page.request.post(`/api/games/${game.id}/${what}`)).ok(), what).toBe(true);
   const held = async (steps: () => Promise<void>) => {
     await hold("pause");

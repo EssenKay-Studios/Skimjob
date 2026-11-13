@@ -167,7 +167,7 @@ test("the move panel: pick a room, coins into the bags, lock it in, change it; r
   await expect(pileCoins(page, "pocket")).toHaveCount(2);
   await expect(pileCoins(page, "duffel")).toHaveCount(1);
   // The previews follow the grab: the Vault's bell (a Locksmith's coins are silent) and what the duffel adds to the share (5 in the crew).
-  await expect(page.locator(".coin-bags").getByRole("img", { name: /^Bell: 0 of 4 lit(, your grab adds 3)?$/ })).toBeVisible();
+  await expect(page.locator(".coin-bags").getByRole("img", { name: /^Bell: 0 of 5 lit(, your grab adds 3)?$/ })).toBeVisible();
   await expect(page.getByText("Your 1 duffel coin adds about 0.2 to each share.")).toBeVisible();
   // By keyboard: Enter picks a pocket coin up, Enter on the duffel's drop place puts it there.
   await pileCoins(page, "pocket").first().focus();
