@@ -338,7 +338,7 @@ for (const { width, height } of VIEWPORTS.filter((v) => v.width < 1024)) {
       expect(t.y + t.height, `toasts end above ${part} at ${width}`).toBeLessThanOrEqual(b.y);
     }
     await shot(page, "toast");
-    await page.getByRole("navigation", { name: "Game panels" }).getByRole("button", { name: /^Notes/ }).click();
+    await page.getByRole("navigation", { name: "Game panels" }).getByRole("button", { name: /^Case/ }).click();
     await expect(page.locator("dialog.bsheet[open]")).toHaveCount(1);
     await ctx.close();
   });
