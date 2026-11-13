@@ -13,6 +13,7 @@ import { privateTo } from "./types";
 import { jobFor, powerOf } from "./overrides";
 import { roomDef } from "./job";
 import { isTaped } from "./bells";
+import { closedRoom } from "./deck";
 import { show } from "./check";
 
 type Raw = Record<string, unknown>;
@@ -26,9 +27,8 @@ export interface RoleHandler {
   readonly winsSunk?: (state: GameState, player: PlayerId) => boolean;
 }
 
-/** `player`'s power numbers, for the power kind its handler serves. */
-const powerIn = <K extends RolePower["kind"]>(state: GameState, player: PlayerState, _kind: K): Extract<RolePower, { kind: K }> =>
-  powerOf(state.config, player.role) as Extract<RolePower, { kind: K }>;
+/** A role's power numbers, read as the power kind its handler serves. */
+type PowerOf<K extends RolePower["kind"]> = Extract<RolePower, { kind: K }>;
 
 const spentThisStretch = (player: PlayerState, perStretch: number): boolean => player.roleState.usedThisStretch >= perStretch;
 
@@ -46,7 +46,7 @@ const resolved = (state: GameState, player: PlayerState, ability: Extract<GameEv
 
 /** Lookout (every round): also watch up to `extraRooms` other rooms in play. */
 function lookout(state: GameState, player: PlayerState, raw: Raw): AbilityUse | string {
-  const { extraRooms } = powerIn(state, player, "lookout");
+  const { extraRooms } = powerOf(state.config, player.role) as PowerOf<"lookout">;
   const rooms = raw.rooms;
   if (!Array.isArray(rooms) || rooms.length < 1 || rooms.length > extraRooms) return `the Lookout watches 1 to ${extraRooms} room(s)`;
   if (!rooms.every((r) => roomInPlay(state, r))) return "the Lookout can only watch rooms in play";
@@ -71,7 +71,7 @@ function detect(state: GameState, player: PlayerState, raw: Raw): GameEvent[] | 
 
 /** Auditor (once between meetings): how many coins reached the duffel from one room in the latest resolved round. */
 function audit(state: GameState, player: PlayerState, raw: Raw): GameEvent[] | string {
-  if (spentThisStretch(player, powerIn(state, player, "audit").perStretch)) return "you have already audited a room since the last meeting";
+  if (spentThisStretch(player, (powerOf(state.config, player.role) as PowerOf<"audit">).perStretch)) return "you have already audited a room since the last meeting";
   const round = state.resolvedRound;
   if (round === 0) return "no round has resolved yet";
   // A round stays the latest resolved one across a regular meeting (a new stretch); one audit of it is enough.
@@ -85,17 +85,18 @@ function audit(state: GameState, player: PlayerState, raw: Raw): GameEvent[] | s
   return resolved(state, player, { kind: "audit", round, room, duffel });
 }
 
-/** Hacker (once between meetings): hide one open room's bell this round; not a taped-off room (its bell is off, §5.3). */
+/** Hacker (once between meetings): hide one open room's bell this round; not a closed room (taped off, §5.3, or locked down, §13; design §3.2). */
 function hide(state: GameState, player: PlayerState, raw: Raw): AbilityUse | string {
-  if (spentThisStretch(player, powerIn(state, player, "hide").perStretch)) return "you have already hidden a bell since the last meeting";
+  if (spentThisStretch(player, (powerOf(state.config, player.role) as PowerOf<"hide">).perStretch)) return "you have already hidden a bell since the last meeting";
   if (!roomInPlay(state, raw.room)) return "hide the bell of a room in play";
   if (isTaped(state, raw.room)) return "a taped-off room's bell is off";
+  if (raw.room === closedRoom(state)) return "a locked-down room is closed this round";
   return { kind: "hide", room: raw.room };
 }
 
 /** Electrician (once between meetings): black out one room next round. */
 function blackout(state: GameState, player: PlayerState, raw: Raw): AbilityUse | string {
-  if (spentThisStretch(player, powerIn(state, player, "blackout").perStretch)) return "you have already cut the power since the last meeting";
+  if (spentThisStretch(player, (powerOf(state.config, player.role) as PowerOf<"blackout">).perStretch)) return "you have already cut the power since the last meeting";
   if (!roomInPlay(state, raw.room)) return "cut the power in a room in play";
   return { kind: "blackout", room: raw.room };
 }
@@ -111,7 +112,7 @@ function lastAbsolved(state: GameState, priest: PlayerId): PlayerId | null {
 
 /** Priest (once between meetings): absolve one other player at this round's split; not the same player twice in a row. */
 function absolve(state: GameState, player: PlayerState, raw: Raw): AbilityUse | string {
-  if (spentThisStretch(player, powerIn(state, player, "absolve").perStretch)) return "you have already absolved someone since the last meeting";
+  if (spentThisStretch(player, (powerOf(state.config, player.role) as PowerOf<"absolve">).perStretch)) return "you have already absolved someone since the last meeting";
   const bad = notOther(state, player, raw.target);
   if (bad) return bad;
   const target = raw.target as PlayerId;
@@ -121,7 +122,7 @@ function absolve(state: GameState, player: PlayerState, raw: Raw): AbilityUse | 
 
 /** Mole (once between meetings): ring any room once, except the Rooftop (§5.5) or a taped-off room (§5.3). */
 function ring(state: GameState, player: PlayerState, raw: Raw): AbilityUse | string {
-  if (spentThisStretch(player, powerIn(state, player, "ring").perStretch)) return "you have already rung a bell since the last meeting";
+  if (spentThisStretch(player, (powerOf(state.config, player.role) as PowerOf<"ring">).perStretch)) return "you have already rung a bell since the last meeting";
   if (!roomInPlay(state, raw.room)) return "ring a room in play";
   if (isTaped(state, raw.room)) return "a taped-off room's bell is off";
   if (roomDef(jobFor(state.config), raw.room).lieLow) return "nothing can ring the Rooftop";
@@ -130,7 +131,7 @@ function ring(state: GameState, player: PlayerState, raw: Raw): AbilityUse | str
 
 /** Fixer (once per game): tear the tape off a taped-off room. */
 function reopen(state: GameState, player: PlayerState, raw: Raw): AbilityUse | string {
-  if (player.roleState.usedThisGame >= powerIn(state, player, "reopen").perGame) return "you have already reopened a room this game";
+  if (player.roleState.usedThisGame >= (powerOf(state.config, player.role) as PowerOf<"reopen">).perGame) return "you have already reopened a room this game";
   if (typeof raw.room !== "string" || !isTaped(state, raw.room)) return "reopen a taped-off room";
   return { kind: "reopen", room: raw.room };
 }

@@ -191,6 +191,14 @@ describe("the move powers (design §11.1)", () => {
     expect(powerControl(viewAs("fixer"))).toMatchObject({ kind: "reopen", rooms: [] });
   });
 
+  it("keeps this round's locked-down room away from the Hacker, as the engine refuses it (design §3.2)", () => {
+    const v = viewAs("hacker");
+    const rooms = (c: ReturnType<typeof powerControl>) => (c && "rooms" in c ? c.rooms : []);
+    expect(rooms(powerControl({ ...v, card: { round: v.round, id: "lockdown", room: "vault" } }))).not.toContain("vault");
+    expect(rooms(powerControl({ ...v, card: { round: v.round, id: "lockdown", room: "vault" } }))).toContain("office");
+    expect(rooms(powerControl({ ...v, card: { round: v.round - 1, id: "lockdown", room: "vault" } }))).toContain("vault"); // last round's card
+  });
+
   it("offers nothing once the power is spent: since the last meeting, or this game", () => {
     const spent = (role: RoleId, roleState: Partial<PlayerView["me"]["roleState"]>) => {
       const v = viewAs(role);

@@ -343,6 +343,13 @@ describe("Hacker: once between meetings, hide one open room's bell this round �
     expect(reason(next, mv("p0", "lobby", 0, hide("vault")))).toMatch(/taped-off room's bell is off/);
   });
 
+  it("a locked-down room is closed like a taped-off one: its bell can't be hidden — design §3.2, §13", () => {
+    const s = game(3, ["hacker"]);
+    const locked: GameState = { ...s, card: { round: s.round, id: "lockdown", room: "vault" } };
+    expect(reason(locked, mv("p0", "lobby", 0, hide("vault")))).toMatch(/locked-down room is closed this round/);
+    expect(() => run(locked, mv("p0", "lobby", 0, hide("office")))).not.toThrow();
+  });
+
   it("once between meetings; only a room in play", () => {
     const s = run(game(3, ["hacker"]), mv("p0", "lobby", 0, hide("office")), ROUND);
     expect(reason(s, mv("p0", "lobby", 0, hide("vault")))).toMatch(/already hidden a bell since the last meeting/);

@@ -159,6 +159,6 @@ describe("ties at every level — design §8.5", () => {
     const s = withPlayers(game(3), { p0: { stash: 3 }, p1: { stash: 3 }, p2: { stash: 3 } });
     expect(outcomeFor(s, null).winners).toEqual(["p0", "p1", "p2"]);
     expect(outcomeFor(s, "theft").winners).toEqual([]);
-    expect(outcomeFor(s, "bust").winners).toEqual([]);
+    expect(outcomeFor(s, "bust", []).winners).toEqual([]);
   });
 });

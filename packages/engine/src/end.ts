@@ -13,8 +13,12 @@ import { honesty, honestyOf } from "./shares";
 /** The game is finished: it ended (design §6.2) or the host ended it early (§16). */
 export const isOver = (phase: Phase): boolean => phase.kind === "ended" || phase.kind === "aborted";
 
-/** Why a heist failed: a bust (Wanted 3, design §5.5), or sunk by theft (honesty below the line at the end, §8.4). */
-type Failure = "bust" | "theft";
+/**
+ * How a game ended: a success (null), sunk by theft (honesty below the line at
+ * the end, §8.4), or a bust (Wanted 3, design §5.5), which always names its
+ * escapees, the round's Rooftop players, so none can be left out by mistake.
+ */
+type Ending = [failure: "theft" | null] | [failure: "bust", escapees: readonly PlayerId[]];
 
 /** Everyone, biggest stash first; equal stashes keep seat order (no tie-break, design §8.5). design §8.6 */
 export function ranking(state: GameState): RankEntry[] {
@@ -40,7 +44,7 @@ export function leadersOf(ranked: readonly RankEntry[]): PlayerId[] {
  * any role (§5.5). The full ranking is always kept (§8.6). Unless the game
  * busted, the kitty and any unsplit duffel pay for the getaway car (§6.3).
  */
-export function outcomeFor(state: GameState, failure: Failure | null, escapees: readonly PlayerId[] = []): Outcome {
+export function outcomeFor(state: GameState, ...[failure, escapees]: Ending): Outcome {
   const ranked = ranking(state);
   const top = leadersOf(ranked);
   const getaway = state.kitty + state.setAside;
@@ -72,7 +76,7 @@ export function endCheck(state: GameState, events: readonly GameEvent[], round: 
  * The `gameEnded` event after `events` (this command's events so far) are
  * folded into `state`. On a bust, `escapees` are the round's Rooftop players (design §5.5).
  */
-export function gameEnded(state: GameState, events: readonly GameEvent[], failure: Failure | null, escapees: readonly PlayerId[] = []): GameEnded {
+export function gameEnded(state: GameState, events: readonly GameEvent[], ...ending: Ending): GameEnded {
   const final = events.reduce(applyEvent, state);
-  return { type: "gameEnded", visibility: PUBLIC, outcome: outcomeFor(final, failure, escapees) };
+  return { type: "gameEnded", visibility: PUBLIC, outcome: outcomeFor(final, ...ending) };
 }
