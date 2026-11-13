@@ -157,6 +157,19 @@
   --crew-10: #8a8f96;
   --crew-11: #b9a3dc;
   --crew-12: #efe2c8;
+  /* Seat colours for the blob avatars: 12 distinct fills, one per seat, each 4.5:1 or better against the cream initials (--paper). */
+  --seat-1: #b8532a;
+  --seat-2: #3d5a80;
+  --seat-3: #5f7a3f;
+  --seat-4: #bb4571;
+  --seat-5: #5b4fa0;
+  --seat-6: #2b7898;
+  --seat-7: #946b0c;
+  --seat-8: #6e4430;
+  --seat-9: #2f7a6c;
+  --seat-10: #6b7077;
+  --seat-11: #8f55a8;
+  --seat-12: #a8263a;
   /* Accessory colours (hats, bandanas) */
   --acc-1: #5b524c;
   --acc-2: #b5443a;

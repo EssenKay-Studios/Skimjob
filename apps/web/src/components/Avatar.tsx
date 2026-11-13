@@ -9,16 +9,16 @@ export interface AvatarProps {
   readonly name: string;
   /** Diameter in px (36–46 in lists; 28 in dense rows). */
   readonly size?: number;
-  /** Override the colour (default: from the name). */
-  readonly colour?: string;
+  /** The player's 0-based seat: it fixes the colour for the whole game (default: hashed from the name). */
+  readonly seat?: number | undefined;
   /** ready: move submitted (clay dot); away: grey wash; turn: wobbling outline. */
   readonly status?: AvatarStatus | undefined;
   readonly bot?: boolean | undefined;
   readonly title?: string;
 }
 
-export function Avatar({ name, size = 40, colour, status, bot, title }: AvatarProps) {
-  const style = { "--av-size": `${size}px`, "--av-fill": colour ?? crewColour(name) } as CSSProperties;
+export function Avatar({ name, size = 40, seat, status, bot, title }: AvatarProps) {
+  const style = { "--av-size": `${size}px`, "--av-fill": crewColour(seat ?? name) } as CSSProperties;
   const cls = ["avatar", status && `avatar--${status}`].filter(Boolean).join(" ");
   const label = title ?? `${name}${bot ? " (bot)" : ""}${status === "ready" ? ", move in" : status === "away" ? ", away" : ""}`;
   return (

@@ -1,9 +1,16 @@
-// Blob-avatar helpers (ui-style "Player avatars"): initials and a crew colour
-// picked from the style-dot palette (§2), both stable for a given name.
+// Blob-avatar helpers (ui-style "Player avatars"): initials and a seat colour
+// (`--seat-1` … `--seat-12` in theme.css). A seat number fixes the colour for
+// the whole game; a name without a seat hashes into the same palette.
 import { hashSeed } from "./sketch";
 
-/** Crew colours: the §2 style-category dots. Cream text reads on all of them. */
-export const CREW_COLOURS = ["#9a5541", "#c46686", "#b7684f", "#6a9bcc", "#788c5d", "#6b5aa6", "#3d5a80"] as const;
+/** Number of seat colours: the most players a game has. */
+export const SEAT_COLOURS = 12;
+
+/** The 0-based seat of an engine player id (`p1` is seat 0, see the server's playerIdFor), or undefined for any other id. */
+export function seatOfPlayer(id: string): number | undefined {
+  const m = /^p(\d+)$/.exec(id);
+  return m ? Number(m[1]) - 1 : undefined;
+}
 
 /** Up to two initials: first letters of the first two words, else the first letter. */
 export function initialsOf(name: string): string {
@@ -19,8 +26,8 @@ export function initialsOf(name: string): string {
     .toLocaleUpperCase();
 }
 
-/** The crew colour for a name (or an explicit index, e.g. seat order). */
+/** The colour for a seat number (0-based) or, with no seat, for a name. */
 export function crewColour(key: string | number): string {
   const i = typeof key === "number" ? key : hashSeed(key.trim().toLowerCase());
-  return CREW_COLOURS[((i % CREW_COLOURS.length) + CREW_COLOURS.length) % CREW_COLOURS.length]!;
+  return `var(--seat-${(((i % SEAT_COLOURS) + SEAT_COLOURS) % SEAT_COLOURS) + 1})`;
 }

@@ -377,9 +377,9 @@ describe("pushing views", () => {
     const seats = (await call(`/games/${game.id}/bots`, host, {})).body.seats;
     const other = createGameStore(db); // start behind the live channel's back: no settle
     const { gameConfig } = await import("./lobby");
-    const config = gameConfig({ ...(game.settings as LobbySettings) }, seats.map((x) => ({ nickname: x.nickname, bot_personality: x.bot })), "boot-seed");
+    const config = gameConfig({ ...(game.settings as LobbySettings) }, seats.map((x) => ({ seat_no: x.seat, nickname: x.nickname, bot_personality: x.bot })), "boot-seed");
     await other.start(game.id, config, async (tx) => {
-      for (const [i, seat] of seats.entries()) await tx.query("update seats set player_id = $3 where game_id = $1 and seat_no = $2", [game.id, seat.seat, playerIdFor(i)]);
+      for (const seat of seats) await tx.query("update seats set player_id = $3 where game_id = $1 and seat_no = $2", [game.id, seat.seat, playerIdFor(seat.seat)]);
     });
     const bots = config.players.filter((p) => p.isBot).map((p) => p.id);
     expect(Object.keys((await other.load(game.id))!.moves)).toEqual([]);
