@@ -12,7 +12,7 @@ import { buildServer } from "./server";
 import { DEFAULT_SETTINGS, parseSettings, storedSettings } from "./settings";
 import { testDb } from "./testkit";
 
-const seats = (n: number) => Array.from({ length: n }, (_, i) => ({ nickname: `S${i}`, bot_personality: i === 0 ? null : ("honest" as const) }));
+const seats = (n: number) => Array.from({ length: n }, (_, i) => ({ seat_no: i, nickname: `S${i}`, bot_personality: i === 0 ? null : ("honest" as const) }));
 const quick = (over: Record<string, unknown> = {}) => {
   const p = parseSettings({ sessionLength: "15m", ...over });
   if (!p.ok) throw new Error(p.error);

@@ -388,7 +388,7 @@ function SeatRow({
   const toast = useToast();
   return (
     <li className={s.bot ? "seat seat--bot" : "seat"}>
-      <Avatar name={s.bot ? s.nickname.replace(/^Bot · /, "") : s.nickname} size={40} bot={!!s.bot} />
+      <Avatar name={s.bot ? s.nickname.replace(/^Bot · /, "") : s.nickname} seat={s.seat} size={40} bot={!!s.bot} />
       <div className="seat__who">
         <span className="seat__name">{s.nickname}</span>
         <span className="seat__tags">

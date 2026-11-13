@@ -325,8 +325,10 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 
 ### Player avatars
 - 36–46px **blob-circles** (`border-radius:50% 46% 52% 48%`) with a 1.4–1.8px ink border, filled
-  with a crew colour taken from the style-dot palette (§2), showing a hand-drawn mask or
-  balaclava doodle or the player's initial in Pangolin 700 on cream.
+  with the player's **seat colour** (`--seat-1` … `--seat-12`, one per seat, so a crew of 12 never
+  repeats a colour; each is 4.5:1 or better against the cream initials), showing a hand-drawn mask
+  or balaclava doodle or the player's initial in Pangolin 700 on cream. The seat number fixes the
+  colour for the whole game; a leaver's seat is freed for the next joiner.
 - On the board, show tiny cel-shaded crew figures (simple capsule bodies with masks) standing in
   rooms, with the same ink outline as the building. Keep them toy-like; avoid detailed faces.
 - Status marks: a clay dot for "move submitted", line boil when it's that player's turn to vote,

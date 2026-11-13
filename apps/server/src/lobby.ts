@@ -25,8 +25,8 @@ export function inviteCode(): string {
   return [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
 }
 
-/** Seat i (in seat order) plays as `p<i+1>`: always a safe engine id (STATUS "Player ids"). */
-export const playerIdFor = (index: number) => `p${index + 1}`;
+/** Seat number n plays as `p<n+1>`: always a safe engine id (STATUS "Player ids"). The seat number also fixes the avatar colour. */
+export const playerIdFor = (seatNo: number) => `p${seatNo + 1}`;
 
 /**
  * The engine player a signed-in user plays as in a started game, or null.
@@ -98,7 +98,13 @@ const gameByCode = async (db: Queryable, raw: string) => {
 };
 const seatsOf = (db: Queryable, id: string) =>
   db.query<SeatRow>("select seat_no, player_id, user_id, nickname, bot_personality, stand_in from seats where game_id = $1 order by seat_no", [id]);
-const nextSeat = (seats: readonly SeatRow[]) => (seats.length ? Math.max(...seats.map((s) => s.seat_no)) + 1 : 0);
+/** The lowest seat number nobody holds: a leaver's seat (and avatar colour) is freed, nobody else's moves. */
+const nextSeat = (seats: readonly SeatRow[]) => {
+  const taken = new Set(seats.map((s) => s.seat_no));
+  let n = 0;
+  while (taken.has(n)) n++;
+  return n;
+};
 
 const PERSONALITY_LIST = (Object.keys(PERSONALITIES) as PersonalityId[]).map((id) => ({ id, name: PERSONALITIES[id].name }));
 
@@ -345,8 +351,8 @@ export function lobbyRoutes(
       const errors = validateConfig(config);
       if (errors.length > 0) throw new Error(`lobby made a bad config: ${errors.join("; ")}`);
       await store.start(game.id, config, async (tx) => {
-        for (const [i, seat] of seats.entries()) {
-          await tx.query("update seats set player_id = $3 where game_id = $1 and seat_no = $2", [game.id, seat.seat_no, playerIdFor(i)]);
+        for (const seat of seats) {
+          await tx.query("update seats set player_id = $3 where game_id = $1 and seat_no = $2", [game.id, seat.seat_no, playerIdFor(seat.seat_no)]);
         }
       });
       return view((await gameById(db, game.id))!, await seatsOf(db, game.id), user);
@@ -358,10 +364,10 @@ export function lobbyRoutes(
 }
 
 /** The engine config for a lobby: seats in seat order, bank job, the host's role list, events and vote setting. design §16 */
-export function gameConfig(settings: LobbySettings, seats: readonly Pick<SeatRow, "nickname" | "bot_personality">[], seed: string): GameConfig {
+export function gameConfig(settings: LobbySettings, seats: readonly Pick<SeatRow, "seat_no" | "nickname" | "bot_personality">[], seed: string): GameConfig {
   return {
     seed,
-    players: seats.map((x, i) => ({ id: playerIdFor(i), name: x.nickname, isBot: x.bot_personality !== null })),
+    players: seats.map((x) => ({ id: playerIdFor(x.seat_no), name: x.nickname, isBot: x.bot_personality !== null })),
     job: "bank",
     roleList: settings.roleList,
     eventsEnabled: settings.eventsEnabled,

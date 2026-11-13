@@ -322,6 +322,20 @@ describe("leave", () => {
   });
 });
 
+// design §15: a seat number fixes a player's avatar colour, so a leaver's number is freed and nobody else's moves.
+describe("seat numbers", () => {
+  it("a leaver's seat is reused by the next joiner; the others keep theirs", async () => {
+    const { who, game } = await host();
+    const ana = (await join(game.inviteCode, "Ana")).session;
+    await join(game.inviteCode, "Bo");
+    await call("POST", `/games/${game.id}/leave`, ana);
+    const after = (await join(game.inviteCode, "Cy")).body.seats!;
+    expect(after.map((s) => [s.nickname, s.seat])).toEqual([["Karthik", 0], ["Cy", 1], ["Bo", 2]]);
+    const started = await call("POST", `/games/${game.id}/start`, who);
+    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Karthik", "p1"], ["Cy", "p2"], ["Bo", "p3"]]);
+  });
+});
+
 // Owner request (decisions.md M2-5b): before the start the host can hand the host role to another person, then leave.
 // PR #27 review: hosting under another name must not swap the session (a guest would lose their other games).
 describe("host nickname per game", () => {
@@ -356,7 +370,7 @@ describe("host hand-over", () => {
     expect((await call("POST", `/games/${game.id}/bots`, ana, {})).status).toBe(201);
     const started = await call("POST", `/games/${game.id}/start`, ana);
     expect(started.status).toBe(200);
-    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Ana", "p1"], ["Bot · Riya", "p2"], ["Bot · Max", "p3"]]);
+    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Bot · Riya", "p1"], ["Ana", "p2"], ["Bot · Max", "p3"]]);
   });
 
   it("refuses a bot, yourself, an empty seat, a non-host, and after the start", async () => {
@@ -392,7 +406,7 @@ describe("host settings in the lobby", () => {
   // design §16: every session length plays the host's role list, events and vote setting.
   it("every length takes the role list, events and votes", async () => {
     const { gameConfig } = await import("./lobby");
-    const seats = [{ nickname: "A", bot_personality: null }, { nickname: "B", bot_personality: null }];
+    const seats = [{ seat_no: 0, nickname: "A", bot_personality: null }, { seat_no: 1, nickname: "B", bot_personality: null }];
     const host = { ...DEFAULT_SETTINGS, roleList: "hidden", voteVisibility: "open" } as const;
     for (const sessionLength of ["1h", "15m"] as const) {
       expect(gameConfig({ ...host, sessionLength }, seats, "s")).toEqual({
@@ -440,7 +454,7 @@ describe("bots fill seats", () => {
     expect((await call("DELETE", `/games/${game.id}/bots/1`, who)).status).toBe(404); // Ana is no bot
     const left = await call("DELETE", `/games/${game.id}/bots/2`, who);
     expect(left.body.seats!.map((s) => s.nickname)).toEqual(["Karthik", "Ana", "Bot · Max"]);
-    expect((await call("POST", `/games/${game.id}/bots`, who, {})).body.seats!.at(-1)).toMatchObject({ seat: 4, nickname: "Bot · Riya" });
+    expect((await call("POST", `/games/${game.id}/bots`, who, {})).body.seats!.at(2)).toMatchObject({ seat: 2, nickname: "Bot · Riya" }); // the freed seat is reused
   });
 
   it.each([["evil"], ["__proto__"], [7]])("refuses personality %j", async (personality) => {

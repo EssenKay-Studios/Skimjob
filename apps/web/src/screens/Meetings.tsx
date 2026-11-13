@@ -7,6 +7,7 @@ import { useContext, useEffect, useId, useState } from "react";
 import { PERK_TEXT } from "@skimjob/content";
 import type { MeetingKind, PlayerId, PlayerView, VoteChoice } from "@skimjob/engine";
 import { Avatar } from "../components/Avatar";
+import { seatOfPlayer } from "../components/avatarLooks";
 import { Button, DangerButton } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { Banner, ClockFace, DialogSheet, ProtectedBanner, TallyBars, type TallyBar } from "../components/MeetingKit";
@@ -79,7 +80,7 @@ function VotePicker({ view, value, onChange, label, seed, sealed = false }: { vi
           seed={`${seed}-${t.id}`}
           className="vote-pick"
           pressed={value?.kind === "shakedown" && value.target === t.id}
-          icon={<Avatar name={plain(t.name)} size={26} bot={t.isBot} />}
+          icon={<Avatar name={plain(t.name)} seat={seatOfPlayer(t.id)} size={26} bot={t.isBot} />}
           onClick={() => onChange({ kind: "shakedown", target: t.id })}
         >
           {t.name}
@@ -480,7 +481,7 @@ export function ResultDialog({ view, pins, dismissed, onDismiss }: { view: Playe
     <DialogSheet open onClose={close} seed={`results-${o.meetingId}`} labelledBy="results-h">
       <div className="result">
         <div className="result__head">
-          {target && <Avatar name={plain(who(target))} size={52} bot={view.players.find((p) => p.id === target)?.isBot} />}
+          {target && <Avatar name={plain(who(target))} seat={seatOfPlayer(target)} size={52} bot={view.players.find((p) => p.id === target)?.isBot} />}
           <div>
             <p className="meta">
               {MEETING_TITLE[o.kind]} after R{o.round}

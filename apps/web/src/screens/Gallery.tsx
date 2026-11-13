@@ -25,7 +25,7 @@ import { TextField } from "../components/TextField";
 import { Toast, useToast } from "../components/Toast";
 import { Underline } from "../components/Underline";
 import { MaskMark, Wordmark } from "../components/Wordmark";
-import { CREW_COLOURS } from "../components/avatarLooks";
+import { SEAT_COLOURS } from "../components/avatarLooks";
 import { Clock, Lock } from "../components/icons";
 import { BANK_JOB } from "@skimjob/content";
 import { AlarmBell, WantedStars } from "../components/Bell";
@@ -200,7 +200,7 @@ export function Gallery() {
               <MyGames seed="g-mygames-empty" games={[]} />
             </Section>
 
-            <Section id="avatars" title="Blob avatars" note="initials · crew colours · ready / away / turn / bot">
+            <Section id="avatars" title="Blob avatars" note="initials · 12 seat colours · ready / away / turn / bot">
               <div className="g-row g-row--center">
                 <Avatar name="Mara Vox" size={46} />
                 <Avatar name="Dez" size={40} status="ready" />
@@ -211,8 +211,8 @@ export function Gallery() {
                 <Avatar name="émile" size={28} />
               </div>
               <div className="g-row g-row--center">
-                {CREW_COLOURS.map((c, i) => (
-                  <Avatar key={c} name={["Ash", "Bo", "Cy", "Di", "Ed", "Fi", "Gus"][i]!} colour={c} size={36} />
+                {Array.from({ length: SEAT_COLOURS }, (_, i) => (
+                  <Avatar key={i} name={["Ash", "Bo", "Cy", "Di", "Ed", "Fi", "Gus", "Hal", "Ivy", "Jo", "Kit", "Lee"][i]!} seat={i} size={36} />
                 ))}
               </div>
               <div className="g-row g-row--center">
