@@ -513,3 +513,34 @@ describe("QA: a missed move into a taped-off Lobby sits the round out — design
     for (const id of s.playerOrder) expect(viewFor(s, id).reveal).not.toBeNull();
   });
 });
+
+describe("QA #259: every coin rings once; only the Locksmith rings less — design §3.1, §5.1, §5.2", () => {
+  it("12 players, one coin each in every coin room: each bell reads 1, the Lobby 0", () => {
+    const rooms = ["office", "vault", "depositBoxes", "serverRoom", "managersOffice"];
+    const s = run(game(12), ...rooms.map((r, i) => mv(`p${i}`, r, 1)), ...lobbyRest(12, rooms.map((_, i) => `p${i}`)), ROUND);
+    expect(ofType(s.log, "bellsRung")[0]?.bells).toMatchObject({ office: 1, vault: 1, depositBoxes: 1, serverRoom: 1, managersOffice: 1 });
+    expect(ofType(s.log, "bellsRung")[0]?.bells.lobby ?? 0).toBe(0);
+  });
+
+  it("a full grab rings its coins: Office-like rooms 2, the Vault 3 (no free first coin)", () => {
+    const rooms = ["office", "vault", "depositBoxes", "serverRoom", "managersOffice"];
+    const s = run(game(12), ...rooms.map((r, i) => mv(`p${i}`, r, r === "vault" ? 3 : 2)), ...lobbyRest(12, rooms.map((_, i) => `p${i}`)), ROUND);
+    expect(ofType(s.log, "bellsRung")[0]?.bells).toMatchObject({ office: 2, vault: 3, depositBoxes: 2, serverRoom: 2, managersOffice: 2 });
+    expect(s.wanted).toBe(0);
+  });
+
+  it("a Locksmith's 3-coin Vault grab on a bell at 4 lights no 5th bulb; anyone else's 1 coin does", () => {
+    const g = game(3, ["locksmith"]);
+    const hot = { ...g, bells: { ...g.bells, vault: 4 } };
+    const smith = run(hot, mv("p0", "vault", 3), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
+    expect([ofType(smith.log, "roomRaided"), smith.wanted, smith.bells.vault]).toEqual([[], 0, 3]);
+    const other = run(hot, mv("p0", "lobby", 1), mv("p1", "vault", 1), mv("p2", "lobby", 1), ROUND);
+    expect(ofType(other.log, "roomRaided")).toMatchObject([{ room: "vault", seized: 1, wanted: 1 }]);
+  });
+
+  it("the Office at 3 plus one 2-coin grab is the 5th bulb: raided", () => {
+    const g = game(3);
+    const s = run({ ...g, bells: { ...g.bells, office: 3 } }, mv("p0", "office", 2), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND);
+    expect(ofType(s.log, "roomRaided")).toMatchObject([{ room: "office", seized: 2, wanted: 1 }]);
+  });
+});
