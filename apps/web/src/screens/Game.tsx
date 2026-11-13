@@ -4,7 +4,7 @@
 // GameChat.tsx), meetings and votes (M2-7, Meetings.tsx) and the bank board
 // (M2-9 art, figures from the view only: game/board.ts), and (M2-10) the
 // ledger / case file sheet, the "While you were away" recap and the private
-// suspicion board (game/notes.ts), the host strip (M2-13, GameHost.tsx) and
+// notes and pins (game/notes.ts), the host strip (M2-13, GameHost.tsx) and
 // (M2-11) the end-of-game reveal (components/Reveal.tsx, from `view.reveal.summary`).
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { PlayerView, RoomId } from "@skimjob/engine";
@@ -13,7 +13,7 @@ import { Chip } from "../components/Chip";
 import { WantedStars } from "../components/Bell";
 import { HonestyMeter } from "../components/HonestyMeter";
 import { GameShell, type ShellPanel } from "../components/GameShell";
-import { Bubble, Clock, Evidence, Pin, Star } from "../components/icons";
+import { Bubble, Clock, Evidence, Star } from "../components/icons";
 import { InfoTip, MoreInGame } from "../components/InfoTip";
 import { MEETING_TITLE } from "../game/meeting";
 import { BankCutaway } from "../art/BankCutaway";
@@ -27,8 +27,7 @@ import { EndingNote, Reveal } from "../components/Reveal";
 import { RulebookSheet } from "../components/Rulebook";
 import { AwayRecap } from "../components/AwayRecap";
 import { CaseBoard } from "../components/CaseBoard";
-import { SuspicionBoard, SuspicionMark } from "../components/SuspicionBoard";
-import { useAwayRecap, usePins, useSeatNotes, useSuspicionBoard, type Board as SuspicionMarks, type BoardChannel, type NotesLoad } from "../game/notes";
+import { useAwayRecap, usePins, useSeatBoard, useSeatNotes, type NotesLoad } from "../game/notes";
 import { caseData } from "../game/caseLeads";
 import type { DescribeContext } from "../game/describeEvent";
 import { BustedSpot, JobDoneSpot, WaitingSpot } from "../art/Spots";
@@ -204,10 +203,10 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
     setRoom: (room) => planning !== null && setPicked({ round: planning, room }),
   };
   const ctx = useMemo(() => ({ me: view.me.id, name: namesOf(view), slot: slotText }), [view]);
-  // M2-10: the private suspicion board, kept per seat on the server (the recap lives in `Away`).
-  // One GET /notes per game page, shared by the recap, the suspicion board and the pins.
+  // design §15.3: your private notes and pins, kept per seat on the server (the recap lives in `Away`).
+  // One GET /notes per game page, shared by the recap, the notes and the pins.
   const notes = useSeatNotes(gameId);
-  const board = useSuspicionBoard(gameId, notes);
+  const board = useSeatBoard(gameId, notes);
   const pins = usePins(gameId, notes);
   const caseBoard = useMemo(() => caseData(view, pins.pins), [view, pins.pins]);
   const people = otherSeats(view);
@@ -226,9 +225,8 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
     if (bailId) setOpen("round");
   }, [bailId]);
   const panels: readonly ShellPanel[] = [
-    { id: "crew", title: "Crew", place: "left", tab: { icon: <Star /> }, node: <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} /> },
-    { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} card={(r) => <RoundCard view={view} send={send} round={r} title={`Round ${r}`} />} /> },
-    ...(outcome ? [] : [{ id: "notes", title: "Notes", place: "left", tab: { icon: <Pin /> }, node: <CrewBoard people={people} board={board} /> } satisfies ShellPanel]),
+    { id: "crew", title: "Crew", place: "left", tab: { icon: <Star /> }, node: <Seats view={view} presence={channel.presence} offset={offset} /> },
+    { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoard data={caseBoard} people={people} pins={pins} board={board} card={(r) => <RoundCard view={view} send={send} round={r} title={`Round ${r}`} />} /> },
     { id: "chat", title: "Chat", place: "left", tab: { icon: <Bubble />, badge: chat.unread }, node: chat.node },
     {
       id: "round",
@@ -282,12 +280,7 @@ function Away({ gameId, view, ctx, notes }: { gameId: string; view: PlayerView; 
   return <AwayRecap lines={away.lines} onDismiss={away.dismiss} />;
 }
 
-/** design §12.3: your private tags on everyone else. */
-function CrewBoard({ people, board }: { people: ReturnType<typeof otherSeats>; board: BoardChannel }) {
-  return <SuspicionBoard people={people} board={board.board} error={board.error} onSave={board.save} />;
-}
-
-/** Everyone but you, as the case board and the suspicion board draw them. */
+/** Everyone but you, as the case board draws them. */
 function otherSeats(view: PlayerView) {
   const looks = seatLooks(view);
   return seatsOf(view)
@@ -412,7 +405,7 @@ function BankBoard({ view, pick }: { view: PlayerView; pick: Pick | null }) {
  * The crew: who has locked in this round (public, owner decision 2 Nov) and
  * each person's presence, online now or last seen; bots show as bots. design §5.1
  */
-function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: Presence | null; offset: number; marks: SuspicionMarks | null }) {
+function Seats({ view, presence, offset }: { view: PlayerView; presence: Presence | null; offset: number }) {
   const seats = seatsOf(view);
   const looks = seatLooks(view);
   const now = useNow(30_000) + offset;
@@ -441,7 +434,6 @@ function Seats({ view, presence, offset, marks }: { view: PlayerView; presence: 
                 {s.you ? "You" : s.name}
                 {s.lockedIn && <span className="crew-seat__mark">locked in</span>}
                 {here.text && !s.you && <span className={`crew-seat__here crew-seat__here--${here.kind}`}>{here.text}</span>}
-                {!s.you && <SuspicionMark tag={marks?.[s.id]?.tag} />}
               </span>
             </li>
           );

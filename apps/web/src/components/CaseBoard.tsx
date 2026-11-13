@@ -1,4 +1,5 @@
-// The case board (design §15.4): the suspect card, the Players strip, your pins,
+// The case board (design §15.4): the suspect card, the Players strip (tap a seat
+// for the leads that name them and your private note on them, §15.3), your pins,
 // a round picker (a round's snapshot card and its leads, design §10) and one
 // Leads list, newest first. It only draws what the adapter
 // (game/caseLeads.ts) gave it; pins are private to the seat. Few words, "i" InfoTips.
@@ -6,28 +7,36 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 import type { PlayerId } from "@skimjob/engine";
 import { CrookAvatar } from "../art/Crook";
 import { leadsNaming, newestFirst, pinnedItems, playerStat, TRUST_LABELS, type CaseData, type Fact, type Lead } from "../game/caseBoard";
-import type { Board, PinsChannel } from "../game/notes";
+import type { BoardChannel, PinsChannel } from "../game/notes";
 import { Button } from "./Button";
 import { InfoTip } from "./InfoTip";
 import { Bell, Lock, Pin, Warn } from "./icons";
+import { SeatNote } from "./SeatNote";
 import { SketchFrame } from "./SketchFrame";
-import { SuspicionMark, type BoardPerson } from "./SuspicionBoard";
 import { Underline } from "./Underline";
 import "./caseboard.css";
+
+interface BoardPerson {
+  readonly id: PlayerId;
+  readonly name: string;
+  readonly look: number;
+  readonly tag?: string | undefined;
+  readonly isBot: boolean;
+}
 
 export interface CaseBoardProps {
   readonly data: CaseData;
   /** Everyone but you. */
   readonly people: readonly BoardPerson[];
   readonly pins: PinsChannel;
-  /** Your tags (the suspicion board); null while loading. */
-  readonly marks: Board | null;
+  /** Your private notes on the others (design §15.3). */
+  readonly board: BoardChannel;
   /** The picked round's snapshot card (components/SnapshotCard.tsx), drawn above its leads. */
   readonly card?: (round: number) => ReactNode;
   readonly seed?: string;
 }
 
-export function CaseBoard({ data, people, pins, marks, card, seed = "case" }: CaseBoardProps) {
+export function CaseBoard({ data, people, pins, board, card, seed = "case" }: CaseBoardProps) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [who, setWho] = useState<PlayerId | null>(null);
   const [round, setRound] = useState<number | null>(null);
@@ -98,7 +107,6 @@ export function CaseBoard({ data, people, pins, marks, card, seed = "case" }: Ca
                       )}
                     </span>
                   )}
-                  <SuspicionMark tag={marks?.[p.id]?.tag} />
                 </button>
               </li>
             );
@@ -106,8 +114,10 @@ export function CaseBoard({ data, people, pins, marks, card, seed = "case" }: Ca
         </ul>
       </div>
 
+      {selected && <SeatNote key={selected.id} person={selected} board={board} seed={`${seed}-note-${selected.id}`} />}
+
       {pins.error && (
-        <p className="sus__error" role="alert">
+        <p className="cb__error" role="alert">
           {pins.error}
         </p>
       )}

@@ -8,7 +8,7 @@ import { GameShell, type ShellPanel } from "../components/GameShell";
 import { ArrowBack, Bubble, Clock, Evidence, Star } from "../components/icons";
 import { SketchFrame } from "../components/SketchFrame";
 import { Underline } from "../components/Underline";
-import { CaseBoardDemo } from "./GalleryNotes";
+import { CaseBoardDemo } from "./GalleryCase";
 import { navigate } from "../router";
 import { TopBar } from "./TopBar";
 

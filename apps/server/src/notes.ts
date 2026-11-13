@@ -6,15 +6,14 @@
 //   moves it forward as the player looks. It only ever moves forward, and never
 //   past the seat's own view (a view's seq counts only what that player can
 //   see, so it says nothing about others' hidden events).
-// - The suspicion board (design §12.3): the seat's own trusted / unsure /
-//   suspicious tag and optional note on each other player. Only the seat that
-//   wrote it can read it; it is never sent over the live channel, never in the
-//   engine log and never in the end-of-game reveal.
+// - The private board (design §15.3): the seat's own note on each other
+//   player. Only the seat that wrote it can read it; it is never sent over the
+//   live channel, never in the engine log and never in the end-of-game reveal.
 //
 // Routes (signed in, seated in a started game, else 401 / 404):
 //   GET   /games/:id/notes        → { lastSeen, board }
 //   PATCH /games/:id/notes/seen   { seq } → { lastSeen }
-//   PATCH /games/:id/notes/board  { subject, tag, note } → { board }
+//   PATCH /games/:id/notes/board  { subject, note } → { board }
 //   PUT   /games/:id/notes/pins   { pins } → { pins }   (case board pins, design §15.4: lead and fact ids)
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";
@@ -26,14 +25,8 @@ import type { Clock } from "./clock";
 import { BOARD_NOTE_MAX_CHARS, BOARD_RATE, PIN_ID_PATTERN, PINS_MAX, SEEN_RATE } from "./settings";
 import type { GameStore } from "./store";
 
-export const SUSPICION_TAGS = ["trusted", "unsure", "suspicious"] as const;
-export type SuspicionTag = (typeof SUSPICION_TAGS)[number];
-
-export interface BoardMark {
-  readonly tag: SuspicionTag | null;
-  readonly note: string;
-}
-export type Board = Readonly<Record<PlayerId, BoardMark>>;
+/** The seat's note on each other player it wrote one on. */
+export type Board = Readonly<Record<PlayerId, string>>;
 
 export interface SeatNotes {
   /** The highest view seq this seat has seen; -1 if it never opened the game. */
@@ -45,19 +38,17 @@ export interface SeatNotes {
 
 type Result<T> = { ok: true; value: T } | { ok: false; reason: string };
 
-/** A board edit from the client, or why not. design §12.3 */
-function parseBoardEdit(body: unknown, state: GameState, owner: PlayerId): Result<{ subject: PlayerId; mark: BoardMark }> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) return { ok: false, reason: "expected { subject, tag, note }" };
+/** A note edit from the client, or why not. design §15.3 */
+function parseBoardEdit(body: unknown, state: GameState, owner: PlayerId): Result<{ subject: PlayerId; note: string }> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return { ok: false, reason: "expected { subject, note }" };
   const raw = body as Record<string, unknown>;
-  for (const k of Object.keys(raw)) if (k !== "subject" && k !== "tag" && k !== "note") return { ok: false, reason: `unknown field ${JSON.stringify(k)}` };
+  for (const k of Object.keys(raw)) if (k !== "subject" && k !== "note") return { ok: false, reason: `unknown field ${JSON.stringify(k)}` };
   const { subject } = raw;
   if (typeof subject !== "string" || !state.config.players.some((p) => p.id === subject)) return { ok: false, reason: "subject must be a player in this game" };
-  if (subject === owner) return { ok: false, reason: "you can't tag yourself" };
-  const tag = raw.tag ?? null;
-  if (tag !== null && !(SUSPICION_TAGS as readonly unknown[]).includes(tag)) return { ok: false, reason: "tag must be trusted, unsure or suspicious" };
-  const note = checkNote(raw.note ?? "");
+  if (subject === owner) return { ok: false, reason: "you can't write a note on yourself" };
+  const note = checkNote(raw.note);
   if (!note.ok) return note;
-  return { ok: true, value: { subject, mark: { tag: tag as SuspicionTag | null, note: note.value } } };
+  return { ok: true, value: { subject, note: note.value } };
 }
 
 /** A pin list from the client: at most PINS_MAX distinct ids, each PIN_ID_PATTERN. design §15.4 */
@@ -126,11 +117,8 @@ export function notesRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
   };
 
   const boardOf = async (gameId: string, player: PlayerId): Promise<Board> => {
-    const rows = await db.query<{ subject: string; tag: SuspicionTag | null; note: string }>(
-      "select subject, tag, note from suspicion_marks where game_id = $1 and player_id = $2 order by subject",
-      [gameId, player],
-    );
-    return Object.fromEntries(rows.map((r) => [r.subject, { tag: r.tag, note: r.note }]));
+    const rows = await db.query<{ subject: string; note: string }>("select subject, note from suspicion_marks where game_id = $1 and player_id = $2 order by subject", [gameId, player]);
+    return Object.fromEntries(rows.map((r) => [r.subject, r.note]));
   };
   const lastSeenOf = async (gameId: string, player: PlayerId): Promise<number> => {
     const [row] = await db.query<{ last_seen_seq: number }>("select last_seen_seq from seats where game_id = $1 and player_id = $2", [gameId, player]);
@@ -175,14 +163,14 @@ export function notesRoutes(app: FastifyInstance, db: Db, store: GameStore, s: S
     if (!boardRate.allow(`${gameId}\0${player}`)) throw new HttpError(429, "slow down: too many changes to your board");
     const edit = parseBoardEdit(req.body, state, player);
     if (!edit.ok) throw new HttpError(400, edit.reason);
-    const { subject, mark } = edit.value;
-    if (mark.tag === null && mark.note === "") {
+    const { subject, note } = edit.value;
+    if (note === "") {
       await db.query("delete from suspicion_marks where game_id = $1 and player_id = $2 and subject = $3", [gameId, player, subject]);
     } else {
       await db.query(
-        `insert into suspicion_marks (game_id, player_id, subject, tag, note) values ($1, $2, $3, $4, $5)
-         on conflict (game_id, player_id, subject) do update set tag = excluded.tag, note = excluded.note, updated_at = now()`,
-        [gameId, player, subject, mark.tag, mark.note],
+        `insert into suspicion_marks (game_id, player_id, subject, note) values ($1, $2, $3, $4)
+         on conflict (game_id, player_id, subject) do update set note = excluded.note, updated_at = now()`,
+        [gameId, player, subject, note],
       );
     }
     return { board: await boardOf(gameId, player) };

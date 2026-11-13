@@ -85,7 +85,7 @@ for (const viewport of VIEWPORTS) {
       expect(await smallTargets(page)).toEqual([]);
 
       // The shell's other panels (side tabs from 1024 px, sheets below), each fitting the screen.
-      for (const name of ["Crew", "Case", "Notes", "Chat"] as const) {
+      for (const name of ["Crew", "Case", "Chat"] as const) {
         await openPanel(page, name);
         const o5 = await overflow(page);
         expect(o5.scroll, `${name} panel: overflow`).toBeLessThanOrEqual(o5.client);

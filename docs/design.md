@@ -460,7 +460,7 @@ From **round 2**, each round has a **4-in-10 chance** [tunable] that one card fl
 
 ### 15.3 Notes and pins
 
-Each player has a private board: tags (trusted / unsure / suspicious), notes and pins (whole leads or single facts, §15.4). Only they can see it. It lives outside the game log, on the server *(owner, 6 Nov)*.
+Each player has a private board: a note on each other player (written from their seat in the case board's Players strip) and pins (whole leads or single facts, §15.4). Only they can see it. It lives outside the game log, on the server *(owner, 6 Nov)*. There are no seat tags: the per-round trust marks (§10.3) replace an overall trusted / unsure / suspicious tag *(owner, 13 Nov)*.
 
 ### 15.4 The case board (the ledger)
 
@@ -478,7 +478,7 @@ Each player has a private board: tags (trusted / unsure / suspicious), notes and
 - **"No alibi" facts** show as FACT lines ("Kai had no alibi: in the Vault, round 3"); **your marks** show as "Your mark" lines ("Ben lied about the Vault, round 3").
 - **Round picker:** "Round:" and a square button per round (1, 2, 3 …); the selected one is gold, a round not played yet is dashed and disabled. It shows that round's snapshot card (§10.2).
 - **Pins:** private (§15.3). You can pin a whole lead or a single fact inside it; pins stay across rounds and are listed together under **Pinned**.
-- **Players:** a strip of seats, each with their ⚠ count, pin count and your tag; tapping one shows the leads that name them.
+- **Players:** a strip of seats, each with their ⚠ count and pin count; tapping one shows the leads that name them and your note on them (§15.3), which you can add, edit or clear there.
 - **Suspect card:** names the **most likely liar** with a one-line reason ("Said Security in R4; you saw Dev in the Vault."). When you have **2 or more pins**, it reads only the pinned facts ("from 3 pins"); otherwise all leads. Each player is ranked by the contradictions in those facts that name them, one point each [tunable: a weight per kind of contradiction]; ties go to the player with the most recent contradiction, then to seat order; the reason quotes their most recent one. It never names you, and with no contradiction it names nobody. It uses only your own `viewFor` (public facts, your sightings and your power results), never hidden information, so it is a lead, not proof.
 - **While you were away:** a short recap of what changed since your last visit, once.
 

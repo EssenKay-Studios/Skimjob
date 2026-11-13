@@ -1,5 +1,5 @@
 // Per-seat notes (M2-10): the "last seen" seq for "while you were away" (design
-// §13) and the private suspicion board (design §12.3).
+// §13) and the private board of notes (design §15.3).
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { WebSocket } from "ws";
@@ -85,43 +85,47 @@ describe("last seen seq (design §13, while you were away)", () => {
   });
 });
 
-describe("suspicion board (design §12.3)", () => {
-  it("tags and notes other players, private to the seat that wrote them", async () => {
+describe("the private board: a note per player (design §15.3)", () => {
+  it("writes a note on other players, private to the seat that wrote it", async () => {
     const { id, humans, bots } = await startGame(3);
     const [a, b, c] = humans;
     const board = (who: string, payload: Record<string, unknown>) => call("PATCH", `/games/${id}/notes/board`, who, payload);
 
-    expect((await board(a!.who, { subject: b!.player, tag: "suspicious", note: "Said Vault, saw them in the Office" })).body).toEqual({
-      board: { [b!.player]: { tag: "suspicious", note: "Said Vault, saw them in the Office" } },
+    expect((await board(a!.who, { subject: b!.player, note: "Said Vault, saw them in the Office" })).body).toEqual({
+      board: { [b!.player]: "Said Vault, saw them in the Office" },
     });
-    await board(a!.who, { subject: bots[0], tag: "trusted" });
-    await board(a!.who, { subject: c!.player, tag: null, note: "quiet so far" });
+    await board(a!.who, { subject: bots[0], note: "bot, Vault twice" });
+    await board(a!.who, { subject: c!.player, note: "quiet so far" });
     expect((await notes(id, a!.who)).board).toEqual({
-      [b!.player]: { tag: "suspicious", note: "Said Vault, saw them in the Office" },
-      [bots[0]!]: { tag: "trusted", note: "" },
-      [c!.player]: { tag: null, note: "quiet so far" },
+      [b!.player]: "Said Vault, saw them in the Office",
+      [bots[0]!]: "bot, Vault twice",
+      [c!.player]: "quiet so far",
     });
     // Only they can see it: b and c have empty boards, whoever they ask about.
     expect((await notes(id, b!.who)).board).toEqual({});
     expect((await notes(id, c!.who)).board).toEqual({});
-    // A change replaces; clearing both tag and note removes the mark.
-    await board(a!.who, { subject: b!.player, tag: "unsure", note: "" });
-    await board(a!.who, { subject: c!.player, tag: null, note: "  " });
-    expect((await notes(id, a!.who)).board).toEqual({ [b!.player]: { tag: "unsure", note: "" }, [bots[0]!]: { tag: "trusted", note: "" } });
+    // A change replaces; an empty or blank note removes it.
+    await board(a!.who, { subject: b!.player, note: "Office after all" });
+    await board(a!.who, { subject: c!.player, note: "  " });
+    await board(a!.who, { subject: bots[0], note: "" });
+    expect((await notes(id, a!.who)).board).toEqual({ [b!.player]: "Office after all" });
   });
 
-  it("refuses yourself, strangers to the game, bad tags, long notes and extra fields", async () => {
+  it("refuses yourself, strangers to the game, a tag, a missing note, long notes and extra fields", async () => {
     const { id, humans } = await startGame(2);
     const [a, b] = humans;
     const board = (payload: Record<string, unknown>) => call("PATCH", `/games/${id}/notes/board`, a!.who, payload);
-    expect((await board({ subject: a!.player, tag: "trusted" })).status).toBe(400);
-    expect((await board({ subject: "p99", tag: "trusted" })).status).toBe(400);
-    expect((await board({ subject: b!.player, tag: "liar" })).status).toBe(400);
-    expect((await board({ subject: b!.player, tag: "unsure", note: "x".repeat(BOARD_NOTE_MAX_CHARS + 1) })).status).toBe(400);
-    expect((await board({ subject: b!.player, tag: "unsure", note: "bad\u0007bell" })).status).toBe(400);
-    expect((await board({ subject: b!.player, tag: "unsure", player: b!.player })).status).toBe(400);
-    expect((await board({ subject: b!.player, tag: "unsure", note: "x".repeat(BOARD_NOTE_MAX_CHARS) })).status).toBe(200);
-    expect((await call("PATCH", `/games/${id}/notes/board`, null, { subject: b!.player, tag: "unsure" })).status).toBe(401);
+    expect((await board({ subject: a!.player, note: "me" })).status).toBe(400);
+    expect((await board({ subject: "p99", note: "who" })).status).toBe(400);
+    // Seat tags are gone (#202): a tag is an unknown field, and a note is required.
+    expect((await board({ subject: b!.player, tag: "suspicious", note: "x" })).status).toBe(400);
+    expect((await board({ subject: b!.player })).status).toBe(400);
+    expect((await board({ subject: b!.player, note: "x".repeat(BOARD_NOTE_MAX_CHARS + 1) })).status).toBe(400);
+    expect((await board({ subject: b!.player, note: "bad\u0007bell" })).status).toBe(400);
+    expect((await board({ subject: b!.player, note: "x", player: b!.player })).status).toBe(400);
+    expect((await board({ subject: b!.player, note: "x".repeat(BOARD_NOTE_MAX_CHARS) })).status).toBe(200);
+    expect((await notes(id, a!.who)).board).toEqual({ [b!.player]: "x".repeat(BOARD_NOTE_MAX_CHARS) });
+    expect((await call("PATCH", `/games/${id}/notes/board`, null, { subject: b!.player, note: "x" })).status).toBe(401);
   });
 
   it("never reaches the engine log, anyone's view or the live channel", async () => {
@@ -133,16 +137,14 @@ describe("suspicion board (design §12.3)", () => {
     const mine: string[] = [];
     const wsA: WebSocket = await app.injectWS(`/games/${id}/ws`, { headers: { cookie: `${SESSION_COOKIE}=${a!.who}` } }, { onInit: (s) => s.on("message", (d) => mine.push(String(d))) });
     await vi.waitFor(() => expect(raw.some((t) => t.includes('"presence"')) && mine.some((t) => t.includes('"presence"'))).toBe(true), { interval: 1, timeout: 5000 });
-    expect((await call("PATCH", `/games/${id}/notes/board`, a!.who, { subject: b!.player, tag: "suspicious", note: secret })).status).toBe(200);
+    expect((await call("PATCH", `/games/${id}/notes/board`, a!.who, { subject: b!.player, note: secret })).status).toBe(200);
     // A change in the game afterwards pushes fresh views to both.
     wsA.send(JSON.stringify({ cmd: { type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } }, id: "m1" }));
     await vi.waitFor(() => expect(mine.some((t) => t.includes('"m1"'))).toBe(true), { interval: 1, timeout: 5000 });
     const state = (await store.load(id))!;
     expect(JSON.stringify(state)).not.toContain(secret);
-    expect(JSON.stringify(state)).not.toContain("suspicious");
     for (const t of [...raw, ...mine]) {
       expect(t).not.toContain(secret);
-      expect(t).not.toContain("suspicious");
     }
     ws.close();
     wsA.close();
@@ -183,7 +185,7 @@ describe("write limits (follow-up #114)", () => {
   it("allows BOARD_RATE.writes board edits and pin changes per window per seat, then 429 until the window passes", async () => {
     const { id, humans } = await startGame(2);
     const [a, b] = humans;
-    const edit = (who: string) => call("PATCH", `/games/${id}/notes/board`, who, { subject: b!.player, tag: "unsure" });
+    const edit = (who: string) => call("PATCH", `/games/${id}/notes/board`, who, { subject: b!.player, note: "unsure" });
     const pin = (who: string) => app.inject({ method: "PUT", url: `/games/${id}/notes/pins`, payload: { pins: [] }, cookies: { [SESSION_COOKIE]: who } });
     for (let i = 0; i < BOARD_RATE.writes; i++) {
       expect((await edit(a!.who)).status).toBe(200);
@@ -192,7 +194,7 @@ describe("write limits (follow-up #114)", () => {
     expect((await edit(a!.who)).status).toBe(429);
     expect((await pin(a!.who)).statusCode).toBe(429);
     // Per seat: the other seat is not slowed down.
-    expect((await call("PATCH", `/games/${id}/notes/board`, b!.who, { subject: a!.player, tag: "unsure" })).status).toBe(200);
+    expect((await call("PATCH", `/games/${id}/notes/board`, b!.who, { subject: a!.player, note: "unsure" })).status).toBe(200);
     clock.advance(BOARD_RATE.windowMs + 1);
     expect((await edit(a!.who)).status).toBe(200);
     expect((await pin(a!.who)).statusCode).toBe(200);

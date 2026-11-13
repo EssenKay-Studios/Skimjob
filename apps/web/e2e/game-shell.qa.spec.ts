@@ -213,7 +213,7 @@ test("resize from phone to laptop with a sheet open: the sheet goes, the lock go
   const { ctx, page } = await newPage(browser, 390, 844);
   const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
   await page.goto(`/game/${game.id}`);
-  await openPanel(page, "Notes");
+  await openPanel(page, "Crew");
   await expect(page.locator("dialog.bsheet[open]")).toHaveCount(1);
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(page.locator("dialog[open]")).toHaveCount(0);
@@ -265,7 +265,7 @@ for (const { width, height } of VIEWPORTS) {
     }
     if (width < 1024) await openPanel(page, "Crew");
     await shot(page, "shell");
-    for (const name of ["Crew", "Case", "Notes", "Chat", "This round"] satisfies PanelName[]) {
+    for (const name of ["Crew", "Case", "Chat", "This round"] satisfies PanelName[]) {
       await openPanel(page, name);
       await settle(page);
       await fits(page, `${name} at ${width}`);

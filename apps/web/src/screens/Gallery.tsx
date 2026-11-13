@@ -6,7 +6,7 @@ import { chatReducer, EMPTY_CHAT, markRead, type ChatMessage, type ChatRequest, 
 import { Avatar } from "../components/Avatar";
 import { BankDoodle } from "../components/BankDoodle";
 import { ArtSections, BankSection } from "./GalleryArt";
-import { NotesSections } from "./GalleryNotes";
+import { CaseSections } from "./GalleryCase";
 import { RolesGallery } from "./GalleryRoles";
 import { HostSection } from "./GalleryHost";
 import { AlibiSection } from "./GalleryAlibi";
@@ -318,7 +318,7 @@ export function Gallery() {
               <ChatSamples />
             </Section>
 
-            <NotesSections />
+            <CaseSections />
 
             <AlibiSection />
 

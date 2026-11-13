@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { NO_LEADS } from "../game/caseBoard";
 import { FIXTURE } from "../game/caseBoard.fixture";
-import type { PinsChannel } from "../game/notes";
+import type { BoardChannel, PinsChannel } from "../game/notes";
 import { CaseBoard } from "./CaseBoard";
 
 const people = [
@@ -13,7 +13,8 @@ const people = [
   { id: "p3", name: "Cy", look: 2, isBot: false },
 ];
 const pins = (ids: string[], ready = true): PinsChannel => ({ pins: new Set(ids), ready, error: null, toggle: () => {} });
-const html = (data = FIXTURE, p = pins([])) => renderToStaticMarkup(createElement(CaseBoard, { data, people, pins: p, marks: { p2: { tag: "suspicious", note: "" } } }));
+const board: BoardChannel = { board: { p2: "Said Lobby, saw them in the Vault" }, error: null, save: async () => null };
+const html = (data = FIXTURE, p = pins([])) => renderToStaticMarkup(createElement(CaseBoard, { data, people, pins: p, board }));
 
 describe("the case board shell (design §15.4)", () => {
   it("shows the suspect with the adapter's one-line reason, and nobody when there is none", () => {
@@ -46,11 +47,13 @@ describe("the case board shell (design §15.4)", () => {
     expect(html(FIXTURE, pins([], false))).toMatch(/class="cb__pin"[^>]*disabled/);
   });
 
-  it("draws the Players strip with ⚠ and pin counts and your tag", () => {
+  it("draws the Players strip with ⚠ and pin counts only: no seat tag, and no note until a seat is tapped (§15.3, #202)", () => {
     const out = html(FIXTURE, pins(["lead:r4.vault"]));
     expect(out).toContain('aria-label="Ben, 1 warnings, 1 pins"');
     expect(out).toContain('aria-label="Cy, 0 warnings, 1 pins"');
-    expect(out).toContain("sus-mark--suspicious");
+    expect(out).not.toMatch(/sus-|Suspicious|Trusted|Unsure/);
+    expect(out).not.toContain("Said Lobby");
+    expect(out).not.toContain("Your note on");
   });
 
   it("carries the InfoTips for Leads, Pins and Suspect, and never injects HTML", () => {
@@ -107,13 +110,13 @@ describe("the case board shell (design §15.4)", () => {
   });
 
   it("labels your own trust marks \"Your mark\" and a no-alibi fact as a Fact (design §10)", () => {
-    const out = renderToStaticMarkup(createElement(CaseBoard, { data: FIXTURE, people, pins: pins(["fact:r4.vault.mark", "fact:r4.vault.noalibi"]), marks: null }));
+    const out = renderToStaticMarkup(createElement(CaseBoard, { data: FIXTURE, people, pins: pins(["fact:r4.vault.mark", "fact:r4.vault.noalibi"]), board }));
     expect(out).toContain('<span class="cb__trust">Your mark</span> You trust Cy&#x27;s alibi: the Vault, round 4');
     expect(out).toContain('<span class="cb__trust">Fact</span> Dot had no alibi: in the Vault, round 4');
   });
 
   it("keeps ids unique when two boards are drawn, and a lead's repeated warning kind doesn't repeat a key", () => {
-    const two = renderToStaticMarkup(createElement("div", null, createElement(CaseBoard, { data: FIXTURE, people, pins: pins([]), marks: null }), createElement(CaseBoard, { data: FIXTURE, people, pins: pins([]), marks: null })));
+    const two = renderToStaticMarkup(createElement("div", null, createElement(CaseBoard, { data: FIXTURE, people, pins: pins([]), board }), createElement(CaseBoard, { data: FIXTURE, people, pins: pins([]), board })));
     const ids = [...two.matchAll(/aria-controls="([^"]+)"/g)].map((m) => m[1]!);
     expect(new Set(ids).size).toBe(ids.length);
   });

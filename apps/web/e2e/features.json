@@ -27,7 +27,7 @@
   "apps/web/src/components/MeetingKit.tsx": "@meeting",
   "apps/web/src/components/MyGames.tsx": "@auth",
   "apps/web/src/components/Reveal.tsx": "@reveal",
-  "apps/web/src/components/SuspicionBoard.tsx": "@caseboard",
+  "apps/web/src/components/SeatNote.tsx": "@caseboard",
   "apps/web/src/game/board.ts": "@board",
   "apps/web/src/game/caseBoard.ts": "@caseboard",
   "apps/web/src/game/caseChecks.ts": "@caseboard",
@@ -44,7 +44,7 @@
   "apps/web/src/screens/GalleryRoles.tsx": "@roles",
   "apps/web/src/screens/GalleryHost.tsx": "@host",
   "apps/web/src/screens/GalleryInfoTip.tsx": "@infotip",
-  "apps/web/src/screens/GalleryNotes.tsx": "@caseboard",
+  "apps/web/src/screens/GalleryCase.tsx": "@caseboard",
   "apps/web/src/screens/GalleryReveal.tsx": "@reveal",
   "apps/web/src/screens/GalleryShell.tsx": "@shell",
   "apps/web/src/screens/Game.tsx": [

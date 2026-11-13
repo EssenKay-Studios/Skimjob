@@ -11,8 +11,8 @@ async function claimLookout(page: Page): Promise<void> {
   await expect(card.getByText("You claimed to be the Lookout.")).toBeVisible();
 }
 
-// M2-10: "While you were away" (design §13), the suspicion board (§12.3) and
-// the case board, at every launch width.
+// M2-10: "While you were away" (design §13), and your private note on a seat in
+// the case board's Players strip (§15.3, §15.4), at every launch width.
 
 const VIEWPORTS = [
   { width: 360, height: 740 },
@@ -25,7 +25,16 @@ const VIEWPORTS = [
 /** The seen mark reaching the server (debounced on the page). */
 const seenSaved = (page: Page) => page.waitForResponse((r) => r.url().includes("/notes/seen") && r.request().method() === "PATCH" && r.ok());
 
-test("the recap shows what changed while you were away, once, and the board stays private @caseboard", async ({ browser }, info) => {
+/** Taps a seat in the case board's Players strip; its note card comes up. design §15.4 */
+async function openSeat(page: Page, name: string) {
+  await openPanel(page, "Case");
+  const board = page.getByRole("region", { name: "Case board" });
+  const seat = board.getByRole("list", { name: "Players" }).getByRole("button", { name: new RegExp(`^${name},`) });
+  if ((await seat.getAttribute("aria-pressed")) !== "true") await seat.click();
+  return board.getByRole("group", { name: `Your note on ${name}` });
+}
+
+test("the recap shows what changed while you were away, once, and your notes stay private @caseboard", async ({ browser }, info) => {
   test.skip(info.project.name !== "desktop", "one viewport is enough for the flow; widths are checked below");
   test.setTimeout(90_000);
   const hostCtx = await browser.newContext();
@@ -49,7 +58,7 @@ test("the recap shows what changed while you were away, once, and the board stay
 
   // Back: the recap is at the top of the screen.
   const back = await hostCtx.newPage();
-  // One GET /notes per game page, shared by the recap, the tags and the pins (#165); dev StrictMode mounts effects twice.
+  // One GET /notes per game page, shared by the recap, the notes and the pins (#165); dev StrictMode mounts effects twice.
   let notesLoads = 0;
   back.on("request", (r) => {
     if (r.method() === "GET" && new URL(r.url()).pathname.endsWith(`/games/${game.id}/notes`)) notesLoads++;
@@ -69,31 +78,36 @@ test("the recap shows what changed while you were away, once, and the board stay
   await dismissed;
   await back.reload();
   await expect(back.getByRole("heading", { name: "Round 1 · Pick your room", level: 2 })).toBeVisible();
-  await openPanel(back, "Notes");
   await expect(back.getByRole("region", { name: "While you were away" })).toHaveCount(0);
 
-  // design §12.3: tag the guest suspicious with a note; it survives a reload.
-  const board = back.getByRole("region", { name: "Your suspicion board" });
-  const row = board.getByRole("group", { name: "Your tag for Guest 1" });
-  await row.getByRole("button", { name: "Suspicious" }).click();
-  await expect(row.getByRole("button", { name: "Suspicious" })).toHaveAttribute("aria-pressed", "true");
-  await row.getByRole("button", { name: "Add note" }).click();
-  await board.getByLabel("Note on Guest 1").fill("Says Lobby, smells like Vault");
-  await board.getByRole("button", { name: "Save note" }).click();
-  await expect(board).toContainText("Says Lobby, smells like Vault");
-  await openPanel(back, "Crew");
-  await expect(back.locator(".crew .sus-mark--suspicious")).toHaveText("Suspicious");
+  // design §15.3: a note on the guest from the Players strip; it survives a reload.
+  const note = await openSeat(back, "Guest 1");
+  await note.getByRole("button", { name: "Add note" }).click();
+  await note.getByLabel("Note on Guest 1").fill("Says Lobby, smells like Vault");
+  await note.getByRole("button", { name: "Save note" }).click();
+  await expect(note.locator(".cb__note-text")).toHaveText("Says Lobby, smells like Vault");
+  await expect(note.getByRole("button", { name: "Edit note" })).toBeVisible();
   await back.reload();
-  await openPanel(back, "Notes");
-  await expect(back.getByRole("region", { name: "Your suspicion board" })).toContainText("Says Lobby, smells like Vault");
-  await expect(back.getByRole("region", { name: "Your suspicion board" }).getByRole("group", { name: "Your tag for Guest 1" }).getByRole("button", { name: "Suspicious" })).toHaveAttribute("aria-pressed", "true");
+  await expect((await openSeat(back, "Guest 1")).locator(".cb__note-text")).toHaveText("Says Lobby, smells like Vault");
 
-  // The guest sees none of it, anywhere on their screen.
+  // The guest sees none of it, anywhere on their screen; their note on the host is empty.
   await guest.reload();
-  await openPanel(guest, "Notes");
-  await expect(guest.getByRole("region", { name: "Your suspicion board" })).toBeVisible();
+  await expect((await openSeat(guest, "Host")).getByRole("button", { name: "Add note" })).toBeVisible();
   await expect(guest.locator("body")).not.toContainText("smells like Vault");
-  await expect(guest.locator(".sus-row.is-suspicious, .sus-mark")).toHaveCount(0);
+
+  // Cancel keeps the note; saving it empty clears it, also after a reload.
+  const again = await openSeat(back, "Guest 1");
+  await again.getByRole("button", { name: "Edit note" }).click();
+  await again.getByLabel("Note on Guest 1").fill("changed my mind");
+  await again.getByRole("button", { name: "Cancel" }).click();
+  await expect(again.locator(".cb__note-text")).toHaveText("Says Lobby, smells like Vault");
+  await again.getByRole("button", { name: "Edit note" }).click();
+  await again.getByLabel("Note on Guest 1").fill("");
+  await again.getByRole("button", { name: "Save note" }).click();
+  await expect(again.getByRole("button", { name: "Add note" })).toBeVisible();
+  await expect(again.locator(".cb__note-text")).toHaveCount(0);
+  await back.reload();
+  await expect((await openSeat(back, "Guest 1")).getByRole("button", { name: "Add note" })).toBeVisible();
   await hostCtx.close();
   await guestCtx.close();
 });
@@ -159,7 +173,7 @@ async function smallTargets(page: Page) {
 const overflow = (page: Page) => page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, viewport: window.innerWidth }));
 
 for (const viewport of VIEWPORTS) {
-  test(`recap, the case board and the suspicion board at ${viewport.width}x${viewport.height}: no overflow, targets ≥44px @caseboard`, async ({ browser }, info) => {
+  test(`recap and the case board with a seat's note open at ${viewport.width}x${viewport.height}: no overflow, targets ≥44px @caseboard`, async ({ browser }, info) => {
     test.skip(info.project.name !== "mobile", "viewports are set per test");
     const ctx = await browser.newContext({ viewport, hasTouch: viewport.width < 1024, isMobile: viewport.width < 1024 });
     const page = await ctx.newPage();
@@ -173,14 +187,12 @@ for (const viewport of VIEWPORTS) {
     expect(box!.y).toBeLessThan(200);
 
     await openPanel(page, "Case");
-    await expect(page.getByRole("region", { name: "Case board" })).toBeVisible();
-
-    await openPanel(page, "Notes");
-    const board = page.getByRole("region", { name: "Your suspicion board" });
-    const first = board.getByRole("group").first();
-    await first.getByRole("button", { name: "Unsure" }).click();
-    await expect(first.getByRole("button", { name: "Unsure" })).toHaveAttribute("aria-pressed", "true");
-    await first.getByRole("button", { name: "Add note" }).click();
+    const board = page.getByRole("region", { name: "Case board" });
+    await board.getByRole("list", { name: "Players" }).getByRole("button").first().click();
+    const note = board.getByRole("group", { name: /^Your note on / });
+    await note.getByRole("button", { name: "Add note" }).click();
+    await note.getByRole("textbox").fill("W".repeat(280));
+    await expect(note.getByRole("button", { name: "Save note" })).toBeVisible();
 
     const o = await overflow(page);
     expect(o.scroll).toBeLessThanOrEqual(o.client);
