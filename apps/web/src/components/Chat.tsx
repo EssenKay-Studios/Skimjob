@@ -27,10 +27,10 @@ import {
   type ReadState,
   type ThreadId,
 } from "../game/chat";
+import { seatOf } from "../game/hud";
 import type { Connection, Reply } from "../game/useGame";
 import { sentence } from "../api";
 import { Avatar } from "./Avatar";
-import { seatOfPlayer } from "./avatarLooks";
 import { Button } from "./Button";
 import { Bubble, Evidence, Plus, Send } from "./icons";
 import { FrameArt, SketchFrame, useElementSize } from "./SketchFrame";
@@ -87,7 +87,7 @@ function MessageRow({ m, ctx }: { m: ChatMessage; ctx: FeedCtx }) {
   const name = ctx.name(m.from);
   return (
     <li className={mine ? "chat-msg is-mine" : "chat-msg"}>
-      <Avatar name={plainName(ctx.seatName(m.from))} seat={seatOfPlayer(m.from)} size={32} bot={ctx.bot(m.from)} title={mine ? "You" : name} />
+      <Avatar name={plainName(ctx.seatName(m.from))} seat={seatOf(m.from)} size={32} bot={ctx.bot(m.from)} title={mine ? "You" : name} />
       <div className="chat-msg__body">
         <p className="chat-msg__meta">
           <span className="chat-msg__name">{mine ? "You" : name}</span>
@@ -258,7 +258,7 @@ export function ChatPanel(props: ChatPanelProps) {
           ) : (
             humans.map((p) => (
               <Button key={p.id} variant="secondary" seed={`dm-${p.id}`} className="chat__person" onClick={() => startDm(p.id)}>
-                <Avatar name={plainName(p.name)} seat={seatOfPlayer(p.id)} size={26} title={p.name} />
+                <Avatar name={plainName(p.name)} seat={seatOf(p.id)} size={26} title={p.name} />
                 <span className="chat__ellipsis">{p.name}</span>
               </Button>
             ))

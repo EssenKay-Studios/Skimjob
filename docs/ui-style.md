@@ -325,7 +325,7 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 
 ### Player avatars
 - 36–46px **blob-circles** (`border-radius:50% 46% 52% 48%`) with a 1.4–1.8px ink border, filled
-  with the player's **seat colour** (`--seat-1` … `--seat-12`, one per seat, so a crew of 12 never
+  with the player's **crew colour** (`--crew-1` … `--crew-12`, one per seat and the same one the crook figure wears, so a crew of 12 never
   repeats a colour; each is 4.5:1 or better against the cream initials), showing a hand-drawn mask
   or balaclava doodle or the player's initial in Pangolin 700 on cream. The seat number fixes the
   colour for the whole game; a leaver's seat is freed for the next joiner.

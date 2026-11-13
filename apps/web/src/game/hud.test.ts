@@ -17,6 +17,7 @@ import {
   presenceInfo,
   remainingMs,
   roomOptions,
+  seatOf,
   seatsOf,
   timerFor,
 } from "./hud";
@@ -82,6 +83,13 @@ describe("bank count", () => {
 });
 
 describe("seats", () => {
+  it("takes each player's seat from the engine id, so a gap in the seats keeps everyone's colour", () => {
+    expect(seatOf("p1")).toBe(0);
+    expect(seatOf("p12")).toBe(11);
+    const gap = config(0, { players: ["p1", "p3", "p4"].map((id) => ({ id, name: id, isBot: false })) });
+    expect(seatsOf(viewFor(createGame(gap), "p3")).map((x) => [x.id, x.seat])).toEqual([["p1", 0], ["p3", 2], ["p4", 3]]);
+  });
+
   it("lists everyone in seat order and marks who has locked in, for everyone (owner decision, 2 Nov; design §5.1)", () => {
     let s = createGame(config(3));
     expect(seatsOf(viewFor(s, "p2")).map((x) => [x.id, x.you, x.lockedIn])).toEqual([

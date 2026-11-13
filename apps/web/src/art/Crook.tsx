@@ -8,7 +8,7 @@
 // - <CrookSvg>: a standalone figure (gallery, spots).
 import { useId } from "react";
 import type { Seed } from "../components/sketch";
-import { accVar, crookLabel, crookLook, crewVar, isLightBody, nameTag, type CrookLook, type Expression, type Hat } from "./crookLooks";
+import { accVar, crookLabel, crookLook, crewVar, nameTag, type CrookLook, type Expression, type Hat } from "./crookLooks";
 
 const INK = "var(--art-ink)";
 const MASK = "var(--ink)";
@@ -177,7 +177,7 @@ function NameTag({ text, x, y, size, dashed = false, unflip = false }: { text: s
   );
 }
 
-function Face({ expression, top, light }: { expression: Expression; top: number; light: boolean }) {
+function Face({ expression, top }: { expression: Expression; top: number }) {
   const y = top + 23; // eye line
   const m = y + 15; // mouth line
   const eyes = [23, 41];
@@ -192,7 +192,7 @@ function Face({ expression, top, light }: { expression: Expression; top: number;
     <>
       {eyes.map((x) => (
         <g key={x}>
-          <ellipse cx={x} cy={y} rx={rx} ry={ry} fill="var(--paper-hi)" stroke={light ? INK : MASK} strokeWidth="1.2" />
+          <ellipse cx={x} cy={y} rx={rx} ry={ry} fill="var(--paper-hi)" stroke={MASK} strokeWidth="1.2" />
           <circle cx={x + px} cy={y + py} r={pr} fill={INK} />
           {!big && <circle cx={x + px - 0.9} cy={y + py - 0.9} r={0.7} fill="var(--paper-hi)" />}
           {expression === "smug" && (
@@ -239,7 +239,6 @@ function CrookBody({ look, expression = "neutral", bot = false, clipId }: CrookP
   const l = lookOf(look);
   const body = BODY[l.shape];
   const fill = crewVar(l.colour);
-  const light = isLightBody(l.colour);
   const y = body.top + 23;
   return (
     <>
@@ -264,7 +263,7 @@ function CrookBody({ look, expression = "neutral", bot = false, clipId }: CrookP
       />
       <path d="M15 22c3-5 8-8 13-8.6" fill="none" stroke="var(--art-hi)" strokeWidth="2.6" strokeLinecap="round" transform={`translate(0 ${body.top - 10})`} />
       <path d={body.d} fill="none" {...line} />
-      <Face expression={expression} top={body.top} light={light} />
+      <Face expression={expression} top={body.top} />
       <Hat hat={l.hat} colour={accVar(l.hatColour)} top={body.top} clipId={`${clipId}-hat`} />
       {expression === "nervous" && (
         <path
