@@ -150,7 +150,7 @@ test("the move panel: pick a room, coins into the bags, lock it in, change it; r
   await expect(page.getByText("Miss the deadline and you go to the Lobby, handing everything in.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
 
-  // The Vault's 3 coins, all in the duffel at first: tap one to pick it up, tap the Pocket to drop it; a drag sends another (design §3.2).
+  // The Vault's 3 coins start in the Grab row: tap one to pick it up, tap the Pocket to drop it; a drag sends another (design §3.2).
   await pickRoom(page, "Vault");
   // A fresh move holds nothing: the 3 coins are in the Grab row and Lock it in waits for one in a bag.
   await expect(pileCoins(page, "room")).toHaveCount(3);

@@ -342,8 +342,7 @@ sketchbook paper. Below, `[frame]` means the sketch frame from §4.
 - Each grabbed coin sits in the **crew duffel** (olive-green paper) or **your pocket** (clay
   paper). **Tap to pick:** a tap (or Enter) on any coin lifts it with a dashed clay ring, and a
   dashed clay place shows where it can go; a tap on the Duffel, the Pocket or the Grab row drops it
-  there (Esc puts it down). A drag does the same; dragging is never the only way. The grab stays at
-  least 1 coin, so the Grab row takes no coin back at 1. A
+  there (Esc puts it down). A drag does the same; dragging is never the only way. A fresh move starts with every coin in the Grab row; the Grab row takes any coin back, and Lock it in waits until at least 1 coin is in a bag (design §3.2). A
   line under the bags says what the duffel adds to each share, and a note warns when the bank may
   run short. A role's move power shows as room or player buttons. End with a **Primary** "Lock it in" button.
 
