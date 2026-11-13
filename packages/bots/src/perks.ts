@@ -5,7 +5,6 @@
 // personality's `shop` chance, when its stash covers the cost and the perk
 // fits what it is doing:
 // - Tail: the richest coin room other than its own.
-// - Stamped alibi: when it hands everything in and the crew suspects it.
 // - Check ballot: never (bots don't read others' ballots).
 // - Soft shoes: once Wanted is up.
 // - Blackout: when it skims, its own room next round.
@@ -19,9 +18,6 @@ import { ofType, roomsWhere } from "./read";
 import { publicSuspicion } from "./claims";
 import { jobThisRound } from "./alarm";
 
-/** Public suspicion of me at or above this makes a true alibi worth stamping (bot setting). */
-const STAMP_ALIBI_AT = 0.5;
-
 /** The use of `perk` that fits `move`, or null when the bot doesn't want it. */
 function wanted(view: PlayerView, perk: PerkId, move: Move): PerkUse | null {
   const me = view.me.id;
@@ -33,8 +29,6 @@ function wanted(view: PlayerView, perk: PerkId, move: Move): PerkUse | null {
         .sort((a, b) => roomDef(job, b).coins - roomDef(job, a).coins)[0];
       return room === undefined ? null : { kind: "tail", room };
     }
-    case "alibi":
-      return move.pocket === 0 && (publicSuspicion(view).get(me) ?? 0) >= STAMP_ALIBI_AT ? { kind: "alibi" } : null;
     case "ballot":
       return null;
     case "softShoes":

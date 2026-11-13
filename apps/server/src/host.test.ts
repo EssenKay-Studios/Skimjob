@@ -222,6 +222,25 @@ describe("extend (design §15)", () => {
   });
 });
 
+describe("extend in the alibi window (design §10, §15)", () => {
+  it("moves alibi:<n> on by extendMs; the window then closes exactly then", async () => {
+    const { id, seats } = await startGame(2);
+    while ((await load(id)).phase.kind === "planning") await step(id);
+    expect((await load(id)).phase).toEqual({ kind: "alibi", round: 1 });
+    const before = (await deadlines(id))[0]!;
+    expect(before).toEqual({ key: "alibi:1", due: clock.now() + H1.alibiMs, paused: false });
+    const r = await req("POST", `/games/${id}/extend`, seats[0]!.who);
+    expect(r.status).toBe(200);
+    expect(r.body.extendedMs).toBe(H1.extendMs);
+    expect(await deadlines(id)).toEqual([{ ...before, due: before.due + H1.extendMs }]);
+    clock.advance(H1.alibiMs + H1.extendMs - 1);
+    expect(await app.scheduler.tick()).toBe(0);
+    clock.advance(1);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect((await load(id)).phase.kind).not.toBe("alibi");
+  });
+});
+
 describe("end the game early (design §6.2, §16)", () => {
   it("host only; the event reaches every socket; bots and deadlines stop; ending twice is fine", async () => {
     const { id, seats } = await startGame(2);

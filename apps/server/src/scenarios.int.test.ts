@@ -175,6 +175,8 @@ function nextDeadline(state: GameState): SystemCommand[] {
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
   // design §9.3: the result window closes when nobody called an emergency.
+  // design §10: the alibi window closes after every round that goes on.
+  if (phase.kind === "alibi") return [{ type: "advance", deadline: { kind: "alibi", round: phase.round } }];
   if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
     const schedule: SystemCommand[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` }];
@@ -463,6 +465,10 @@ describe("scenarios: end-to-end stories over HTTP + WebSocket", () => {
     expect(await a.send({ type: "callEmergency" })).toMatchObject({ rejected: true });
     expect(await b.send({ type: "submitMove", move: { room: "office", duffel: 2, pocket: 0 } })).toMatchObject({ ok: true });
     await app.live.system(game.id, { type: "advance", deadline: { kind: "round", round: 1 } });
+    // design §10: the alibi window comes first, and no emergency is called in it.
+    expect((await load(game.id)).phase).toEqual({ kind: "alibi", round: 1 });
+    expect(await a.send({ type: "callEmergency" })).toMatchObject({ rejected: true });
+    await app.live.system(game.id, { type: "advance", deadline: { kind: "alibi", round: 1 } });
     expect((await load(game.id)).phase).toEqual({ kind: "result", round: 1 });
     // The crew's pool (1 for 4 players): the caller is named; the notice period is the server's.
     expect(await a.send({ type: "callEmergency" })).toMatchObject({ ok: true });

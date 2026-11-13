@@ -1,16 +1,18 @@
 // What players say: one public "said" event for every statement (design §19.2
-// seam 5): the plan board's snapshot as a round resolves (§10), role claims and
-// alibis (§11.3). Talk changes no rule; it is put on the ledger so it is
+// seam 5): the plan board's snapshot as a round resolves, role claims (§11.3) and
+// alibis (§10), and each player's secret trust marks on alibis (§10). Talk changes no rule; it is put on the ledger so it is
 // structured and lasting (the case board, the reveal, and bots, which don't
 // read chat). Any role in the content may be claimed, whether or not it can be
 // in this game: refusing a role outside the game's pool would tell players what
 // the (hidden) pool holds.
 import { POWER_CLAIM_TARGET } from "@skimjob/content";
-import type { GameEvent, GameState, PlanEditRecord, PlanEntry, PlayerId, PowerClaim, Statement } from "./types";
-import { PUBLIC } from "./types";
+import type { AlibiMark, GameEvent, GameState, PlanEditRecord, PlanEntry, PlayerId, PowerClaim, Statement } from "./types";
+import { PUBLIC, secretTo } from "./types";
 import { isObject, playerFor, show } from "./check";
 import { rolesFor } from "./overrides";
-import { stampedAlibi } from "./perks";
+import { applyEvent } from "./reduce";
+import { afterResult } from "./meeting";
+import type { Draw } from "./handle";
 
 const said = (statement: Statement): GameEvent => ({ type: "said", visibility: PUBLIC, statement });
 
@@ -27,16 +29,64 @@ export function claimRole(state: GameState, command: Record<string, unknown>): G
   return [said({ kind: "role", player: player.id, role, stretch })];
 }
 
-/** design §11.3 Alibis: a room in play and a resolved round, at any time (owner, 6 Nov); one per player per round. */
+/**
+ * design §10 Alibis: a room in play, posted in that round's alibi window (owner, 13 Nov); one per
+ * player per round, never changed. No alibi for an older round, and none once the window closes.
+ */
 export function postAlibi(state: GameState, command: Record<string, unknown>): GameEvent[] | string {
   const player = playerFor(state, command);
   if (typeof player === "string") return player;
   const { round, room } = command;
-  if (typeof round !== "number" || !Number.isInteger(round) || round < 1 || round > state.resolvedRound) return `round ${show(round)} has not resolved`;
+  if (state.phase.kind !== "alibi" || round !== state.phase.round) return `the alibi window for round ${show(round)} is not open`;
   if (typeof room !== "string" || !state.rooms.includes(room)) return `room ${show(room)} is not open in this game`;
   if (statements(state).some((s) => s.kind === "alibi" && s.player === player.id && s.round === round)) return `you already posted an alibi for round ${round}`;
-  // design §12: a true alibi for a round its poster bought a Stamped alibi in is stamped "verified".
-  return [said({ kind: "alibi", player: player.id, round, room }), ...stampedAlibi(state, player.id, round, room)];
+  return [said({ kind: "alibi", player: player.id, round, room })];
+}
+
+/**
+ * design §4.1, §10: `round`'s alibi window closes. Everyone who played it and posted no alibi is
+ * shown in their real room, as a fact; then the meeting the round called is awaited, else the
+ * result window opens, or with the crew's pool empty the next round starts (§4.2 steps 9–10, §9.3).
+ */
+export function closeAlibi(state: GameState, round: unknown, draw: Draw): GameEvent[] | string {
+  if (state.phase.kind !== "alibi" || round !== state.phase.round) return `the round ${show(round)} alibi window is not open`;
+  const posted = new Set(statements(state).flatMap((s) => (s.kind === "alibi" && s.round === round ? [s.player] : [])));
+  const real = new Map(state.log.flatMap((e) => (e.type === "coinsGrabbed" && e.round === round ? [[e.player, e.room] as const] : [])));
+  // Seat order; a player who sat the round out (§3.3) was in no room, so has no fact.
+  const noAlibi = state.playerOrder.flatMap((p) => (!posted.has(p) && real.has(p) ? [{ player: p, room: real.get(p) as string }] : []));
+  const closed: GameEvent = { type: "alibiWindowClosed", visibility: PUBLIC, round, noAlibi };
+  const settled = applyEvent(state, closed);
+  return settled.meetingDue ? [closed] : [closed, ...afterResult(settled, draw)];
+}
+
+/** The marks `player` has made, by `round` and target (the latest of each). design §10 */
+export function marksOf(log: readonly GameEvent[], player: PlayerId): Map<string, AlibiMark> {
+  const marks = new Map<string, AlibiMark>();
+  for (const e of log) {
+    if (e.type !== "alibiMarked" || e.player !== player) continue;
+    const key = `${e.round}/${e.target}`;
+    if (e.mark === null) marks.delete(key);
+    else marks.set(key, e.mark);
+  }
+  return marks;
+}
+
+/**
+ * design §10 Trust marks: mark another player's alibi in a round whose card is out (its alibi window
+ * has closed) Trusted or Liar, or clear the mark (null); changeable at any time, past rounds too.
+ * Secret to the marker for good.
+ */
+export function markAlibi(state: GameState, command: Record<string, unknown>): GameEvent[] | string {
+  const player = playerFor(state, command);
+  if (typeof player === "string") return player;
+  const { round, target, mark } = command;
+  if (typeof round !== "number" || !Number.isInteger(round) || round < 1 || round > state.resolvedRound) return `round ${show(round)} has not been played`;
+  if (state.phase.kind === "alibi" && state.phase.round === round) return `round ${round}'s card is not out yet`;
+  if (!isSeat(state, target)) return `unknown player ${show(target)}`;
+  if (target === player.id) return "you can't mark your own alibi";
+  if (mark !== null && mark !== "trusted" && mark !== "liar") return "mark must be trusted, liar or null";
+  if ((marksOf(state.log, player.id).get(`${round}/${target}`) ?? null) === mark) return "that is already your mark";
+  return [{ type: "alibiMarked", visibility: secretTo(player.id), player: player.id, round, target, mark }];
 }
 
 const isSeat = (state: GameState, id: unknown): id is PlayerId => typeof id === "string" && Object.hasOwn(state.players, id);

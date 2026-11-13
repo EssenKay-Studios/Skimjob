@@ -120,6 +120,7 @@ describe("12 players — design §3, §6.2, §8", () => {
       sched("meeting-1"),
       { type: "advance", deadline: { kind: "round", round: 5 } },
       { type: "advance", deadline: { kind: "round", round: 6 } },
+      { type: "advance", deadline: { kind: "alibi", round: 4 } },
       { type: "advance", deadline: { kind: "result", round: 4 } },
       { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-1" } },
       { type: "advance", deadline: { kind: "closeMeeting", meetingId: "meeting-1" } },

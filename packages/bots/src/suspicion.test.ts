@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { viewFor, type GameState, type PlayerId } from "@skimjob/engine";
 import { SUSPICION_WEIGHTS as W, mostSuspicious, suspicion } from "./suspicion";
-import { closeResult, emergencyMeeting, game, round, run, type Plan } from "./testkit";
+import { alibiWindow, closeAlibi, closeResult, emergencyMeeting, game, round, run, type Plan } from "./testkit";
 
 const scoresOf = (s: GameState, viewer: PlayerId) => suspicion(viewFor(s, viewer));
 
@@ -111,11 +111,10 @@ describe("suspicion — design §17.3", () => {
     expect(scoresOf(s, "ana").get("ben")).toBe(-W.verified);
   });
 
-  it("no alibi counts once the crew has had its say about the round (the next planning, or a later round) — design §11.3", () => {
-    let s = round(game(3), { ana: { room: "office" }, ben: { room: "office" }, carl: { room: "lobby", alibi: null } });
-    expect(scoresOf(s, "ana").get("carl")).toBe(0); // just resolved: Carl may yet post it
-    s = round(s, { ana: { room: "office" }, ben: { room: "office" }, carl: { room: "lobby" } });
-    expect(scoresOf(s, "ana").get("carl")).toBe(W.noAlibi);
+  it("no alibi counts once the round's alibi window has closed — design §10, §11.3", () => {
+    const s = alibiWindow(game(3), { ana: { room: "office" }, ben: { room: "office" }, carl: { room: "lobby", alibi: null } });
+    expect(scoresOf(s, "ana").get("carl")).toBe(0); // the window is open: Carl may yet post it
+    expect(scoresOf(closeAlibi(s), "ana").get("carl")).toBe(W.noAlibi);
   });
 
   it("a shakedown resets the target's score: low if clean, a little raised if not — design §11.3", () => {

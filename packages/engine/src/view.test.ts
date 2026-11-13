@@ -22,8 +22,11 @@ const config = (voteVisibility: GameConfig["voteVisibility"] = "hiddenThenReveal
   voteVisibility,
 });
 
-/** Round 1 resolves (everyone misses): the result window (design §9.3). */
-const ROUND_TO_RESULT = [{ type: "advance", deadline: { kind: "round", round: 1 } }];
+/** Round 1 resolves (everyone misses), its alibi window closes (design §10): the result window (§9.3). */
+const ROUND_TO_RESULT = [
+  { type: "advance", deadline: { kind: "round", round: 1 } },
+  { type: "advance", deadline: { kind: "alibi", round: 1 } },
+];
 const VIEWERS = ["ana", "ben", "carl"]; // carl owns no sample event
 const ended = (s: GameState): GameState => ({ ...s, phase: { kind: "ended", outcome: sampleEvents.gameEnded.outcome } });
 const withEvent = (s: GameState, event: GameEvent): GameState => ({ ...s, log: [...s.log, event] });
@@ -196,12 +199,14 @@ describe("eventsSince — 'while you were away' input, design §13", () => {
 
 describe("views are copies — design §17.3 (bots only get viewFor), task 8 review", () => {
   it("changing every part of a view changes neither the game nor later views", () => {
-    // A game with a Security watch, a resolved round, an alibi, a proposal, a sealed vote and a pending move.
+    // A game with a Security watch, a resolved round, an alibi and a trust mark (design §10), a proposal, a sealed vote and a pending move.
     let s = run(
       createGame(config()),
       { type: "submitMove", player: "ana", move: { ...fullGrab("security"), watch: "vault" } },
       { type: "advance", deadline: { kind: "round", round: 1 } },
       { type: "postAlibi", player: "ana", round: 1, room: "office" },
+      { type: "advance", deadline: { kind: "alibi", round: 1 } },
+      { type: "markAlibi", player: "ana", round: 1, target: "ben", mark: "liar" },
       { type: "advance", deadline: { kind: "result", round: 1 } },
       { type: "proposeMeeting", player: "ana", slot: "fri" },
       { type: "sealVote", player: "ana", vote: { kind: "shakedown", target: "ben" } },

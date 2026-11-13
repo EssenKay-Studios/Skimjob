@@ -5,7 +5,7 @@
 // (STATUS.md task 8) iterate over these, so every event type gets covered.
 import type { Command, CommandType } from "./commands";
 import type { EventOfType, GameEventType } from "./events";
-import { PUBLIC, REVEAL, privateTo } from "./visibility";
+import { PUBLIC, REVEAL, privateTo, secretTo } from "./visibility";
 
 const ana = "ana";
 const ben = "ben";
@@ -109,7 +109,8 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
       },
     },
   },
-  alibiVerified: { type: "alibiVerified", visibility: PUBLIC, player: ana, round: 1, room: "lobby" },
+  alibiWindowClosed: { type: "alibiWindowClosed", visibility: PUBLIC, round: 1, noAlibi: [{ player: ben, room: "vault" }] },
+  alibiMarked: { type: "alibiMarked", visibility: secretTo(ana), player: ana, round: 1, target: ben, mark: "liar" },
   meetingProposed: { type: "meetingProposed", visibility: PUBLIC, proposalId: "p1", by: ana, slot: "2026-11-01T19:00Z" },
   meetingProposalAccepted: { type: "meetingProposalAccepted", visibility: PUBLIC, proposalId: "p1", by: ben },
   meetingScheduled: { type: "meetingScheduled", visibility: PUBLIC, meetingId: "m1", slot: "2026-11-01T19:00Z", proposalId: "p1" },
@@ -162,6 +163,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
 export const sampleCommands: { readonly [T in CommandType]: Extract<Command, { type: T }> } = {
   submitMove: { type: "submitMove", player: ana, move: { room: "security", duffel: 0, pocket: 0, watch: "vault" } },
   postAlibi: { type: "postAlibi", player: ana, round: 1, room: "office" },
+  markAlibi: { type: "markAlibi", player: ana, round: 1, target: ben, mark: "trusted" },
   claimRole: { type: "claimRole", player: ben, role: "auditor" },
   proposeMeeting: { type: "proposeMeeting", player: ana, slot: "2026-11-01T19:00Z" },
   acceptMeeting: { type: "acceptMeeting", player: ben, proposalId: "p1" },

@@ -71,9 +71,9 @@ function step(s: GameState, ...commands: unknown[]): GameState {
   }
   return s;
 }
-/** Resolves the round being planned, and `p` spends the crew's emergency in its result window; the meeting opens (design §9.3). */
+/** Resolves the round being planned, closes its alibi window (design §10), and `p` spends the crew's emergency in its result window; the meeting opens (design §9.3). */
 function withEmergency(s: GameState, p: string): GameState {
-  s = step(s, ROUND(s), { type: "callEmergency", player: p });
+  s = step(s, ROUND(s), { type: "advance", deadline: { kind: "alibi", round: s.round } }, { type: "callEmergency", player: p });
   return step(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: s.pendingEmergency?.meetingId } });
 }
 const closeMeeting = (s: GameState) => run(s, { type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });

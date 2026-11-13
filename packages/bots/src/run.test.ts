@@ -187,10 +187,11 @@ describe("personalities behave as design §17.3 describes", () => {
     expect(careful("Cautious")).toBeGreaterThan(careful("Honest"));
   });
 
-  it("sanity: honest crews usually pull the job off, and most shakedowns in a mixed crew catch someone with loot", () => {
+  it("sanity: honest crews often pull the job off, and most shakedowns in a mixed crew catch someone with loot", () => {
     // Loose bounds so the balance pass can retune numbers without breaking this; the simulator reports the real figures.
-    // 0.6 (was 0.8): R7's raids and busts (S3a.2) end some honest games too, until the S5 balance pass tunes them.
-    expect(stats(["honest"], 5, 20).success).toBeGreaterThanOrEqual(0.6);
+    // 0.4 (was 0.8, then 0.6): R7's raids and busts (S3a.2) end some honest games too, until the S5 balance pass tunes them;
+    // about half of honest 5-player games succeed (200 seeds, before and after the #294 alibi window), so 20 games at 0.6 was seed luck.
+    expect(stats(["honest"], 5, 60).success).toBeGreaterThanOrEqual(0.4);
     expect(all.shakedowns).toBeGreaterThan(0);
     // 0.15 (was 0.5): raids seize whole grabs, pockets included (S3a.2); a shakedown catches anything above the share (design §9.6).
     expect(all.dirty / all.shakedowns).toBeGreaterThan(0.15);

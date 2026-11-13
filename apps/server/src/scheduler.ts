@@ -39,13 +39,15 @@ const advance = (deadline: Deadline): SystemCommand => ({ type: "advance", deadl
 
 /**
  * The deadlines the host's extend moves on (M2-13, design §15): the round being
- * planned (with its early end, set once everyone locked in), the result
- * window or the open vote window. None in other phases.
+ * planned (with its early end, set once everyone locked in), the alibi window
+ * (design §10), the result window or the open vote window. None in other phases.
  */
 export function extendKeys(s: GameState): readonly string[] {
   switch (s.phase.kind) {
     case "planning":
       return [`round:${s.phase.round}`, `roundEarly:${s.phase.round}`];
+    case "alibi":
+      return [`alibi:${s.phase.round}`];
     case "result":
       return [`result:${s.phase.round}`];
     case "meeting":
@@ -82,6 +84,8 @@ export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeetin
     if (allLockedIn(s)) out.push({ key: `roundEarly:${round}`, command, dueAt: now + t.lockInGraceMs });
     return out;
   },
+  // The alibi window after every round's result: planning waits for it. design §4.1, §10
+  alibi: (s, t, now) => (s.phase.kind === "alibi" ? [{ key: `alibi:${s.phase.round}`, command: advance({ kind: "alibi", round: s.phase.round }), dueAt: now + t.alibiMs }] : []),
   // The result window, when an emergency can be called; once one is, the next round waits for its meeting. design §9.3
   result: (s, t, now) =>
     s.phase.kind === "result" && !s.pendingEmergency

@@ -75,7 +75,7 @@ export const ROLE_TEXT: Readonly<Record<RoleId, RoleText>> = {
     name: "Locksmith",
     power: "Each of your coins rings one time less.",
     win: "crew",
-    spot: "A room rang less than its visitors' claims add up to.",
+    spot: "A room rang less than its visitors' alibis add up to.",
   },
   detective: {
     name: "Detective",
@@ -125,7 +125,6 @@ export const ROLE_TEXT: Readonly<Record<RoleId, RoleText>> = {
 /** Perk text by perk id. design §20.3 */
 export const PERK_TEXT: Readonly<Record<string, InfoText>> = {
   tail: { name: "Tail", text: "Next round, also see who was in one more room." },
-  alibi: { name: "Stamped alibi", text: 'If your alibi is true, the ledger stamps it "verified".' },
   ballot: { name: "Check ballot", text: "See one player's vote at the next meeting." },
   softShoes: { name: "Soft shoes", text: "Next round, your coins make no sound at all." },
   blackout: { name: "Blackout", text: "Next round, one room goes dark: no sightings, no cameras." },
@@ -170,6 +169,10 @@ export const TIPS = {
   emergency: { name: "Emergency", text: "The crew shares a few emergency meetings. Anyone can call one after a round's result." },
   planBoard: { name: "Plan board", text: "Drag the crew onto rooms. Nothing is binding." },
   iAgree: { name: "I agree", text: "Tap when the plan suits you. Anyone can still break it." },
+  alibiPopup: { name: "Where were you?", text: "After each round, say which room you were in, true or a lie. One alibi a round, and you can't change it." },
+  snapshot: { name: "Snapshot card", text: "Where everyone says they were this round, with what everyone saw: bells, raids, the event and missing coins." },
+  trustMarks: { name: "Your marks", text: "Mark any crook's alibi Trusted or Liar for your own notes. Only you see your marks." },
+  cardKey: { name: "How to read the card", text: "A dashed ring is what someone says. A solid ring is a fact: they gave no alibi, so the game shows where they really were." },
   leads: { name: "Leads", text: "What happened, newest first. ⚠ means two facts don't add up." },
   pins: { name: "Pins", text: "Pin a lead or one fact. Only you see your pins." },
   suspect: { name: "Suspect", text: "Who your facts point at: your pins if you have 2 or more, otherwise every lead. A hunch, not proof." },

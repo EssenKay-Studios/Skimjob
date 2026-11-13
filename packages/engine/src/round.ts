@@ -20,7 +20,6 @@ import { roleHandler } from "./roles";
 import { boughtIn, roundSales } from "./perks";
 import { coolBells, factVisibility, isTaped, raidedRooms, ringBells } from "./bells";
 import { honestyOf, splitDuffel } from "./shares";
-import { afterResult } from "./meeting";
 
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
@@ -119,7 +118,7 @@ function grabbed(order: readonly PlayerId[], asked: (id: PlayerId) => number, ba
  * a use the other already did is "already done" and not spent (§11.4).
  * Otherwise the fold of `roundResolved` notes the meeting the round called
  * (§4.2 step 9: a raid calls a briefing, a third of the bank a regular
- * meeting) and awaits it; else the result window opens, or the next round starts (§9.3).
+ * meeting) and opens the alibi window (§10); what follows waits for it (`closeAlibi`, said.ts).
  */
 export function resolveRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const job = roundJob(jobFor(state.config), state.card, eventsFor(state.config));
@@ -345,7 +344,6 @@ export function resolveRound(state: GameState, round: number, draw: Draw): GameE
   // §4.2 step 8: the end check (a bust has already ended the game).
   const ended = busted ? gameEnded(state, events, "bust", lyingLow) : endCheck(state, events, round);
   if (ended) return [...events, ended];
-  // §4.2 steps 9–10: the meeting the round called is awaited; else the result window, or with the pool empty the next round (§9.3).
-  const settled = events.reduce(applyEvent, state);
-  return settled.meetingDue ? events : [...events, ...afterResult(settled, draw)];
+  // §4.1, §10: the alibi window opens; the meeting the round called, the result window or the next round wait for it to close.
+  return events;
 }

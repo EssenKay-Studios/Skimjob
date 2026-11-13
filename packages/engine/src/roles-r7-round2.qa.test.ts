@@ -8,7 +8,7 @@ import { setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand, type CommandResult } from "./handle";
 import { viewFor } from "./view";
-import { closeResultWindow } from "./result.testkit";
+import { closeAlibiWindow, closeResultWindow } from "./result.testkit";
 import { fullGrab } from "./grab.testkit";
 import { giveTail } from "./perks.testkit";
 
@@ -35,7 +35,8 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
     const planning = (cmd as { type?: string }).type === "submitMove" || (cmd as { type?: string }).type === "useAbility";
     const r = handleCommand(planning ? planningOpen(s) : s, cmd);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(cmd)}: ${r.reason}`);
-    return r.state;
+    // design §10: a round's alibi window closes at once, nobody posting.
+    return must(closeAlibiWindow(r.state));
   }, state);
 }
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
@@ -45,6 +46,16 @@ const mv = (player: string, room: string, extra: object = {}) => ({ type: "submi
 const watch = (player: string, room: string, extra: object = {}) => mv(player, "security", { watch: room, ...extra });
 const cut = (player: string, room: string) => mv(player, "lobby", { ability: { kind: "blackout", room } });
 const json = (s: GameState, id: string) => JSON.stringify(viewFor(s, id));
+/**
+ * Resolve the round being planned with everyone posting the same alibi `room`, so the closed
+ * window shows nobody's real room (design §10) and only what the test is about can differ.
+ */
+const resolveAlibied = (s: GameState, room: string): GameState => {
+  let x = must(handleCommand(s, ROUND(s)));
+  for (const player of x.playerOrder) x = must(handleCommand(x, { type: "postAlibi", player, round: s.round, room }));
+  return must(closeAlibiWindow(x));
+};
+
 
 /** Round 1 with the given cuts (other seats in the Lobby), on to round 2's planning with those rooms dark. */
 function darkRound2(players: number, roles: string[], cuts: [string, string][]): GameState {
@@ -112,14 +123,14 @@ describe("QA an Electrician cut on Security takes Security's own cameras offline
 
   it("viewFor: the dark-Security watcher's view is the same whoever is in the room they watch, in the result window", () => {
     const s = darkRound2(5, ["electrician"], [["p0", "security"]]);
-    const a = run(s, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "office"), mv("p4", "lobby"), ROUND);
-    // Same public facts (two in the Office), different people.
-    const b = run(s, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "lobby"), mv("p3", "office"), mv("p4", "office"), ROUND);
+    const a = resolveAlibied(run(s, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "office"), mv("p4", "lobby")), "lobby");
+    // Same public facts (two in the Office, the same alibis), different people.
+    const b = resolveAlibied(run(s, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "lobby"), mv("p3", "office"), mv("p4", "office")), "lobby");
     expect(json(a, "p1")).toBe(json(b, "p1"));
     // Sanity: with the lights on, the same watch tells the games apart.
     const lit = darkRound2(5, ["electrician"], [["p0", "vault"]]);
-    const la = run(lit, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "office"), mv("p4", "lobby"), ROUND);
-    const lb = run(lit, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "lobby"), mv("p3", "office"), mv("p4", "office"), ROUND);
+    const la = resolveAlibied(run(lit, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "office"), mv("p3", "office"), mv("p4", "lobby")), "lobby");
+    const lb = resolveAlibied(run(lit, mv("p0", "lobby"), watch("p1", "office"), mv("p2", "lobby"), mv("p3", "office"), mv("p4", "office")), "lobby");
     expect(json(la, "p1")).not.toBe(json(lb, "p1"));
   });
 

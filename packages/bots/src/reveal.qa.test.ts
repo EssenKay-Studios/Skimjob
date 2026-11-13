@@ -78,6 +78,7 @@ function play(c: GameConfig, absent: readonly PlayerId[] = [], ids: readonly Per
     else if (state.pendingEmergency)
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
     else if (phase.kind === "planning") system({ type: "advance", deadline: { kind: "round", round: phase.round } });
+    else if (phase.kind === "alibi") system({ type: "advance", deadline: { kind: "alibi", round: phase.round } });
     else if (phase.kind === "result") system({ type: "advance", deadline: { kind: "result", round: phase.round } });
     else if (phase.kind === "awaitingMeeting") {
       if (!state.scheduledMeeting) system({ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` });

@@ -1,5 +1,5 @@
 // Scheduler and elastic timing. docs/m2-plan.md M2-4; design §4.1, §11.1, §11.3
-import { BANK_JOB } from "@skimjob/content";
+import { ALIBI_WINDOW_MS, BANK_JOB } from "@skimjob/content";
 import type { GameState, VoteVisibility } from "@skimjob/engine";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -12,7 +12,7 @@ import { buildServer } from "./server";
 import type { LobbySettings } from "./settings";
 import { createGameStore, type GameStore } from "./store";
 import { testDb } from "./testkit";
-import { tickFor, TICK_MS, TIMINGS } from "./timing";
+import { scaleTiming, tickFor, TICK_MS, TIMINGS } from "./timing";
 
 const QUICK = TIMINGS["15m"];
 
@@ -103,6 +103,34 @@ describe("presets (design §17)", () => {
     expect(TIMINGS["3h"].meetingMs).toBe(5 * 60_000);
     for (const k of ["1d", "3d", "1w"] as const) expect(TIMINGS[k].autoMeetings).toBe(false);
   });
+
+  it("the alibi window is the same 20 s in every preset, and shrinks with TIME_SCALE (design §10, §17.2)", () => {
+    expect(ALIBI_WINDOW_MS).toBe(20_000);
+    for (const t of Object.values(TIMINGS)) expect(t.alibiMs).toBe(ALIBI_WINDOW_MS);
+    expect(scaleTiming(QUICK, 0.1).alibiMs).toBe(2_000);
+  });
+});
+
+describe("the alibi window (design §4.1, §10)", () => {
+  it("is closed the way a round is: alibi:<n> is planned alibiMs after the round resolves, fires on the tick, then the result window", { timeout: 60_000 }, async () => {
+    const { id } = await startGame(0, { sessionLength: "15m" }, 2);
+    clock.advance(QUICK.roundMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect((await load(id)).phase).toEqual({ kind: "alibi", round: 1 });
+    expect(await deadlines(id)).toEqual([{ key: "alibi:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
+    clock.advance(QUICK.alibiMs - 1);
+    expect(await app.scheduler.tick()).toBe(0);
+    clock.advance(1);
+    expect(await app.scheduler.tick()).toBe(1);
+    const s = await load(id);
+    // Nobody posted: every seat that played is shown in its real room.
+    expect(s.log.find((e) => e.type === "alibiWindowClosed")).toMatchObject({ round: 1, visibility: { kind: "public" } });
+    expect((s.log.find((e) => e.type === "alibiWindowClosed") as unknown as { noAlibi: unknown[] }).noAlibi).toHaveLength(3);
+    expect(s.phase).toEqual({ kind: "result", round: 1 });
+    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
+    // A stale alibi row for a closed window is refused by the engine: dropped, nothing changes.
+    await expect(app.live.system(id, { type: "advance", deadline: { kind: "alibi", round: 1 } })).rejects.toThrow(/refused/);
+  });
 });
 
 describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
@@ -116,6 +144,7 @@ describe("all-bot games on a fake clock (M2-4 acceptance)", () => {
           if (!seen.has(d.key)) {
             seen.set(d.key, d.due);
             if (d.key.startsWith("round:")) expect(d.due - clock.now()).toBe(QUICK.roundMs); // design §17.1
+            if (d.key.startsWith("alibi:")) expect(d.due - clock.now()).toBe(QUICK.alibiMs); // design §10
             if (d.key.startsWith("result:")) expect(d.due - clock.now()).toBe(QUICK.resultMs); // design §9.3
             if (d.key.startsWith("closeMeeting:")) expect(d.due - clock.now()).toBe(QUICK.meetingMs);
             // STATUS: the shakedown window always runs its full server-set length. design §9.6
@@ -155,8 +184,12 @@ describe("restarts (M2-4 acceptance)", () => {
     expect(await app.scheduler.tick()).toBe(1);
     const s = await load(id);
     expect(count(s, "roundResolved")).toBe(1);
-    // design §9.3: the round opens the result window, whose deadline then starts round 2.
-    expect(s.phase).toEqual({ kind: "result", round: 1 });
+    // design §10, §9.3: the round opens the alibi window, then the result window, whose deadline then starts round 2.
+    expect(s.phase).toEqual({ kind: "alibi", round: 1 });
+    expect(await deadlines(id)).toEqual([{ key: "alibi:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
+    clock.advance(QUICK.alibiMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
     expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
     clock.advance(QUICK.resultMs);
     expect(await app.scheduler.tick()).toBe(1);
@@ -177,7 +210,7 @@ describe("restarts (M2-4 acceptance)", () => {
     ]);
     await app.close();
     await boot();
-    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
+    expect(await deadlines(id)).toEqual([{ key: "alibi:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
     expect(await app.scheduler.tick()).toBe(0);
     expect(count(await load(id), "roundResolved")).toBe(1);
   });
@@ -209,7 +242,7 @@ describe("failures (PR #22 review)", () => {
     expect(await sched.tick()).toBe(1);
     const s = await load(id);
     expect(count(s, "roundResolved")).toBe(1);
-    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
+    expect(await deadlines(id)).toEqual([{ key: "alibi:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
   });
 
   it("a refused (stale) deadline is dropped and the game's real next deadline is planned", { timeout: 60_000 }, async () => {
@@ -225,7 +258,7 @@ describe("failures (PR #22 review)", () => {
     ]);
     expect(await app.scheduler.tick()).toBe(0);
     expect(count(await load(id), "roundResolved")).toBe(1);
-    expect(await deadlines(id)).toEqual([{ key: "result:1", due: clock.now() + QUICK.resultMs, paused: false }]);
+    expect(await deadlines(id)).toEqual([{ key: "alibi:1", due: clock.now() + QUICK.alibiMs, paused: false }]);
   });
 });
 
@@ -246,6 +279,11 @@ describe("the emergency's notice and the result window (design §9.3)", () => {
     };
     expect(await send({ type: "callEmergency" })).toMatchObject({ rejected: true });
     clock.advance(QUICK.roundMs);
+    expect(await app.scheduler.tick()).toBe(1);
+    // design §9.3, §10: not during the alibi window either; the result window opens once it closes.
+    expect((await load(id)).phase).toEqual({ kind: "alibi", round: 1 });
+    expect(await send({ type: "callEmergency" })).toMatchObject({ rejected: true });
+    clock.advance(QUICK.alibiMs);
     expect(await app.scheduler.tick()).toBe(1);
     expect((await load(id)).phase).toEqual({ kind: "result", round: 1 });
     expect(await send({ type: "callEmergency" })).toMatchObject({ ok: true });

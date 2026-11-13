@@ -26,7 +26,7 @@ function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
   };
 }
 
-/** Every seat a Lookout (acts only when used), all seven perks on sale, every stash at 9 coins. */
+/** Every seat a Lookout (acts only when used), every perk on sale, every stash at 9 coins. */
 function game(players: number): GameState {
   const cfg = config(players);
   const s = replay(
@@ -50,6 +50,7 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
 const buy = (p: string, perk: unknown) => ({ type: "buyPerk", player: p, perk });
 const mv = (p: string) => ({ type: "submitMove", player: p, move: fullGrab("lobby", 0) });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+const ALIBI = (s: GameState) => ({ type: "advance", deadline: { kind: "alibi", round: s.resolvedRound } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
 
 const ledger = (s: GameState, id: string) => viewFor(s, id).ledger.map(({ event }) => event);
@@ -60,7 +61,6 @@ describe("anonymous purchases: the public log can't name a buyer — design §12
     for (const n of [3, 8, 12]) {
       const perks = {
         tail: { kind: "tail", room: "vault" },
-        alibi: { kind: "alibi" },
         ballot: { kind: "ballot", target: "p0" },
         softShoes: { kind: "softShoes" },
         blackout: { kind: "blackout", room: "office" },
@@ -83,7 +83,6 @@ describe("anonymous purchases: the public log can't name a buyer — design §12
     // p0, p1 and p3 lock in, in that order; p2 never does (its default move). p3 watches.
     const perks: unknown[] = [
       { kind: "tail", room: "vault" },
-      { kind: "alibi" },
       { kind: "ballot", target: "p3" },
       { kind: "softShoes" },
       { kind: "blackout", room: "office" },
@@ -103,7 +102,7 @@ describe("anonymous purchases: the public log can't name a buyer — design §12
             if (when === "afterOwnLock" && id === buyer) steps.push(buy(buyer, perk));
           }
           if (when === "last" || (when === "afterOwnLock" && !locks.includes(buyer))) steps.push(buy(buyer, perk));
-          const s = run(game(4), ...steps, ROUND, RESULT);
+          const s = run(game(4), ...steps, ROUND, ALIBI, RESULT);
           expect(s.phase.kind).toBe("planning");
           const view = viewFor(s, "p3");
           // The seq of the bystander's view counts only what it sees: no gaps where others' private events sit.
@@ -168,7 +167,7 @@ describe("anonymous purchases: the public log can't name a buyer — design §12
   });
 
   it("nothing is announced for a round with no purchase, and a purchase is announced only for its own round", () => {
-    let s = run(game(3), buy("p0", { kind: "softShoes" }), ...ids(3).map(mv), ROUND, RESULT);
+    let s = run(game(3), buy("p0", { kind: "softShoes" }), ...ids(3).map(mv), ROUND, ALIBI, RESULT);
     const before = s;
     s = run(s, ...ids(3).map(mv), ROUND);
     expect(ofType(s.log.slice(before.log.length), "perkSold")).toEqual([]);
@@ -176,7 +175,7 @@ describe("anonymous purchases: the public log can't name a buyer — design §12
   });
 
   it("determinism: the same seed and commands with purchases give the same log", () => {
-    const play = () => run(game(4), mv("p0"), buy("p0", { kind: "blackout", room: "vault" }), buy("p2", { kind: "alibi" }), ...ids(4).map(mv), ROUND, RESULT, ...ids(4).map(mv), ROUND);
+    const play = () => run(game(4), mv("p0"), buy("p0", { kind: "blackout", room: "vault" }), buy("p2", { kind: "ballot", target: "p0" }), ...ids(4).map(mv), ROUND, ALIBI, RESULT, ...ids(4).map(mv), ROUND);
     expect(json(play().log)).toBe(json(play().log));
   });
 });

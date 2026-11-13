@@ -6,7 +6,7 @@ import { PERSONALITIES, type Personality } from "./personalities";
 import { botRandom, chooseAlibi, chooseMove, chooseSpot, chooseVote, createBot, crewHunch, decide, misjudged, type Random } from "./bot";
 import { runBotGame } from "./run";
 import { suspicion } from "./suspicion";
-import { closeResult, config, emergencyMeeting, game, round, run } from "./testkit";
+import { alibiWindow, closeAlibi, closeResult, config, emergencyMeeting, game, round, run } from "./testkit";
 
 /** A personality with no noise or misreading at votes, so a test can pin its behaviour. */
 const exact = (base: Personality, change: Partial<Personality> = {}): Personality => ({ ...base, noise: 0, misread: 0, hunch: 0, ...change });
@@ -151,7 +151,7 @@ describe("alibis — design §11.3", () => {
 
   // Ana pockets 4 of the Vault's 6, handing in 2; whether anyone saw her decides the cover-up.
   const pocketed = (withWitness: boolean): GameState =>
-    round(game(3), {
+    alibiWindow(game(3), {
       ana: { room: "vault", pocket: 4, alibi: null },
       ben: { room: withWitness ? "vault" : "office" },
       carl: { room: "lobby" },
@@ -173,9 +173,43 @@ describe("alibis — design §11.3", () => {
   });
 
   it("tells the truth when it handed everything in, and posts only once per round", () => {
-    const s = round(game(3), { ana: { room: "vault", alibi: null }, ben: { room: "office" }, carl: { room: "lobby" } });
+    const s = alibiWindow(game(3), { ana: { room: "vault", alibi: null }, ben: { room: "office" }, carl: { room: "lobby" } });
     expect(chooseAlibi(viewFor(s, "ana"), exact(PERSONALITIES.greedy, { lie: 1 }), rolls(0))).toBe("vault");
     expect(chooseAlibi(viewFor(s, "ben"), PERSONALITIES.honest, rolls(0))).toBeNull(); // the script posted it
+  });
+
+  // design §10, §19.3
+  it("posts its alibi in the alibi window from its own view: for the window's round, once; none in planning or after the window", () => {
+    const alibis = (st: GameState) => decide(viewFor(st, "ana"), exact(PERSONALITIES.honest), seeded("a"), "test-crew").filter((c) => c.type === "postAlibi");
+    const s0 = game(3);
+    expect(alibis(s0)).toEqual([]); // planning round 1: nothing resolved yet
+    const s = alibiWindow(s0, { ana: { room: "vault", alibi: null }, ben: { room: "office" }, carl: { room: "lobby" } });
+    expect(s.phase).toEqual({ kind: "alibi", round: 1 });
+    const posted = alibis(s);
+    expect(posted).toEqual([{ type: "postAlibi", player: "ana", round: 1, room: "vault" }]);
+    const after = run(s, ...posted);
+    expect(alibis(after)).toEqual([]); // never a second one
+    const result = closeAlibi(after);
+    expect(result.phase.kind).toBe("result");
+    expect(alibis(result)).toEqual([]);
+    const planning = closeResult(result);
+    expect(planning.phase).toEqual({ kind: "planning", round: 2 });
+    expect(alibis(planning)).toEqual([]);
+  });
+
+  it("never sends markAlibi (trust marks are for people) — design §10, §19.3", () => {
+    for (const personality of Object.values(PERSONALITIES)) {
+      const c = config(5, `marks-${personality.name}`);
+      const sent: PlayerCommand[] = [];
+      const agents = c.players.map((p) => {
+        const bot = createBot({ player: p.id, personality, seed: p.id, crewSeed: "crew" });
+        return { ...bot, act: (v: Parameters<typeof bot.act>[0]) => { const out = bot.act(v); sent.push(...out); return out; } };
+      });
+      const { state } = runBotGame(c, agents);
+      expect(sent.some((x) => x.type === "postAlibi")).toBe(true);
+      expect(sent.filter((x) => x.type === "markAlibi")).toEqual([]);
+      expect(state.log.some((e) => e.type === "alibiMarked")).toBe(false);
+    }
   });
 });
 

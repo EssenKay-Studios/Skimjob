@@ -24,6 +24,8 @@
 //  - the phase machine never sticks: until the game ends, some scheduler
 //    deadline is accepted; and every game ends. [§4.1, §11, §17.2]
 //  - phase and its companion fields agree (meeting, pendingShakedown). [§17.2]
+//  - alibis are posted only in their round's alibi window, one per player;
+//    the window's close names everyone who played and posted none. [§4.1, §10]
 //  - replay(config, log) rebuilds the state; same seed + commands = same log. [§17.2]
 //  - viewFor never leaks: the ledger/case file are exactly what canSee allows,
 //    and changing anything hidden from a player leaves their view identical. [§13, §17.2, §11.2]
@@ -90,6 +92,8 @@ function nextDeadlines(state: GameState): Command[] {
   const out: Command[] = [];
   if (state.pendingEmergency) out.push({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
   if (phase.kind === "planning") out.push({ type: "advance", deadline: { kind: "round", round: phase.round } });
+  // design §4.1, §10: the alibi window closes.
+  if (phase.kind === "alibi") out.push({ type: "advance", deadline: { kind: "alibi", round: phase.round } });
   // design §9.3: the result window closes unless an emergency was called in it.
   if (phase.kind === "result" && !state.pendingEmergency) out.push({ type: "advance", deadline: { kind: "result", round: phase.round } });
   if (phase.kind === "awaitingMeeting") {
@@ -146,7 +150,7 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
   const choice =
     fit && phase === "planning"
       ? 0
-      : fit && phase === "result" && t.chance(30)
+      : fit && (phase === "alibi" || (phase === "result" && t.chance(30)))
         ? 5
         : fit && phase === "meeting"
           ? 9
@@ -191,6 +195,11 @@ function playerCommand(state: GameState, t: Tape, style: Style): { command: Reco
       return { command: { ...base, type: "submitMove", move }, seated };
     }
     case 5:
+      // design §10: trust marks on others' alibis, sometimes cleared or on yourself (refused).
+      if (t.chance(25)) {
+        const mark = t.pick(["trusted", "liar", null, "maybe"]);
+        return { command: { ...base, type: "markAlibi", round: t.int(state.resolvedRound + 2), target: t.pick(state.playerOrder), mark }, seated };
+      }
       return { command: { ...base, type: "postAlibi", round: t.int(state.resolvedRound + 2), room: room() }, seated };
     case 6:
       return { command: { ...base, type: "proposeMeeting", slot: `slot-${t.int(3)}` }, seated };
@@ -254,6 +263,8 @@ function garbageCommand(state: GameState, t: Tape): unknown {
     { type: "castVote", player, vote: { kind: "shakedown", target: player } },
     { type: "sealVote", player, vote: { kind: "maybe" } },
     { type: "postAlibi", player, room: 3 },
+    { type: "markAlibi", player, round: 1, target: player, mark: "liar" },
+    { type: "markAlibi", player, round: "1", target: "p99", mark: "maybe" },
     { type: "acceptMeeting", player, proposalId: { id: 1 } },
     { type: "proposeMeeting", player, slot: 9 },
     { type: "useAbility", player, ability: { kind: "reopen", room: "vault" } },
@@ -269,6 +280,7 @@ function garbageCommand(state: GameState, t: Tape): unknown {
     { type: "advance", deadline: { kind: "round", round: state.round, plan: { entries: [{ player: "p99", placed: null, room: null, power: null, agreed: true }], history: [] } } },
     { type: "advance", deadline: { kind: "openMeeting", meetingId: "meeting-9" } },
     { type: "advance", deadline: { kind: "result", round: 99 } },
+    { type: "advance", deadline: { kind: "alibi", round: state.round + 1 } },
     { type: "advance", deadline: { kind: "closeMeeting", meetingId: "emergency-nobody" } },
     { type: "advance", deadline: { kind: "resolveShakedown", meetingId: "meeting-1" } },
     { type: "scheduleMeeting", meetingId: "meeting-4", slot: "x" },
@@ -354,9 +366,26 @@ function checkState(state: GameState, inflow: number): void {
   // design §6.2: the game ends after the round that empties the bank or reaches the cap; no round or meeting follows.
   if (state.resolvedRound > 0 && (state.bank === 0 || state.resolvedRound === roundCap)) check(state.phase.kind === "ended", "the game is over once the bank is empty or the cap is reached", state.phase);
   if (state.phase.kind === "planning") check(state.phase.round === state.round, "planning the latest round");
-  // design §11.3: one alibi per player and round.
+  // design §10: one alibi per player and round, posted in that round's alibi window (after it resolves, before its window closes).
   const alibis = state.log.flatMap((e) => (e.type === "said" && e.statement.kind === "alibi" ? [`${e.statement.player}/${e.statement.round}`] : []));
   check(new Set(alibis).size === alibis.length, "one alibi per player per round", alibis);
+  let resolved = 0;
+  let windowOpen = false;
+  for (const e of state.log) {
+    if (e.type === "roundResolved") [resolved, windowOpen] = [e.round, true];
+    if (e.type === "alibiWindowClosed") {
+      check(windowOpen && e.round === resolved, "an alibi window closes once, for the round just resolved", e);
+      // design §10: the no-alibi facts are everyone who played the round and posted none, in seat order.
+      const posted = new Set(state.log.flatMap((x) => (x.type === "said" && x.statement.kind === "alibi" && x.statement.round === e.round ? [x.statement.player] : [])));
+      const real = new Map(state.log.flatMap((x) => (x.type === "coinsGrabbed" && x.round === e.round ? [[x.player, x.room] as const] : [])));
+      const expected = state.playerOrder.filter((p) => real.has(p) && !posted.has(p)).map((p) => ({ player: p, room: real.get(p) }));
+      check(isDeepStrictEqual(e.noAlibi, expected), "no-alibi facts = who played and posted none, in their real room", { e, expected });
+      windowOpen = false;
+    }
+    if (e.type === "said" && e.statement.kind === "alibi") check(windowOpen && e.statement.round === resolved, "an alibi is posted only in its round's window", e);
+  }
+  check((state.phase.kind === "alibi") === (windowOpen && state.phase.kind !== "ended"), "the alibi phase is exactly an open window", state.phase);
+  if (state.phase.kind === "alibi") check(state.phase.round === state.resolvedRound, "the alibi window is the latest resolved round's", state.phase);
   // design §9.3: the pool only shrinks, by one per call, and an emergency is only ever pending in the result window.
   const calls = state.log.filter((e) => e.type === "emergencyMeetingCalled").length;
   check(state.emergencies === (state.playerOrder.length <= 6 ? 1 : 2) - calls && state.emergencies >= 0, "the emergency pool = its size − calls ≥ 0", [state.emergencies, calls]);
@@ -667,7 +696,7 @@ describe("engine invariants under fuzzing — design §17.2", () => {
     expect(stats.rejected).toBeGreaterThan(stats.games * 5);
     expect(stats.players.size).toBeGreaterThanOrEqual(8);
     expect([...stats.outcomes].sort()).toEqual(["bust", "success", "theft"]);
-    for (const t of ["shakedownResolved", "roomRaided", "bellsCooled", "roomReopened", "ability:ring", "ability:hide", "ability:absolve", "sinsAbsolved", "powerCut", "voteSealed"]) {
+    for (const t of ["shakedownResolved", "roomRaided", "bellsCooled", "roomReopened", "ability:ring", "ability:hide", "ability:absolve", "sinsAbsolved", "powerCut", "voteSealed", "alibiWindowClosed", "alibiMarked"]) {
       expect(stats.types, t).toContain(t);
     }
   }, TIMEOUT);

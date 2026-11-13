@@ -116,9 +116,9 @@ export function decide(view: PlayerView, p: Personality, random: Random, crewSee
   if (isOver(phase) || phase.kind === "setup") return [];
   const player = view.me.id;
   const out: PlayerCommand[] = [];
-  // design §11.3: an alibi for the latest round as it resolves (alibis have no window).
+  // design §10, §19.3: an alibi in the round's alibi window, from the bot's own view.
   const room = chooseAlibi(view, p, random);
-  if (room !== null) out.push({ type: "postAlibi", player, round: lastResolvedRound(view), room });
+  if (room !== null && phase.kind === "alibi") out.push({ type: "postAlibi", player, round: phase.round, room });
   if (phase.kind === "meeting") {
     // v2 §4: vote, then maybe claim a role (the Priest only after its vote).
     const vote = view.me.vote === null ? chooseVote(view, p, random, crewSeed) : null;
@@ -290,17 +290,17 @@ export function chooseSpot(view: PlayerView, p: Personality, random: Random, mov
   return { room: breaks ? (covers[0] as RoomId) : move.room, power: target === undefined ? null : { role: view.me.role, target } };
 }
 
-// ---------------------------------------------------------------- alibis (§11.3)
+// ---------------------------------------------------------------- alibis (§10)
 
 /**
- * The room to claim for the latest resolved round, or null if already posted.
+ * The room to claim in the open alibi window (design §10), or null outside it or if already posted.
  * Its plan spot if that was a cover story (it sticks to it, design §10); else the
  * truth, unless the bot pocketed and decides to cover it: then the richest
  * room whose coins are no more than what it really handed in (so the claim adds up).
  */
 export function chooseAlibi(view: PlayerView, p: Personality, random: Random): RoomId | null {
-  const round = lastResolvedRound(view);
-  if (round === 0) return null;
+  if (view.phase.kind !== "alibi") return null;
+  const round = view.phase.round;
   if (saidOf(view, "alibi").some((a) => a.player === view.me.id && a.round === round)) return null;
   const split = ofType(view.caseFile, "coinsGrabbed").find((e) => e.round === round);
   if (!split) return null;

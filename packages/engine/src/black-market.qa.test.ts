@@ -105,11 +105,16 @@ const ROUND = (s: GameState) => ({
   type: "advance",
   deadline: { kind: "round", round: s.round },
 });
+const ALIBI = (s: GameState) => ({
+  type: "advance",
+  deadline: { kind: "alibi", round: s.resolvedRound },
+});
 const RESULT = (s: GameState) => ({
   type: "advance",
   deadline: { kind: "result", round: s.resolvedRound },
 });
-const NEXT = [ROUND, RESULT];
+// design §4.1, §10: the alibi window closes before the result window.
+const NEXT = [ROUND, ALIBI, RESULT];
 const CLOSE = (s: GameState) => ({
   type: "advance",
   deadline: { kind: "closeMeeting", meetingId: s.meeting?.id },
@@ -128,6 +133,7 @@ const vote = (p: string, target: string) => ({
 });
 const emergency = (by: string): Cmd[] => [
   ROUND,
+  ALIBI,
   { type: "callEmergency", player: by },
   (s: GameState) => ({
     type: "advance",
@@ -160,7 +166,6 @@ describe("QA: the shop — design §12", () => {
   it("a stash of exactly the cost buys it (stash 0, spent += cost); one coin short is refused, for every perk", () => {
     const uses: Record<PerkId, object> = {
       tail: { kind: "tail", room: "vault" },
-      alibi: { kind: "alibi" },
       ballot: { kind: "ballot", target: "p1" },
       softShoes: { kind: "softShoes" },
       blackout: { kind: "blackout", room: "office" },
@@ -195,7 +200,7 @@ describe("QA: the shop — design §12", () => {
   it("one per round, across every perk kind, also after a Bail; again the next round", () => {
     let s = run(withStash(game(3), { p0: 9 }), buy("p0", { kind: "bail" }));
     for (const perk of [
-      { kind: "alibi" },
+      { kind: "ballot", target: "p1" },
       { kind: "softShoes" },
       { kind: "bail" },
       { kind: "tail", room: "vault" },
@@ -204,7 +209,7 @@ describe("QA: the shop — design §12", () => {
         "you have already bought a perk this round",
       );
     s = run(s, ...lobby(3), ...NEXT);
-    s = run(s, buy("p0", { kind: "alibi" }));
+    s = run(s, buy("p0", { kind: "ballot", target: "p1" }));
     expect([s.spent, player(s, "p0").roleState.bail]).toEqual([4, true]);
   });
 
@@ -212,11 +217,11 @@ describe("QA: the shop — design §12", () => {
     let s = withStash(game(3, { contentOverrides: { roundCap: 1 } }), {
       p0: 9,
     });
-    expect(reason(s, buy("p9", { kind: "alibi" }))).toMatch(/p9/);
+    expect(reason(s, buy("p9", { kind: "tail", room: "vault" }))).toMatch(/p9/);
     s = withStash(game(3), { p0: 9 });
-    s = run(s, mv("p1", "vault", 3), ROUND);
+    s = run(s, mv("p1", "vault", 3), ROUND, ALIBI);
     expect(s.phase.kind).toBe("result");
-    expect(reason(s, buy("p0", { kind: "alibi" }))).toBe(
+    expect(reason(s, buy("p0", { kind: "tail", room: "vault" }))).toBe(
       "perks are bought while a round is being planned",
     );
     s = run(s, { type: "callEmergency", player: "p2" }, (x: GameState) => ({
@@ -227,7 +232,7 @@ describe("QA: the shop — design §12", () => {
       },
     }));
     expect(s.phase.kind).toBe("meeting");
-    expect(reason(s, buy("p0", { kind: "alibi" }))).toBe(
+    expect(reason(s, buy("p0", { kind: "tail", room: "vault" }))).toBe(
       "perks are bought while a round is being planned",
     );
     const ended = run(
@@ -235,7 +240,7 @@ describe("QA: the shop — design §12", () => {
       ROUND,
     );
     expect(ended.phase.kind).toBe("ended");
-    expect(reason(ended, buy("p0", { kind: "alibi" }))).toBe(
+    expect(reason(ended, buy("p0", { kind: "tail", room: "vault" }))).toBe(
       "the game is over",
     );
   });
@@ -371,56 +376,6 @@ describe("QA: each perk at its boundaries — design §12", () => {
     expect(ofType(s.log, "powerCut")).toHaveLength(2);
   });
 
-  it("Stamped alibi: stamps only the round it was bought; a true alibi the round after is not stamped", () => {
-    let s = run(
-      withStash(game(3), { p0: 1 }),
-      buy("p0", { kind: "alibi" }),
-      mv("p0", "office"),
-      mv("p1", "lobby"),
-      mv("p2", "lobby"),
-      ROUND,
-    );
-    s = run(
-      s,
-      { type: "postAlibi", player: "p0", round: 1, room: "office" },
-      RESULT,
-    );
-    s = run(
-      s,
-      mv("p0", "office"),
-      mv("p1", "lobby"),
-      mv("p2", "lobby"),
-      ROUND,
-      { type: "postAlibi", player: "p0", round: 2, room: "office" },
-    );
-    expect(ofType(s.log, "alibiVerified").map((e) => e.round)).toEqual([1]);
-  });
-
-  it("Stamped alibi: a buyer who missed their move is stamped only for the room the default move put them in", () => {
-    const s = run(
-      withStash(game(3), { p0: 1 }),
-      buy("p0", { kind: "alibi" }),
-      mv("p1", "lobby"),
-      mv("p2", "lobby"),
-      ROUND,
-    );
-    const real = ofType(s.log, "coinsGrabbed").find((e) => e.player === "p0")
-      ?.room as string;
-    const wrong = real === "office" ? "vault" : "office";
-    expect(
-      ofType(
-        since(s, run(s, { type: "postAlibi", player: "p0", round: 1, room: wrong })),
-        "alibiVerified",
-      ),
-    ).toEqual([]);
-    expect(
-      ofType(
-        since(s, run(s, { type: "postAlibi", player: "p0", round: 1, room: real })),
-        "alibiVerified",
-      ),
-    ).toHaveLength(1);
-  });
-
   it("Plant evidence: in a dark room nobody is seen; never twice in a feed when two buyers plant the same player or they really were there", () => {
     let s = run(
       withStash(game(4), { p0: 9 }),
@@ -517,7 +472,7 @@ describe("QA: Check ballot — design §9.5, §12", () => {
         vote: { kind: "shakedown", target: "p2" },
       },
     );
-    s = run(s, mv("p1", "vault"), mv("p2", "vault"), ROUND);
+    s = run(s, mv("p1", "vault"), mv("p2", "vault"), ROUND, ALIBI);
     s = run(s, OPEN);
     expect(s.meeting?.kind).toBe("briefing");
     expect(viewFor(s, "p0").me.seenBallots).toEqual({
@@ -604,6 +559,7 @@ describe("QA: Bail — design §9.6, §9.7, §12", () => {
     );
     while (s.phase.kind !== "ended") {
       if (s.phase.kind === "planning") s = run(s, ROUND);
+      else if (s.phase.kind === "alibi") s = run(s, ALIBI);
       else if (s.phase.kind === "result") s = run(s, RESULT);
       else if (s.phase.kind === "awaitingMeeting") s = run(s, OPEN);
       else if (s.phase.kind === "meeting") s = run(s, CLOSE);
@@ -643,7 +599,8 @@ describe("QA: Bail — design §9.6, §9.7, §12", () => {
               break;
             }
         s = run(s, ROUND);
-      } else if (s.phase.kind === "result") s = run(s, RESULT);
+      } else if (s.phase.kind === "alibi") s = run(s, ALIBI);
+      else if (s.phase.kind === "result") s = run(s, RESULT);
       else if (s.phase.kind === "awaitingMeeting") {
         // A briefing: p1 is still protected there.
         s = run(s, OPEN);
@@ -712,7 +669,6 @@ describe("QA: viewFor leaks around purchases — design §12, §18", () => {
   it('"someone bought X": every other view is identical whoever bought it, for every perk kind', () => {
     const uses: Record<PerkId, (buyer: string) => object> = {
       tail: () => ({ kind: "tail", room: "vault" }),
-      alibi: () => ({ kind: "alibi" }),
       ballot: () => ({ kind: "ballot", target: "p3" }),
       softShoes: () => ({ kind: "softShoes" }),
       blackout: () => ({ kind: "blackout", room: "office" }),
@@ -788,7 +744,8 @@ describe("QA: the Rig is gone next to S3a.8's redraw — design §12, §13", () 
         );
         if (s.phase.kind === "ended") break;
         while (s.phase.kind !== "planning" && s.phase.kind !== "ended") {
-          if (s.phase.kind === "result") s = run(s, RESULT);
+          if (s.phase.kind === "alibi") s = run(s, ALIBI);
+          else if (s.phase.kind === "result") s = run(s, RESULT);
           else if (s.phase.kind === "awaitingMeeting") s = run(s, OPEN, CLOSE);
           else throw new Error(s.phase.kind);
         }
@@ -804,7 +761,7 @@ describe("QA: the Rig is gone next to S3a.8's redraw — design §12, §13", () 
 });
 
 describe("QA: determinism — design §19.1", () => {
-  /** Coins earned in play (no test-only stashes), every perk kind but Check ballot bought, and a Bail used. */
+  /** Coins earned in play (no test-only stashes), every perk kind but Plant evidence bought, and a Bail used. */
   const script = (): GameState => {
     let s = game(4, { seed: "qa-det", eventsEnabled: true });
     s = run(
@@ -833,7 +790,7 @@ describe("QA: determinism — design §19.1", () => {
     return run(
       s,
       buy("p1", { kind: "tail", room: "office" }),
-      buy("p2", { kind: "alibi" }),
+      buy("p2", { kind: "ballot", target: "p0" }),
       mv("p2", "office"),
       ROUND,
     );

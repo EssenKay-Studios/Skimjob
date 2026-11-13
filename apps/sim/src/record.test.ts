@@ -60,11 +60,12 @@ function run(state: GameState, ...commands: Command[]): GameState {
     return r.state;
   }, state);
 }
-/** Back to planning: a Bail choice window, a due meeting (server slot, nobody votes) and the result window pass (design §9.3, §9.4, §9.6). */
+/** Back to planning: the alibi window, a Bail choice window, a due meeting (server slot, nobody votes) and the result window pass (design §9.3, §9.4, §9.6, §10). */
 function pass(s: GameState): GameState {
   for (;;) {
     const p = s.phase;
-    if (p.kind === "result") s = apply(s, { type: "advance", deadline: { kind: "result", round: p.round } });
+    if (p.kind === "alibi") s = apply(s, { type: "advance", deadline: { kind: "alibi", round: p.round } });
+    else if (p.kind === "result") s = apply(s, { type: "advance", deadline: { kind: "result", round: p.round } });
     else if (p.kind === "shakedownPending") s = apply(s, { type: "advance", deadline: { kind: "resolveShakedown", meetingId: p.meetingId } });
     else if (p.kind === "awaitingMeeting") {
       s = apply(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: "now" });
@@ -82,9 +83,10 @@ describe("recordGame — a scripted game", () => {
   const lobby = (st: GameState) => run(pass(st), move("p0", "lobby"), move("p1", "lobby"), move("p2", "lobby"), roundDeadline(pass(st)));
   let s = lookouts(3);
   for (let r = 0; r < 3; r++) s = run(pass(s), move("p0", "vault", 6), move("p1", "lobby", 1), move("p2", "lobby"), roundDeadline(pass(s)));
-  // Round 3's result window: p1 spends the crew's emergency (design §9.3).
+  // Round 3's alibi window closes, then in its result window p1 spends the crew's emergency (design §9.3, §10).
   s = run(
     s,
+    { type: "advance", deadline: { kind: "alibi", round: 3 } },
     { type: "callEmergency", player: "p1" },
     { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } },
     { type: "castVote", player: "p1", vote: { kind: "shakedown", target: "p0" } },

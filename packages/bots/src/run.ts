@@ -109,6 +109,9 @@ export function runBotGame(config: GameConfig, agents: readonly Agent[], options
       system({ type: "advance", deadline: { kind: "openMeeting", meetingId: state.pendingEmergency.meetingId } });
     } else if (phase.kind === "planning") {
       system({ type: "advance", deadline: { kind: "round", round: phase.round, plan: planBoard(state, agents) } });
+    } else if (phase.kind === "alibi") {
+      // design §10: the bots posted theirs; the alibi window closes.
+      system({ type: "advance", deadline: { kind: "alibi", round: phase.round } });
     } else if (phase.kind === "result") {
       // design §9.3: the bots had their say; nobody called an emergency, so the window closes.
       system({ type: "advance", deadline: { kind: "result", round: phase.round } });

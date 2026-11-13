@@ -54,8 +54,10 @@ const blackout = (p: string, room: string) => ({ type: "buyPerk", player: p, per
 const mv = (p: string, room = "lobby", pocket = 0, extra: object = {}) => ({ type: "submitMove", player: p, move: { ...fullGrab(room, pocket), ...extra } });
 const cut = (p: string, room: string) => mv(p, "lobby", 0, { ability: { kind: "blackout", room } });
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+const ALIBI = (s: GameState) => ({ type: "advance", deadline: { kind: "alibi", round: s.resolvedRound } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
-const NEXT = [ROUND, RESULT];
+// design §4.1, §10: the alibi window closes before the result window.
+const NEXT = [ROUND, ALIBI, RESULT];
 const CLOSE = (s: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: s.meeting?.id } });
 const RESOLVE = (s: GameState) => ({ type: "advance", deadline: { kind: "resolveShakedown", meetingId: s.pendingShakedown?.meetingId } });
 const vote = (p: string, target: string) => ({ type: "castVote", player: p, vote: { kind: "shakedown", target } });
@@ -174,6 +176,7 @@ describe("QA: power cuts come out together, in an order that tells nothing — d
         mv("p1", "vault", 3),
         cut("p0", elecRoom),
         ROUND,
+        ALIBI,
         { type: "callEmergency", player: "p2" },
         (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }),
         vote("p0", "p1"),
@@ -187,7 +190,7 @@ describe("QA: power cuts come out together, in an order that tells nothing — d
       expect([...s.cutsPending].sort()).toEqual([perkRoom, elecRoom].sort());
       if (choice !== null) s = run(s, { type: "chooseBail", player: "p1", use: choice });
       s = run(s, RESOLVE);
-      while (s.round < 2) s = run(s, s.phase.kind === "result" ? RESULT : ROUND);
+      while (s.round < 2) s = run(s, s.phase.kind === "alibi" ? ALIBI : s.phase.kind === "result" ? RESULT : ROUND);
       return s;
     };
     const runs = [play("office", "vault", true), play("vault", "office", true), play("office", "vault", false), play("vault", "office", null)];

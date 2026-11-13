@@ -91,6 +91,7 @@ const MAX_TIMER_MS = 2 ** 31 - 1;
 const PLAYER_COMMANDS: { readonly [T in PlayerCommand["type"]]: true } = {
   submitMove: true,
   postAlibi: true,
+  markAlibi: true,
   claimRole: true,
   proposeMeeting: true,
   acceptMeeting: true,

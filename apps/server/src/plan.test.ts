@@ -123,7 +123,8 @@ async function toNextRound(app: FastifyInstance, id: string): Promise<void> {
   for (;;) {
     const s = (await createGameStore(db).load(id))!;
     const p = s.phase;
-    if (p.kind === "result") await app.live.system(id, { type: "advance", deadline: { kind: "result", round: p.round } });
+    if (p.kind === "alibi") await app.live.system(id, { type: "advance", deadline: { kind: "alibi", round: p.round } }); // design §10
+    else if (p.kind === "result") await app.live.system(id, { type: "advance", deadline: { kind: "result", round: p.round } });
     else if (p.kind === "awaitingMeeting") {
       if (!s.scheduledMeeting) await app.live.system(id, { type: "scheduleMeeting", meetingId: p.meetingId, slot: p.meetingId });
       await app.live.system(id, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });

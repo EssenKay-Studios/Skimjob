@@ -9,7 +9,7 @@ import { createGame, setupEvents } from "./setup";
 import { replay } from "./reduce";
 import { handleCommand, type CommandResult } from "./handle";
 import { viewFor } from "./view";
-import { closeResultWindow } from "./result.testkit";
+import { closeAlibiWindow, closeResultWindow } from "./result.testkit";
 import { fullGrab } from "./grab.testkit";
 
 function config(players: number, extra: Partial<GameConfig> = {}): GameConfig {
@@ -41,7 +41,8 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
     const cmd = typeof c === "function" ? c(s) : c;
     const r = handleCommand(planningOpen(s), cmd);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(cmd)}: ${r.reason}`);
-    return r.state;
+    // design §10: a round's alibi window closes at once, nobody posting.
+    return must(closeAlibiWindow(r.state));
   }, state);
 }
 function reason(state: GameState, command: unknown): string {
@@ -53,6 +54,15 @@ function reason(state: GameState, command: unknown): string {
   return r.reason;
 }
 const ROUND = (s: GameState) => ({ type: "advance", deadline: { kind: "round", round: s.round } });
+/**
+ * Resolve the round being planned with everyone posting the same alibi `room`, so the closed
+ * window shows nobody's real room (design §10) and only what the test is about can differ.
+ */
+const resolveAlibied = (s: GameState, room: string): GameState => {
+  let x = must(handleCommand(s, ROUND(s)));
+  for (const player of x.playerOrder) x = must(handleCommand(x, { type: "postAlibi", player, round: s.round, room }));
+  return must(closeAlibiWindow(x));
+};
 /** Resolve the round being planned, stopping in its result window (or the meeting it called). */
 const resolve = (s: GameState, ...moves: Cmd[]): GameState => run(s, ...moves, ROUND);
 /** Open the due meeting (a briefing or a regular one) and close it with no votes. design §9.1, §9.2 */
@@ -524,8 +534,9 @@ describe("QA viewFor leaks: two games differing only in a hidden fact look the s
     // Round 1: p0 cuts the Rooftop; every bell stays at 0 (Lobby is silent).
     const s = nextRound(resolve(game(4, ["electrician"]), withAbility("p0", "lobby", { kind: "blackout", room: "rooftop" }), ...lobbyAll(4, ["p0"])));
     expect(s.dark).toEqual(["rooftop"]);
-    const a = resolve(s, mv("p0", "lobby"), mv("p1", "rooftop"), mv("p2", "rooftop"), mv("p3", "security", 0, { watch: "rooftop" }));
-    const b = resolve(s, mv("p0", "lobby"), mv("p1", "security", 0, { watch: "lobby" }), mv("p2", "rooftop"), mv("p3", "security", 0, { watch: "rooftop" }));
+    // Everyone posts the same alibi, so the closed window shows no real room (design §10).
+    const a = resolveAlibied(run(s, mv("p0", "lobby"), mv("p1", "rooftop"), mv("p2", "rooftop"), mv("p3", "security", 0, { watch: "rooftop" })), "lobby");
+    const b = resolveAlibied(run(s, mv("p0", "lobby"), mv("p1", "security", 0, { watch: "lobby" }), mv("p2", "rooftop"), mv("p3", "security", 0, { watch: "rooftop" })), "lobby");
     sameView(a, b, "p2");
     expect(ofType(since(s, a), "roomWatched").find((e) => e.player === "p3")).toMatchObject({ room: "rooftop", seen: [], offline: true });
   });

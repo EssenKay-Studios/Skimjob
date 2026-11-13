@@ -12,6 +12,7 @@ import { handleCommand } from "./handle";
 import { viewFor } from "./view";
 import { revealSummary } from "./reveal";
 import { fullGrab } from "./grab.testkit";
+import { closeResultWindow } from "./result.testkit";
 
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`);
 const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
@@ -48,6 +49,13 @@ const refused = (state: GameState, command: unknown): string => {
 
 const ROUND = (s: GameState, plan?: unknown) => ({ type: "advance", deadline: { kind: "round", round: s.round, plan } });
 const RESULT = (s: GameState) => ({ type: "advance", deadline: { kind: "result", round: s.resolvedRound } });
+const ALIBI = (s: GameState) => ({ type: "advance", deadline: { kind: "alibi", round: s.resolvedRound } });
+/** Closes the alibi window and then the result window, whichever are open (nobody posts, nobody calls an emergency). design §4.1, §9.3, §10 */
+const settle = (s: GameState): GameState => {
+  const r = closeResultWindow(s);
+  if (!r.ok) throw new Error(r.reason);
+  return r.state;
+};
 const mv = (p: string, room = "lobby", pocket = 0, extra: object = {}) => ({ type: "submitMove", player: p, move: { ...fullGrab(room, pocket), ...extra } });
 const saids = (log: readonly GameEvent[]) => log.filter((e): e is Extract<GameEvent, { type: "said" }> => e.type === "said");
 
@@ -82,8 +90,7 @@ describe("QA: the snapshot is logged once, as the round resolves — design §10
       const out = ok(s, ROUND(s, PLAN));
       expect(out.events[0]).toMatchObject({ type: "said", statement: { kind: "plan", round: r } });
       expect(saids(out.events)).toHaveLength(1);
-      s = out.state;
-      s = s.phase.kind === "result" ? run(s, RESULT(s)) : s;
+      s = settle(out.state);
       if (s.phase.kind !== "planning") break;
     }
     const plans = saids(s.log).map((e) => e.statement);
@@ -110,8 +117,11 @@ describe("QA: the snapshot is logged once, as the round resolves — design §10
 
   it("a plan on any other deadline is ignored: nothing is said outside the round's resolution", () => {
     const s = run(game(3), ROUND(game(3)));
-    expect(s.phase.kind).toBe("result");
-    const out = ok(s, { type: "advance", deadline: { kind: "result", round: 1, plan: PLAN } });
+    expect(s.phase.kind).toBe("alibi");
+    const closed = ok(s, { type: "advance", deadline: { kind: "alibi", round: 1, plan: PLAN } });
+    expect(saids(closed.events)).toEqual([]);
+    expect(closed.state.phase.kind).toBe("result");
+    const out = ok(closed.state, { type: "advance", deadline: { kind: "result", round: 1, plan: PLAN } });
     expect(saids(out.events)).toEqual([]);
   });
 
@@ -136,10 +146,8 @@ describe("QA: nothing said, nothing logged — design §10", () => {
     let a = game(3);
     let b = game(3);
     for (let r = 0; r < 3; r++) {
-      a = run(a, ROUND(a));
-      b = run(b, ROUND(b, { entries: [], history: [] }));
-      if (a.phase.kind === "result") a = run(a, RESULT(a));
-      if (b.phase.kind === "result") b = run(b, RESULT(b));
+      a = settle(run(a, ROUND(a)));
+      b = settle(run(b, ROUND(b, { entries: [], history: [] })));
     }
     expect(b).toEqual(a);
     expect(saids(a.log)).toEqual([]);
@@ -181,22 +189,21 @@ describe("QA: determinism and aliasing — design §19.1", () => {
 
   it("same seed + same commands (plans, alibis, claims, perks) → identical logs; the log replays", () => {
     const play = () =>
-      run(
+      settle(run(
         game(4, { p1: "electrician" }),
-        { type: "buyPerk", player: "p0", perk: { kind: "alibi" } },
+        { type: "buyPerk", player: "p0", perk: { kind: "ballot", target: "p2" } },
         mv("p0", "office", 1),
         mv("p1", "lobby", 0, { ability: { kind: "blackout", room: "vault" } }),
         (s: GameState) => ROUND(s, PLAN),
         { type: "postAlibi", player: "p0", round: 1, room: "office" },
         { type: "claimRole", player: "p1", role: "lookout" },
-        (s: GameState) => (s.phase.kind === "result" ? RESULT(s) : { type: "postAlibi", player: "p3", round: 1, room: "vault" }),
-      );
+      ));
     const a = play();
     const b = play();
     expect(a.log).toEqual(b.log);
     expect(saids(a.log).map((e) => e.statement.kind)).toEqual(["plan", "alibi", "role"]);
     // A game with no patched stashes folds from its log alone.
-    const plain = run(game(3), (s: GameState) => ROUND(s, PLAN), RESULT, { type: "postAlibi", player: "p1", round: 1, room: "vault" });
+    const plain = settle(run(game(3), (s: GameState) => ROUND(s, PLAN), { type: "postAlibi", player: "p1", round: 1, room: "vault" }));
     expect(replay(plain.config, plain.log)).toEqual({ ...plain, players: replay(plain.config, plain.log).players });
     expect(replay(plain.config, plain.log).log).toEqual(plain.log);
   });
@@ -237,11 +244,11 @@ describe("QA: event order at resolution identifies nobody — design §10, §12,
     const a = world([
       ["p0", { kind: "softShoes" }],
       ["p1", { kind: "blackout", room: "vault" }],
-      ["p2", { kind: "alibi" }],
+      ["p2", { kind: "ballot", target: "p3" }],
     ]);
     const b = world([
       ["p2", { kind: "blackout", room: "vault" }],
-      ["p1", { kind: "alibi" }],
+      ["p1", { kind: "ballot", target: "p3" }],
       ["p0", { kind: "softShoes" }],
     ]);
     const types = pub(a.events).map((e) => e.type);
@@ -254,8 +261,9 @@ describe("QA: event order at resolution identifies nobody — design §10, §12,
 
   it("the next round's power cuts (an Electrician's and a Blackout perk's) come out the same in both worlds, with no source, after the said plan", () => {
     const next = (r: ReturnType<typeof world>) => {
-      const s = r.state.phase.kind === "result" ? ok(r.state, RESULT(r.state)) : null;
-      if (!s) throw new Error(`expected the result window, got ${r.state.phase.kind}`);
+      if (r.state.phase.kind !== "alibi") throw new Error(`expected the alibi window, got ${r.state.phase.kind}`);
+      const s = closeResultWindow(r.state);
+      if (!s.ok) throw new Error(s.reason);
       return s.events;
     };
     const a = next(world([["p1", { kind: "blackout", room: "vault" }]]));
@@ -297,10 +305,10 @@ describe("QA: event order at resolution identifies nobody — design §10, §12,
 });
 
 describe("QA: the said union and its limits — design §11.3, §19.2 seam 5", () => {
+  /** Round 1 has resolved; its alibi window is open (design §10). */
   const resolved = (n = 3) => {
     const s = game(n);
-    const r = run(s, ROUND(s, PLAN));
-    return r.phase.kind === "result" ? run(r, RESULT(r)) : r;
+    return run(s, ROUND(s, PLAN));
   };
 
   it("every statement kind is one public said event every seat sees identically; the old event types are gone", () => {
@@ -323,32 +331,15 @@ describe("QA: the said union and its limits — design §11.3, §19.2 seam 5", (
     expect(refused(alibied, { type: "postAlibi", player: "p0", round: 1, room: "vault" })).toMatch(/already posted/);
   });
 
-  it("alibi rounds: a stale round is fine after many rounds, but never 0, the round being planned, a future one, or a non-integer", () => {
+  it("alibi rounds: only the round whose alibi window is open; never a stale round, 0, a future one or a non-integer; none once it closes (design §10, owner 13 Nov)", () => {
     let s = resolved();
-    for (let i = 0; i < 2; i++) {
-      s = run(s, ROUND(s));
-      if (s.phase.kind === "result") s = run(s, RESULT(s));
-    }
-    expect(s.resolvedRound).toBe(3);
-    expect(s.phase.kind).toBe("planning");
+    for (let i = 0; i < 2; i++) s = run(settle(s), ROUND);
+    expect(s.phase).toEqual({ kind: "alibi", round: 3 });
     const say = (round: unknown) => ({ type: "postAlibi", player: "p2", round, room: "lobby" });
-    for (const r of [0, -1, 4, 5, 1.5, Number.NaN, Infinity, "1", null, undefined, [1], { valueOf: () => 1 }]) expect(refused(s, say(r))).toMatch(/has not resolved/);
-    const posted = run(s, say(1), say(3), say(2));
-    expect(saids(posted.log).filter((e) => e.statement.kind === "alibi")).toHaveLength(3);
-  });
-
-  it("a Stamped alibi bought in round 1 is still stamped when its alibi comes rounds later; a false one is never stamped and can't be redone", () => {
-    let s = game(3);
-    s = run(s, { type: "buyPerk", player: "p0", perk: { kind: "alibi" } }, { type: "buyPerk", player: "p1", perk: { kind: "alibi" } }, mv("p0", "office"), mv("p1", "vault"));
-    s = run(s, ROUND(s, PLAN));
-    if (s.phase.kind === "result") s = run(s, RESULT(s));
-    s = run(s, ROUND(s));
-    if (s.phase.kind === "result") s = run(s, RESULT(s));
-    const late = ok(s, { type: "postAlibi", player: "p0", round: 1, room: "office" });
-    expect(late.events.map((e) => e.type)).toEqual(["said", "alibiVerified"]);
-    const lie = ok(late.state, { type: "postAlibi", player: "p1", round: 1, room: "lobby" });
-    expect(lie.events.map((e) => e.type)).toEqual(["said"]);
-    expect(refused(lie.state, { type: "postAlibi", player: "p1", round: 1, room: "vault" })).toMatch(/already posted/);
+    for (const r of [0, -1, 1, 2, 4, 5, 2.5, Number.NaN, Infinity, "3", null, undefined, [3], { valueOf: () => 3 }]) expect(refused(s, say(r))).toMatch(/is not open/);
+    const posted = run(s, say(3));
+    expect(saids(posted.log).filter((e) => e.statement.kind === "alibi")).toHaveLength(1);
+    expect(refused(settle(posted), say(3))).toMatch(/is not open/);
   });
 
   it("12 players: a full board with every seat claiming, pledging and agreeing, in seat order", () => {
@@ -359,39 +350,45 @@ describe("QA: the said union and its limits — design §11.3, §19.2 seam 5", (
   });
 });
 
-describe("QA: out of phase — design §4.1, §11.3, owner ruling 9 Nov", () => {
+describe("QA: out of phase — design §4.1, §10, §11.3, owner rulings 9 and 13 Nov", () => {
   const alibi = (p: string, round: unknown, room = "lobby") => ({ type: "postAlibi", player: p, round, room });
   const claim = (p: string, role = "lookout") => ({ type: "claimRole", player: p, role });
 
   it("before any round resolves no alibi can be posted, for any round; a role claim can", () => {
     const s = game(3);
-    for (const r of [0, 1, 2]) expect(refused(s, alibi("p0", r))).toMatch(/has not resolved/);
+    for (const r of [0, 1, 2]) expect(refused(s, alibi("p0", r))).toMatch(/is not open/);
     expect(ok(s, claim("p0")).events.map((e) => e.type)).toEqual(["said"]);
   });
 
-  it("alibis and claims are taken in every between-rounds phase: the result window, an awaited meeting, an open vote, a pending shakedown's window", () => {
+  it("alibis only in the alibi window; claims in every between-rounds phase: the alibi window, an awaited meeting, an open vote, a pending shakedown's window", () => {
     // A bank of 9 (3 a seat): round 1's full grabs take a third, so a regular meeting is due (design §9.1).
     let s = game(3, {}, { contentOverrides: { bank: { coinsPerPlayer: 3 } } });
     s = run(s, mv("p0", "vault"), mv("p1", "office"), mv("p2", "lobby"), (x: GameState) => ROUND(x, PLAN));
-    expect(s.phase.kind).toBe("awaitingMeeting");
+    expect(s.phase.kind).toBe("alibi");
     s = run(s, alibi("p0", 1), claim("p0"));
+    expect(refused(s, alibi("p0", 1, "vault"))).toMatch(/already posted/);
+    s = run(s, ALIBI);
+    expect(s.phase.kind).toBe("awaitingMeeting");
+    expect(refused(s, alibi("p1", 1))).toMatch(/is not open/);
+    s = run(s, claim("p1"));
     const id = s.phase.kind === "awaitingMeeting" ? s.phase.meetingId : "";
     s = run(s, { type: "scheduleMeeting", meetingId: id, slot: "now" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: id } });
     expect(s.phase.kind).toBe("meeting");
-    // The regular meeting opened a new stretch: p0 may claim again, once.
-    s = run(s, alibi("p1", 1), claim("p0", "priest"), claim("p1"));
+    // The regular meeting opened a new stretch: p0 and p1 may claim again, once.
+    expect(refused(s, alibi("p1", 1))).toMatch(/is not open/);
+    s = run(s, claim("p0", "priest"), claim("p1"));
     expect(refused(s, claim("p0", "hacker"))).toMatch(/already claimed/);
-    expect(refused(s, alibi("p0", 1, "vault"))).toMatch(/already posted/);
     s = run(s, { type: "castVote", player: "p0", vote: { kind: "shakedown", target: "p2" } }, { type: "castVote", player: "p1", vote: { kind: "shakedown", target: "p2" } });
     s = run(s, (x: GameState) => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: x.meeting?.id } }));
     expect(s.phase.kind).toBe("shakedownPending");
-    s = run(s, alibi("p2", 1), claim("p2"));
-    expect(saids(s.log).filter((e) => e.statement.kind === "alibi").map((e) => e.statement.kind === "alibi" && e.statement.player)).toEqual(["p0", "p1", "p2"]);
+    expect(refused(s, alibi("p2", 1))).toMatch(/is not open/);
+    s = run(s, claim("p2"));
+    expect(saids(s.log).filter((e) => e.statement.kind === "alibi").map((e) => e.statement.kind === "alibi" && e.statement.player)).toEqual(["p0"]);
   });
 
   it("an emergency meeting opens no new stretch: a claim made before it still blocks the next one", () => {
     let s = game(3);
-    s = run(s, (x: GameState) => ROUND(x));
+    s = run(s, (x: GameState) => ROUND(x), ALIBI);
     expect(s.phase.kind).toBe("result");
     s = run(s, claim("p0"), { type: "callEmergency", player: "p1" });
     s = run(s, (x: GameState) => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: x.pendingEmergency?.meetingId } }));

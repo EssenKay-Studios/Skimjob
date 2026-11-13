@@ -13,6 +13,7 @@ import { meetingResult } from "./meeting";
 import { viewFor } from "./view";
 import { fullGrab } from "./grab.testkit";
 import { giveBail } from "./perks.testkit";
+import { closeAlibiWindow } from "./result.testkit";
 
 /** One perk per tier and no Bail, whatever the seed: Bail in the shop opens a Bail choice window after every passed shakedown (design §9.6). */
 const SHOP_NO_BAIL: readonly PerkId[] = ["tail", "softShoes", "plantEvidence"];
@@ -55,7 +56,10 @@ function run(state: GameState, ...commands: Cmd[]): GameState {
     const command = typeof c === "function" ? c(s) : c;
     const r = handleCommand(s, command);
     if (!r.ok) throw new Error(`rejected ${JSON.stringify(command)}: ${r.reason}`);
-    return r.state;
+    // design §10: a round's alibi window closes at once (nobody posts); these tests are about what follows it.
+    const closed = closeAlibiWindow(r.state);
+    if (!closed.ok) throw new Error(closed.reason);
+    return closed.state;
   }, state);
 }
 function reason(state: GameState, command: unknown): string {

@@ -28,7 +28,6 @@ export type AbilityUse =
  * A perk bought on the black market and used at once, while planning (design
  * §12); Bail is the one held item.
  * - tail: next round, also see who was in `room`.
- * - alibi: if your alibi for this round is true, it is stamped "verified" in the ledger.
  * - ballot: see `target`'s vote at the next meeting (also in Secret mode).
  * - softShoes: next round, your coins don't ring at all.
  * - blackout: next round, `room` goes dark (announced like a power cut).
@@ -37,7 +36,6 @@ export type AbilityUse =
  */
 export type PerkUse =
   | { readonly kind: "tail"; readonly room: RoomId }
-  | { readonly kind: "alibi" }
   | { readonly kind: "ballot"; readonly target: PlayerId }
   | { readonly kind: "softShoes" }
   | { readonly kind: "blackout"; readonly room: RoomId }
@@ -117,10 +115,18 @@ export type VoteChoice =
   | { readonly kind: "shakedown"; readonly target: PlayerId }
   | { readonly kind: "skip" };
 
+/** A private trust mark on one player's alibi in one round. design §10 */
+export type AlibiMark = "trusted" | "liar";
+
 export type PlayerCommand =
   | { readonly type: "submitMove"; readonly player: PlayerId; readonly move: Move }
-  /** Say (truthfully or not) you were in `room` in resolved `round`; any time, once per round. design §11.3 */
+  /** Say (truthfully or not) you were in `room` in `round`, only in that round's alibi window; once, never changed. design §10 */
   | { readonly type: "postAlibi"; readonly player: PlayerId; readonly round: number; readonly room: RoomId }
+  /**
+   * Mark `target`'s alibi for played `round` Trusted or Liar for your own notes, or clear it (null);
+   * changeable any time. Only you ever see it. design §10
+   */
+  | { readonly type: "markAlibi"; readonly player: PlayerId; readonly round: number; readonly target: PlayerId; readonly mark: AlibiMark | null }
   /**
    * Claim (truthfully or not) to be `role`: public, changes no rule. Once per
    * stretch; any role the content knows. design §11.3
@@ -160,6 +166,8 @@ export type Deadline =
    * out when nobody used it. design §4.2
    */
   | { readonly kind: "round"; readonly round: number; readonly plan?: PlanSnapshot }
+  /** `round`'s alibi window has ended: the no-alibi facts, then any meeting it called, the result window or the next round. design §4.1, §10 */
+  | { readonly kind: "alibi"; readonly round: number }
   /** The result window after `round` has closed with no emergency called: the next round starts. design §9.3 */
   | { readonly kind: "result"; readonly round: number }
   /** A scheduled meeting's slot, or an emergency's notice period, has arrived: open the vote window. design §9.3, §9.4 */

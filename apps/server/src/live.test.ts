@@ -405,9 +405,9 @@ describe("pushing views", () => {
     const c = await Client.open(id, humans[0]!);
     await expect(app.live.system(id, { type: "advance", deadline: { kind: "round", round: 2 } })).rejects.toThrow(/refused/);
     const resolved = await app.live.system(id, { type: "advance", deadline: { kind: "round", round: 1 } });
-    // design §9.2, §9.3: a raid's briefing, if the bots raided a room, then the result window.
+    // design §10, §9.2, §9.3: the alibi window, then a raid's briefing, if the bots raided a room, then the result window.
     let after = resolved;
-    expect(["result", "awaitingMeeting"]).toContain(after.phase.kind);
+    expect(after.phase).toEqual({ kind: "alibi", round: 1 });
     while (after.phase.kind !== "planning") for (const cmd of nextDeadline(after)) after = await app.live.system(id, cmd as Parameters<typeof app.live.system>[1]);
     expect(after.phase).toMatchObject({ kind: "planning", round: 2 });
     for (const p of after.playerOrder.filter((x) => x !== humans[0]!.player)) expect(after.moves[p]).toBeDefined();
@@ -427,6 +427,8 @@ function nextDeadline(state: GameState): Command[] {
   }
   if (phase.kind === "planning") return [{ type: "advance", deadline: { kind: "round", round: phase.round } }];
   // design §9.3: the result window closes when nobody called an emergency.
+  // design §10: the alibi window closes after every round that goes on.
+  if (phase.kind === "alibi") return [{ type: "advance", deadline: { kind: "alibi", round: phase.round } }];
   if (phase.kind === "result") return [{ type: "advance", deadline: { kind: "result", round: phase.round } }];
   if (phase.kind === "awaitingMeeting") {
     const schedule: Command[] = state.scheduledMeeting ? [] : [{ type: "scheduleMeeting", meetingId: phase.meetingId, slot: `server-${phase.meetingId}` }];

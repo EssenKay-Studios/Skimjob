@@ -15,7 +15,7 @@ import { applyEvent } from "./reduce";
 import { isOver } from "./end";
 import { checkMove, resolveRound } from "./round";
 import { isObject, playerFor, show } from "./check";
-import { claimRole, planSaid, postAlibi } from "./said";
+import { claimRole, closeAlibi, markAlibi, planSaid, postAlibi } from "./said";
 import { buyPerk, chooseBail } from "./perks";
 import {
   acceptMeeting,
@@ -101,6 +101,8 @@ const advance: Handler = (state, command, draw) => {
       // Named round, so a retried or late deadline is refused instead of resolving the next round.
       if (deadline.round !== state.phase.round) return `the round ${show(deadline.round)} deadline is not pending (round ${state.phase.round} is)`;
       return withPlan(state, state.phase.round, deadline.plan, draw);
+    case "alibi":
+      return closeAlibi(state, deadline.round, draw);
     case "result":
       return closeResult(state, deadline.round, draw);
     case "openMeeting":
@@ -118,6 +120,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   abortGame: () => [{ type: "gameAborted", visibility: PUBLIC }],
   submitMove,
   postAlibi,
+  markAlibi,
   claimRole,
   proposeMeeting,
   acceptMeeting,

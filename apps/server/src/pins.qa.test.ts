@@ -67,6 +67,7 @@ async function playOn(id: string, stop: (s: GameState) => boolean = () => false)
     const p = s.phase;
     let cmd: SystemCommand;
     if (p.kind === "planning") cmd = { type: "advance", deadline: { kind: "round", round: p.round } };
+    else if (p.kind === "alibi") cmd = { type: "advance", deadline: { kind: "alibi", round: p.round } }; // design §10
     else if (p.kind === "result") cmd = { type: "advance", deadline: { kind: "result", round: p.round } };
     else if (p.kind === "awaitingMeeting" && !s.scheduledMeeting) cmd = { type: "scheduleMeeting", meetingId: p.meetingId, slot: `qa-${p.meetingId}` };
     else if (p.kind === "awaitingMeeting") cmd = { type: "advance", deadline: { kind: "openMeeting", meetingId: s.scheduledMeeting!.meetingId } };
