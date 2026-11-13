@@ -3,12 +3,15 @@
 //
 // Pure: the round loop calls `gameEnded` with the events it has produced so
 // far, which are folded first, so the ranking sees the last round's coins.
-import type { GameEnded, GameEvent, GameState, Outcome, PlayerId, PlayerState, RankEntry } from "./types";
+import type { GameEnded, GameEvent, GameState, Outcome, Phase, PlayerId, PlayerState, RankEntry } from "./types";
 import { PUBLIC } from "./types";
 import { applyEvent } from "./reduce";
 import { jobFor } from "./overrides";
 import { roleHandler } from "./roles";
 import { honesty, honestyOf } from "./shares";
+
+/** The game is finished: it ended (design §6.2) or the host ended it early (§16). */
+export const isOver = (phase: Phase): boolean => phase.kind === "ended" || phase.kind === "aborted";
 
 /** Why a heist failed: a bust (Wanted 3, design §5.5), or sunk by theft (honesty below the line at the end, §8.4). */
 type Failure = "bust" | "theft";

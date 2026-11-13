@@ -183,6 +183,8 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `${verb(e.player, "chose", "chose")} ${e.use ? "to use Bail" : "not to use Bail"}.`;
     case "alibiVerified":
       return `Verified: ${who(e.player)} really ${you(e.player) ? "were" : "was"} in the ${roomName(e.room)} in round ${e.round}.`;
+    case "gameAborted":
+      return "The host ended the game.";
     case "gameEnded": {
       const o = e.outcome;
       const winners = o.winners.length === 0 ? "nobody wins" : `${names(o.winners)} ${o.winners.length === 1 && !you(o.winners[0]!) ? "wins" : "win"}`;

@@ -66,6 +66,7 @@ type ExpectedVisibility = {
   perkBought: "private"; // design §12: who bought it opens at the reveal
   bailChosen: "private"; // design §9.6: the Bail choice is private until the reveal
   alibiVerified: "public"; // design §12: the "verified" stamp is in the ledger
+  gameAborted: "public";
   gameEnded: "public";
 };
 

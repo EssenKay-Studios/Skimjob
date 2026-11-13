@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openPanel, startGame } from "./setupGame";
+import { closePanel, openPanel, startGame } from "./setupGame";
 
 // QA, M2-13 host controls (design §15): the host panel at 360 and 1280 px (no sideways
 // scroll, touch targets ≥ 44 px), only the host gets it, a guest's own API calls are refused,
@@ -8,7 +8,7 @@ import { openPanel, startGame } from "./setupGame";
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
 
 for (const width of [360, 1280]) {
-  test(`host panel at ${width}px: host only, fits, pause and resume reach the crew @host`, async ({ page, browser }, info) => {
+  test(`host panel in the Menu at ${width}px: host only, fits, pause and resume reach the crew @host`, async ({ page, browser }, info) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 800 });
     const errors: string[] = [];
@@ -22,16 +22,22 @@ for (const width of [360, 1280]) {
     await expect(guest.locator(".hud__kicker")).toContainText(/Round 1 of/);
 
     const panel = page.getByRole("region", { name: "Host controls" });
-    await openPanel(page, "This round");
     await openPanel(guest, "This round");
+    const menu = async (p: typeof page) => {
+      await closePanel(p);
+      await p.getByRole("button", { name: "Menu", exact: true }).click();
+    };
+    await menu(guest);
     await expect(guest.getByRole("region", { name: "Host controls" })).toHaveCount(0);
+    await guest.getByRole("button", { name: "Close", exact: true }).click();
+    await openPanel(guest, "This round");
     // A guest going round the UI is refused, and nothing shows as paused.
     for (const path of ["pause", "extend", "resume"]) {
       expect((await guest.request.post(`/api/games/${game.id}/${path}`, { data: {} })).status()).toBe(403);
     }
     await expect(guest.getByText("Paused by the host")).toHaveCount(0);
 
-    await panel.getByText("Host controls").click();
+    await menu(page);
     const pause = panel.getByRole("button", { name: "Pause the game" });
     const extend = panel.getByRole("button", { name: "Add time" });
     for (const button of [pause, extend]) {
@@ -41,6 +47,9 @@ for (const width of [360, 1280]) {
       expect(box.x + box.width).toBeLessThanOrEqual(width);
     }
     await pause.click();
+    await expect(panel.getByText("Paused", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await openPanel(page, "This round");
     await expect(page.getByText("Paused by the host")).toBeVisible();
     await expect(guest.getByText("Paused by the host")).toBeVisible();
     // Pausing again over the API (a double click from another tab) is refused and changes nothing.
@@ -51,9 +60,11 @@ for (const width of [360, 1280]) {
     await page.screenshot({ path: info.outputPath(`host-panel-paused-${width}.png`), fullPage: true });
     await guest.screenshot({ path: info.outputPath(`guest-paused-${width}.png`), fullPage: true });
 
+    await menu(page);
     const resume = panel.getByRole("button", { name: "Resume the game" });
     expect((await resume.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await resume.click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
     await expect(page.getByText("Paused by the host")).toHaveCount(0);
     await expect(guest.getByText("Paused by the host")).toHaveCount(0);
     expect((await page.request.post(`/api/games/${game.id}/resume`, { data: {} })).status()).toBe(409);

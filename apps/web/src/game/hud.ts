@@ -141,6 +141,8 @@ export function phaseInfo(view: PlayerView): PhaseInfo {
       return { title: "Crew meeting", timerKey: `closeMeeting:${p.meetingId}`, timerLabel: "votes close in" };
     case "shakedownPending":
       return { title: "Shakedown pending", timerKey: `resolveShakedown:${p.meetingId}`, timerLabel: "lands in" };
+    case "aborted":
+      return { title: "Game ended", timerKey: null, timerLabel: "" };
     case "ended":
       return { title: p.outcome.result === "success" ? "Job done" : "Busted", timerKey: null, timerLabel: "" };
     default: {

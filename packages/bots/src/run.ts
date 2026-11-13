@@ -5,6 +5,7 @@
 // Only the scheduler here reads the full game state, as the real server does;
 // agents only ever get viewFor() output. design §17.3, §17.4
 import {
+  isOver,
   createGame,
   handleCommand,
   viewFor,
@@ -89,11 +90,11 @@ export function runBotGame(config: GameConfig, agents: readonly Agent[], options
   };
 
   for (let steps = 0; ; steps++) {
-    if (state.phase.kind === "ended") return { state, rejections, steps };
+    if (isOver(state.phase)) return { state, rejections, steps };
     if (steps >= maxSteps) throw new Error(`game not over after ${maxSteps} steps`);
     for (const agent of agents) {
       for (const command of agent.act(viewFor(state, agent.player))) {
-        if (state.phase.kind === "ended") break;
+        if (isOver(state.phase)) break;
         const r = handleCommand(state, command);
         if (r.ok) state = r.state;
         else rejections.push({ player: agent.player, command, reason: r.reason });

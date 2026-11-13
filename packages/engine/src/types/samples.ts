@@ -143,6 +143,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
     taken: 2,
     clean: false,
   },
+  gameAborted: { type: "gameAborted", visibility: PUBLIC },
   gameEnded: {
     type: "gameEnded",
     visibility: PUBLIC,
@@ -170,6 +171,7 @@ export const sampleCommands: { readonly [T in CommandType]: Extract<Command, { t
   useAbility: { type: "useAbility", player: ben, ability: { kind: "detect", target: ana } },
   buyPerk: { type: "buyPerk", player: ana, perk: { kind: "tail", room: "vault" } },
   chooseBail: { type: "chooseBail", player: ana, use: true },
+  abortGame: { type: "abortGame" },
   advance: { type: "advance", deadline: { kind: "openMeeting", meetingId: "m2" } },
   scheduleMeeting: { type: "scheduleMeeting", meetingId: "meeting-1", slot: "2026-11-01T21:00Z" },
 };

@@ -54,7 +54,9 @@ export type Phase =
    */
   | { readonly kind: "shakedownPending"; readonly meetingId: string; readonly target: PlayerId }
   /** Game over; everything is revealed. design §13 */
-  | { readonly kind: "ended"; readonly outcome: Outcome };
+  | { readonly kind: "ended"; readonly outcome: Outcome }
+  /** The host ended the game early: no outcome, no reveal. design §6.2 */
+  | { readonly kind: "aborted" };
 
 export interface PlayerState {
   readonly id: PlayerId;

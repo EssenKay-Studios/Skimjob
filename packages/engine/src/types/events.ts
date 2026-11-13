@@ -619,6 +619,12 @@ export type Outcome =
       readonly winners: readonly PlayerId[];
     };
 
+/** design §6.2, §16: the host ended the game early. Nobody wins, nothing is scored and there is no reveal. */
+export interface GameAborted {
+  readonly type: "gameAborted";
+  readonly visibility: PublicVisibility;
+}
+
 export interface GameEnded {
   readonly type: "gameEnded";
   readonly visibility: PublicVisibility;
@@ -629,6 +635,7 @@ export interface GameEnded {
 
 export type GameEvent =
   | GameCreated
+  | GameAborted
   | RngSeeded
   | RoomsSet
   | BankFilled

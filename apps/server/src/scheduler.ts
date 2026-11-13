@@ -19,7 +19,7 @@
 // - The engine refuses a deadline that isn't pending (rounds are named), so
 //   even a stale row can't resolve anything twice. A refused row is dropped
 //   and the game re-planned; any other failure keeps the row for a retry.
-import { lockedIn, type Deadline, type GameState, type SystemCommand } from "@skimjob/engine";
+import { isOver, lockedIn, type Deadline, type GameState, type SystemCommand } from "@skimjob/engine";
 import type { FastifyBaseLogger } from "fastify";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
@@ -128,7 +128,7 @@ export const DEADLINE_RULES: { readonly [K in Deadline["kind"] | "scheduleMeetin
 
 /** Every deadline the state calls for. An ended game has none. */
 export function planDeadlines(s: GameState, t: Timing, now: number): PlannedDeadline[] {
-  if (s.phase.kind === "ended") return [];
+  if (isOver(s.phase)) return [];
   return Object.values(DEADLINE_RULES).flatMap((rule) => rule(s, t, now));
 }
 
@@ -270,7 +270,7 @@ export function createScheduler(deps: {
     async reconcile(gameId, state) {
       const now = clock.now();
       const planned = new Map(planDeadlines(state, await timingOf(gameId), now).map((d) => [d.key, d]));
-      if (state.phase.kind === "ended") timings.delete(gameId);
+      if (isOver(state.phase)) timings.delete(gameId);
       const timers = await db.transaction(async (tx) => {
         // The host's pause stops every row, whatever its kind. M2-13
         const [game] = await tx.query<{ paused: boolean }>("select paused_at is not null as paused from games where id = $1", [gameId]);
@@ -314,7 +314,7 @@ export function createScheduler(deps: {
         }
         return after;
       });
-      if (state.phase.kind === "ended") known.delete(gameId);
+      if (isOver(state.phase)) known.delete(gameId);
       else known.set(gameId, sortTimers(timers));
     },
 
