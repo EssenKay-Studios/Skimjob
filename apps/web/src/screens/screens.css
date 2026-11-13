@@ -7,6 +7,8 @@
   --gutter-r: max(var(--gutter), env(safe-area-inset-right));
   /* The top bar's height; the game shell fills the window below it. */
   --topbar-h: calc(max(14px, env(safe-area-inset-top)) + 52px);
+  /* The laptop game layout fills the window up to this width, so it doesn't stretch on ultra-wide screens. */
+  --shell-max-w: 1920px;
 }
 
 .topbar {
@@ -21,7 +23,7 @@
 }
 /* On the game screen the top bar sits in the shell's column, so the wordmark lines up with the frames below (see shell.css). */
 .page:has(.shell--wide) .topbar {
-  max-width: 1400px;
+  max-width: var(--shell-max-w);
 }
 .page:has(.shell--narrow) .topbar {
   max-width: 640px;

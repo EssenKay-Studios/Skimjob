@@ -4,6 +4,9 @@
 
 .shell {
   --shell-gap: 12px;
+  --shell-plan-min: 160px;
+  /* The bank board's frame around its drawing: padding, heading and caption. */
+  --shell-board-chrome: 92px;
 }
 /* The phone bar's parts: the tab bar and the dock, plus the bar's padding and gap. Their sum lifts the toasts clear of the bar. */
 :root {
@@ -105,7 +108,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   gap: var(--shell-gap) 14px;
   height: calc(100dvh - var(--topbar-h));
-  max-width: 1400px;
+  max-width: var(--shell-max-w);
   margin: 0 auto;
   padding: 0 var(--gutter-r) 16px var(--gutter-l);
 }
@@ -144,6 +147,7 @@
 }
 .shell__centre {
   grid-column: 2;
+  container-type: size;
 }
 .shell__right {
   grid-column: 3;
@@ -151,6 +155,16 @@
 .shell--wide .shell__board {
   flex: none;
   padding: 0;
+}
+/* The drawing keeps its shape (--bank-aspect, set by BankCutaway), so on wide
+   windows its width is capped by the column height left for it once the board's
+   frame, the gap and the Plan board's minimum are set aside: the whole board stays
+   on screen (design §15.6 one screen). It sits centred in its frame. It never
+   drops below 600 px, where it would switch to the stacked layout and its rooms
+   get too small to tap: short windows scroll the column as before. */
+.shell--wide .shell__board .bank {
+  max-width: max(600px, calc((100cqh - var(--shell-board-chrome) - 10px - var(--shell-plan-min)) * var(--bank-aspect)));
+  margin-inline: auto;
 }
 .shell__panel {
   display: flex;
@@ -161,8 +175,8 @@
 }
 /* The columns scroll when the window is too short; a panel never shrinks below its heading and a few lines. */
 .shell__plan {
-  flex: 1 0 160px;
-  min-height: 160px;
+  flex: 1 0 var(--shell-plan-min);
+  min-height: var(--shell-plan-min);
 }
 .shell__right .shell__panel {
   flex: 1 0 120px;
