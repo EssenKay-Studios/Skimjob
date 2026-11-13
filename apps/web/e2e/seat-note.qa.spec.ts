@@ -75,3 +75,23 @@ test("Enter saves, Escape cancels, a blank save clears, 280 emoji fit, a switche
   expect(errors).toEqual([]);
   await ctx.close();
 });
+
+test("on the sheet layout, Escape cancels the note edit and keeps the Case sheet open @caseboard", async ({ browser }, info) => {
+  test.skip(info.project.name !== "mobile", "the Case sheet is the < 1024 px layout");
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 740 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
+  await page.goto(`/game/${game.id}`);
+  await openPanel(page, "Case");
+  const board = page.getByRole("region", { name: "Case board" });
+  const seat = board.getByRole("list", { name: "Players" }).getByRole("button").first();
+  await seat.click();
+  const name = (await seat.getAttribute("aria-label"))!.split(",")[0]!;
+  const note = board.getByRole("group", { name: `Your note on ${name}` });
+  await note.getByRole("button", { name: "Add note" }).click();
+  await note.getByLabel(`Note on ${name}`).fill("draft");
+  await note.getByLabel(`Note on ${name}`).press("Escape");
+  await expect(note.getByRole("button", { name: "Add note" })).toBeVisible();
+  await expect(page.locator("dialog.bsheet[open] .bsheet__head h2")).toHaveText("Case");
+  await ctx.close();
+});

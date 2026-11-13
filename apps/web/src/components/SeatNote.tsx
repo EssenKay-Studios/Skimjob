@@ -57,8 +57,13 @@ export function SeatNote({ person, board, seed }: SeatNoteProps) {
             // Capped in code points, as the server counts (maxLength would count UTF-16 units: 140 emoji).
             onChange={(e) => setDraft([...e.target.value].slice(0, NOTE_MAX_CHARS).join(""))}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void save();
-              if (e.key === "Escape") setEditing(false);
+              if (e.key === "Enter" && !busy) void save();
+              if (e.key === "Escape") {
+                // Esc cancels the edit; it doesn't also close the sheet the case board sits in.
+                e.preventDefault();
+                e.stopPropagation();
+                setEditing(false);
+              }
             }}
             hint={`${[...draft].length}/${NOTE_MAX_CHARS}`}
           />

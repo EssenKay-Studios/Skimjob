@@ -122,9 +122,9 @@ export function parseNickname(input: unknown): string | null {
   return r.ok ? r.name : null;
 }
 
-/** Suspicion board (design §12.3, M2-10): characters per note. */
+/** Private notes (design §15.3): characters per note. */
 export const BOARD_NOTE_MAX_CHARS = 280;
-/** Suspicion board writes per window per seat, and "last seen" marks (a page sends at most one a second or so). */
+/** Private note writes per window per seat, and "last seen" marks (a page sends at most one a second or so). */
 export const BOARD_RATE = { writes: 20, windowMs: 10_000 } as const;
 /** Case board pins per seat, and what a pin id looks like (lead and fact ids from the web adapter). */
 export const PINS_MAX = 100;
