@@ -1,7 +1,7 @@
 import { LESSONS } from "@skimjob/content";
 import { expect, test, type Page } from "@playwright/test";
 import { showsAfterCards } from "./meetingCards";
-import { pickRoom } from "./move";
+import { grabAll, pickRoom } from "./move";
 import { openPanel, startGame, settle } from "./setupGame";
 
 // S4.6, design §15.6, §20.6: the teaching pop-ups and the game menu's Tips
@@ -99,6 +99,7 @@ async function playRound1(page: Page, opts: { tips: boolean }) {
   await page.goto(`/game/${game.id}`);
   await openPanel(page, "This round");
   await pickRoom(page, "Vault");
+  await grabAll(page);
   await page.getByRole("button", { name: "Lock it in" }).click();
   return game;
 }

@@ -57,12 +57,12 @@ for (const viewport of VIEWPORTS) {
       expect(o2.scroll).toBeLessThanOrEqual(o2.client);
       expect(await smallTargets(page)).toEqual([]);
       // A coin picked up (#232): it lifts and drop places show in the Grab row and the Pocket, still fitting.
-      await pileCoins(page, "duffel").first().click();
+      await pileCoins(page, "room").first().click();
       await expect(page.getByRole("button", { name: "Drop the coin in your pocket" })).toBeVisible();
       const held = await overflow(page);
       expect(held.scroll).toBeLessThanOrEqual(held.client);
       expect(await smallTargets(page)).toEqual([]);
-      await pileCoins(page, "duffel").first().click(); // put it down again
+      await pileCoins(page, "room").first().click(); // put it down again
 
       // M2-9: the bank board is the main board; tapping a room picks it in the move panel.
       await closePanel(page); // below 1024 px the sheet covers the board

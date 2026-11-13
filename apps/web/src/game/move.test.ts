@@ -17,10 +17,9 @@ const viewAs = (role: RoleId, n = 5): PlayerView => viewFor(createGame(config(n)
 const option = (view: PlayerView, id: string) => roomOptions(view).find((o) => o.id === id)!;
 
 describe("the grab and the two bags (design §3.2)", () => {
-  it("grabs 1 up to the room's limit in a coin room and nothing where there are no coins", () => {
-    expect(grabOf(3, null)).toBe(3);
+  it("a fresh move grabs nothing, up to the room's limit, and nothing where there are no coins", () => {
+    expect(grabOf(3, 0)).toBe(0); // everything starts in the Grab row
     expect(grabOf(3, 2)).toBe(2);
-    expect(grabOf(3, 0)).toBe(1); // at least 1 coin
     expect(grabOf(2, 9)).toBe(2); // never above the limit
     expect(grabOf(0, 2)).toBe(0); // Security, Rooftop
   });
@@ -45,10 +44,10 @@ describe("the grab and the two bags (design §3.2)", () => {
     expect(moveCoin({ duffel: 2, pocket: 1 }, "room", "pocket", 3)).toEqual({ duffel: 2, pocket: 1 }); // the room is empty
   });
 
-  it("puts a coin back in the room, but never the last one grabbed (at least 1 coin)", () => {
+  it("puts a coin back in the room, the last one too (Lock it in needs 1 in a bag, not the bags)", () => {
     expect(moveCoin({ duffel: 1, pocket: 2 }, "pocket", "room", 3)).toEqual({ duffel: 1, pocket: 1 });
     expect(moveCoin({ duffel: 1, pocket: 1 }, "duffel", "room", 3)).toEqual({ duffel: 0, pocket: 1 });
-    expect(moveCoin({ duffel: 0, pocket: 1 }, "pocket", "room", 3)).toEqual({ duffel: 0, pocket: 1 });
+    expect(moveCoin({ duffel: 0, pocket: 1 }, "pocket", "room", 3)).toEqual({ duffel: 0, pocket: 0 });
     expect(moveCoin({ duffel: 0, pocket: 1 }, "duffel", "room", 3)).toEqual({ duffel: 0, pocket: 1 }); // the duffel has none
   });
 

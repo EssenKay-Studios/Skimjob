@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { chatTab, openChat, openPanel, startGame, settle } from "./setupGame";
+import { grabAll } from "./move";
 
 // The one-screen layout shell and the bottom sheet (design §15.6, S3b.2) at the
 // five launch widths, on the gallery's demo page: no horizontal overflow, targets
@@ -272,6 +273,7 @@ for (const viewport of [{ width: 360, height: 740 }, { width: 390, height: 844 }
     await page.goto(`/game/${game.id}`);
     await page.locator('.bank-room[data-room=office]').click(); // the board picks the room
     await openPanel(page, "This round");
+    await grabAll(page);
     await page.getByRole("button", { name: "Lock it in" }).click();
     const toast = page.locator(".toast").filter({ hasText: "Locked in" });
     await expect(toast).toBeVisible();

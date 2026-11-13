@@ -214,7 +214,7 @@ describe("QA: the split never loses or invents a coin (design §3.2 step 3)", ()
           Object.values(bagsOf(grab, pocket)).reduce((a, b) => a + b),
         ).toBe(grab);
     const s = game("detective");
-    const bags2 = bagsOf(grabOf(option(view(s), "vault").coins, null), 2);
+    const bags2 = bagsOf(grabOf(option(view(s), "vault").coins, 3), 2);
     const { events } = resolve(submit(s, { room: "vault", ...bags2 }));
     expect(
       events.find((e) => e.type === "coinsGrabbed" && e.player === "p1"),

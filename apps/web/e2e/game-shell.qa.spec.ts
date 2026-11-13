@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
-import { pickRoom } from "./move";
+import { grabAll, pickRoom } from "./move";
 import { callEmergency, chatTab, expectRankingReadable, openPanel, showResult, startGame, type PanelName, settle, DEFAULT_SEED } from "./setupGame";
 
 const SHOTS = process.env.SHOTS_DIR;
@@ -323,6 +323,7 @@ for (const { width, height } of VIEWPORTS.filter((v) => v.width < 1024)) {
     await page.goto(`/game/${game.id}`);
     await openPanel(page, "This round");
     await pickRoom(page, "Office");
+    await grabAll(page);
     await page.getByRole("button", { name: "Lock it in" }).click();
     await openPanel(page, "Chat");
     await composer(page).fill("toast check");
