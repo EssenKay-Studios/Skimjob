@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { RevealEnding, RevealSummary } from "@skimjob/engine";
 import { Reveal } from "../components/Reveal";
 import { sampleEvents } from "../../../../packages/engine/src/types/samples";
-import { changedStory, itemText, planOf, satOutText, starText, whyText } from "./reveal";
+import { itemText, lieText, roundTruth, satOutText, starText, whyText } from "./reveal";
 
 const NAMES: Record<string, string> = { p1: "Ana", p2: "Ben", p3: "Cy" };
 const ctx = { me: "p1", name: (p: string) => NAMES[p] ?? p };
@@ -39,19 +39,30 @@ describe("reveal lines", () => {
   });
 });
 
-describe("plan against move — design §10, §15.4, §15.5", () => {
-  const move = { player: "p2", room: "vault", duffel: 1, pocket: 1, missed: false, alibi: null, planned: null };
-  it("tells a kept plan, a broken one and no plan spot apart", () => {
-    expect(planOf({ ...move, planned: "vault" })).toEqual({ spot: "Vault", broken: false });
-    expect(planOf({ ...move, planned: "office" })).toEqual({ spot: "Office", broken: true });
-    expect(planOf(move)).toEqual({ spot: "no plan spot", broken: false });
+describe("each round's card, told true — design §15.5, §18 board 5", () => {
+  const move = (player: string, room: string, alibi: string | null) => ({ player, room, duffel: 1, pocket: 0, missed: false, alibi, planned: null });
+  const round = (moves: ReturnType<typeof move>[]) => ({ round: 3, card: null, moves, satOut: [], resolved: null, split: null, items: [], stashes: {} });
+  const r = round([move("p1", "vault", "vault"), move("p2", "office", "vault"), move("p3", "lobby", null)]);
+
+  it("stamps each alibi TRUE or LIE, keeps the no-alibi facts, and draws each liar where they really were", () => {
+    expect(roundTruth(r, new Map()).rooms).toEqual([
+      { room: "vault", said: [{ player: "p1", lie: false }, { player: "p2", lie: true }], noAlibi: [], really: [] },
+      { room: "office", said: [], noAlibi: [], really: ["p2"] },
+      { room: "lobby", said: [], noAlibi: ["p3"], really: [] },
+    ]);
   });
-  it("calls a changed story only when the plan spot and the alibi both exist and differ", () => {
-    expect(changedStory({ ...move, planned: "vault", alibi: "lobby" })).toBe("Changed story: planned Vault, later said Lobby.");
-    expect(changedStory({ ...move, planned: "vault", alibi: "vault" })).toBeNull();
-    expect(changedStory({ ...move, planned: null, alibi: "lobby" })).toBeNull();
-    expect(changedStory({ ...move, planned: "vault", alibi: null })).toBeNull();
+
+  it("lists the round's lies with the viewer's own mark, if they made one (design §10)", () => {
+    const lies = (marks: Map<string, "trusted" | "liar">) => roundTruth(r, marks).lies.map((l) => lieText(l, ctx));
+    expect(lies(new Map())).toEqual(["Ben said the Vault; really the Office."]);
+    expect(lies(new Map([["3/p2", "liar"]]))).toEqual(["Ben said the Vault; really the Office. You had marked Ben a liar."]);
+    expect(lies(new Map([["3/p2", "trusted"]]))).toEqual(["Ben said the Vault; really the Office. You had trusted Ben."]);
+    // A mark from another round, or on a true alibi, adds nothing.
+    expect(lies(new Map([["2/p2", "liar"], ["3/p1", "liar"]]))).toEqual(["Ben said the Vault; really the Office."]);
+    expect(lieText({ player: "p1", said: "security", real: "vault", mark: null }, ctx)).toBe("You said Security; really the Vault.");
+    expect(roundTruth(round([move("p2", "vault", "vault")]), new Map()).lies).toEqual([]);
   });
+
   it("says a player sat the round out, you or another", () => {
     expect(satOutText("p1", ctx)).toBe("You sat the round out: the Lobby was taped off.");
     expect(satOutText("p3", ctx)).toBe("Cy sat the round out: the Lobby was taped off.");
@@ -87,7 +98,7 @@ describe("<Reveal>", () => {
       { round: 2, card: { id: "audit", room: null }, moves: [], satOut: [], resolved: null, split: null, items: [], stashes: { p1: 0, p2: 9, p3: 0 } },
     ],
   };
-  const html = renderToStaticMarkup(createElement(Reveal, { summary, ctx, looks: new Map() }));
+  const html = renderToStaticMarkup(createElement(Reveal, { summary, ctx, looks: new Map(), marks: new Map([["1/p2", "liar" as const]]) }));
 
   it("opens every role, marks the ★ winner and voids the rest on a failure", () => {
     for (const role of ["Mole", "Locksmith", "Hacker"]) expect(html).toContain(role);
@@ -99,17 +110,19 @@ describe("<Reveal>", () => {
 
   it("shows the first round with the real room, the lie and the hidden cause", () => {
     expect(html).toContain('aria-label="Round 1"');
-    expect(html).toContain("said Lobby: lie");
+    expect(html).toContain("Lies in round 1");
+    expect(html).toContain("Ben said the Lobby; really the Vault. You had marked Ben a liar.");
     expect(html).toContain(RING.replace(/'/g, "&#x27;"));
     expect(html).toContain("reveal__item is-hidden");
   });
 
-  // design §10, §15.5: the plan spot beside the real room, the changed story and the hidden-bell result.
-  it("replays the plan against the move, with the changed story, and says who sat the round out (design §3.3, §10, §15.4)", () => {
-    expect(html).toContain("Plan: Office");
-    expect(html).toContain("(broken)");
+  // design §15.5, §18 board 5: the card told true replaces the plan replay; who sat the round out (§3.3).
+  it("stamps the alibi LIE, rings the liar under \"really:\" and says who sat the round out", () => {
+    expect(html).toContain('aria-label="The card, told true"');
+    expect(html).toMatch(/reveal__said is-lie.*?<span class="reveal__stamp">LIE<\/span>/);
+    expect(html).toMatch(/<span class="meta">really:<\/span><span class="reveal__liar">/);
     expect(html).toContain("Went: Vault");
-    expect(html).toContain("Changed story: planned Office, later said Lobby.");
+    expect(html).not.toMatch(/Plan:|Changed story|broken/);
     expect(html).toContain("Cy sat the round out: the Lobby was taped off.");
   });
 

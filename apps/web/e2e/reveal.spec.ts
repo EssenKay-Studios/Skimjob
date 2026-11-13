@@ -2,8 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 // S4.9: the end-of-game reveal (design §15.5) on its own demo page
 // (/dev/gallery/reveal: a small hand-made game, no server, so it loads in a blink):
-// every role, who won and why, and each round's plan against what everyone really did,
-// with the changed story, a sat-out round and the Hacker's hidden bell in the last round.
+// every role, who won and why, and each round's card told true against what everyone really did,
+// with a lie, a sat-out round and the Hacker's hidden bell in the last round.
 // Then the same game with 24-character names at every launch width: nothing past the edge.
 
 const noSidewaysScroll = (page: Page) =>
@@ -12,7 +12,7 @@ const noSidewaysScroll = (page: Page) =>
 test.describe("the reveal demo", () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
-  test("every role, plan against moves, a sat-out round and each ending @reveal", async ({ page }, info) => {
+  test("every role, the card told true, a sat-out round and each ending @reveal", async ({ page }, info) => {
     test.skip(info.project.name !== "desktop", "the viewport is set here");
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -30,21 +30,21 @@ test.describe("the reveal demo", () => {
     await expect(reveal.locator(".reveal__void")).toHaveCount(0);
     await expect(reveal).not.toContainText(/token/i);
 
-    // Round 1: Ben planned the Vault and went there, but later said the Lobby: a changed story and a lie.
+    // Round 1: Ben went to the Vault but said the Lobby: the card told true stamps it a LIE.
     const sheet = reveal.locator(".reveal__round");
-    const moves = sheet.getByRole("list", { name: "Plan against what everyone really did" });
-    await expect(sheet.getByRole("heading", { name: "Round 1" })).toBeVisible();
+    const moves = sheet.getByRole("list", { name: "What everyone really did" });
+    const truth = sheet.getByRole("list", { name: "The card, told true" });
+    await expect(sheet.getByRole("heading", { name: "Round 1", exact: true })).toBeVisible();
     await expect(moves.locator("li")).toHaveCount(4);
-    const ben = moves.locator("li").filter({ hasText: "Ben" });
-    await expect(ben).toContainText("Plan: Vault");
-    await expect(ben).toContainText("Went: Vault");
-    await expect(ben).toContainText("said Lobby: lie");
-    await expect(ben).toContainText("Changed story: planned Vault, later said Lobby.");
+    await expect(moves.locator("li").filter({ hasText: "Ben" })).toContainText("Went: Vault");
+    await expect(truth.locator(".reveal__said.is-lie")).toContainText("LIE");
+    await expect(sheet.locator(".reveal__lies")).toContainText("Lies in round 1");
+    await expect(sheet.locator(".reveal__lies")).toContainText("Ben said the Lobby; really the Vault.");
 
     // Round 2: Dot broke the plan; the Lobby raid is in the timeline.
     await reveal.getByRole("button", { name: "Next round" }).click();
-    await expect(sheet.getByRole("heading", { name: "Round 2" })).toBeVisible();
-    await expect(moves.locator("li").filter({ hasText: "Dot" })).toContainText("Plan: Vault (broken)");
+    await expect(sheet.getByRole("heading", { name: "Round 2", exact: true })).toBeVisible();
+    await expect(moves.locator("li").filter({ hasText: "Dot" })).toContainText("Went:");
     await expect(sheet).toContainText("Raid! The police hit the Lobby in round 2");
     await expect(sheet).toContainText("Ben claimed Lookout, but was really the Mole.");
 

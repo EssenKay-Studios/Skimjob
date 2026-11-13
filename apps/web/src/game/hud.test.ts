@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { presenceOf } from "./useGame";
 import {
   agoText,
-  alibiState,
+  alibiDue,
   bankTotal,
   formatCountdown,
   jobOf,
@@ -42,10 +42,12 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
 
 describe("HUD", () => {
-  it("names the phase and its deadline: planning, then the result window (design §5, §9.3)", () => {
+  it("names the phase and its deadline: planning, the alibi window, then the result window (design §5, §9.3, §10)", () => {
     let s = createGame(config());
     expect(phaseInfo(viewFor(s, "p1"))).toEqual({ title: "Planning: pick a room", timerKey: "round:1", timerLabel: "locks in" });
     s = run(s, round(1));
+    expect(phaseInfo(viewFor(s, "p1"))).toEqual({ title: "Alibis", timerKey: "alibi:1", timerLabel: "closes in" });
+    s = run(s, { type: "advance", deadline: { kind: "alibi", round: 1 } });
     expect(phaseInfo(viewFor(s, "p1"))).toEqual({ title: "Round 1 result", timerKey: "result:1", timerLabel: "next round in" });
   });
 
@@ -163,31 +165,27 @@ describe("move panel", () => {
     s = run(s, { type: "submitMove", player: "p2", move: { room: "office", duffel: 2, pocket: 0 } }, round(1));
     expect(justMissed(viewFor(s, "p1"))).toEqual({ round: 1, room: "lobby" });
     expect(justMissed(viewFor(s, "p2"))).toBeNull();
-    // design §9.3: the result window closes with no emergency called.
-    s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
+    // design §10, §9.3: the alibi window, then the result window, close with nothing posted or called.
+    s = run(s, { type: "advance", deadline: { kind: "alibi", round: 1 } }, { type: "advance", deadline: { kind: "result", round: 1 } });
     s = run(s, { type: "submitMove", player: "p1", move: { room: "office", duffel: 2, pocket: 0 } }, round(2));
     expect(justMissed(viewFor(s, "p1"))).toBeNull();
   });
 });
 
 describe("alibis", () => {
-  it("offers the latest resolved round in every phase and remembers your claim (design §11.3)", () => {
+  it("are due only in the round's alibi window, until you post one (design §10)", () => {
     let s = createGame(config(3));
-    expect(alibiState(viewFor(s, "p1"))).toBeNull();
+    expect(alibiDue(viewFor(s, "p1"))).toBeNull();
     s = run(s, round(1));
-    expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: null });
+    expect(phaseInfo(viewFor(s, "p1"))).toEqual({ title: "Alibis", timerKey: "alibi:1", timerLabel: "closes in" });
+    expect(alibiDue(viewFor(s, "p1"))).toBe(1);
     s = run(s, { type: "postAlibi", player: "p1", round: 1, room: "vault" });
-    expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: "vault" });
-    expect(alibiState(viewFor(s, "p2"))).toEqual({ round: 1, posted: null });
-    // Also while a meeting is open (a raid's briefing can open at once): still between rounds.
-    const meeting = run(s, { type: "callEmergency", player: "p2" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } });
-    expect(meeting.phase.kind).toBe("meeting");
-    expect(alibiState(viewFor(meeting, "p2"))).toEqual({ round: 1, posted: null });
-    // Also while the next round is planned: the engine takes an alibi for any resolved round, in any phase.
-    s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
-    expect(s.phase.kind).toBe("planning");
-    expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: "vault" });
-    expect(alibiState(viewFor(s, "p2"))).toEqual({ round: 1, posted: null });
+    expect(alibiDue(viewFor(s, "p1"))).toBeNull();
+    expect(alibiDue(viewFor(s, "p2"))).toBe(1);
+    // The window closes, answered or not: nothing is due after it.
+    s = run(s, { type: "advance", deadline: { kind: "alibi", round: 1 } });
+    expect(alibiDue(viewFor(s, "p2"))).toBeNull();
+    expect(handleCommand(s, { type: "postAlibi", player: "p2", round: 1, room: "vault" }).ok).toBe(false);
   });
 });
 

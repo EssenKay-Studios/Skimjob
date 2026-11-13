@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { BANK_JOB } from "@skimjob/content";
 import { handleCommand, viewFor, type GameState, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
-import { createGame } from "../game/deal.testkit";
+import { createGame, pastAlibi } from "../game/deal.testkit";
 import { MeetingNow, MeetingsPanel } from "./Meetings";
 
 const NAMES = { p1: "Ana", p2: "Ben", p3: "Cy" } as const;
@@ -18,7 +18,7 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   for (const c of commands) {
     const r = handleCommand(state, c);
     if (!r.ok) throw new Error(`${c.type}: ${r.reason}`);
-    state = r.state;
+    state = pastAlibi(r.state);
   }
   return state;
 }

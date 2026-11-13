@@ -4,7 +4,7 @@
 // over events (it names no role or faction: lines come from describeEvent or
 // from public round results). docs/m2-plan.md M2-10
 import type { GameEvent, LoggedEvent, PlayerView } from "@skimjob/engine";
-import { describeEvent, type DescribeContext } from "./describeEvent";
+import { describeEvent, the, type DescribeContext } from "./describeEvent";
 import { bailPromptOf, MEETING_TITLE } from "./meeting";
 
 /** One recap line and the entries it was built from (for tests: they must all be in the viewer's view). */
@@ -53,6 +53,17 @@ export function recapItems(events: readonly LoggedEvent[], view: PlayerView, ctx
     });
   }
 
+  // design §10: the latest snapshot card, from public data (the round's alibis and its "no alibi" facts).
+  const card = of("alibiWindowClosed").at(-1);
+  if (card) {
+    const { round, noAlibi } = card.event;
+    const alibis = view.ledger.flatMap(({ seq, event: e }) => (e.type === "said" && e.statement.kind === "alibi" && e.statement.round === round ? [{ seq, room: e.statement.room }] : []));
+    const said = new Map<string, number>();
+    for (const { room } of alibis) said.set(room, (said.get(room) ?? 0) + 1);
+    const parts = [...[...said].sort((a, b) => b[1] - a[1]).map(([room, n]) => `${n} said ${the(room)}`), ...(noAlibi.length ? [`${noAlibi.length} had no alibi`] : [])];
+    picks.push({ prio: 6, seq: card.seq, text: `Round ${round}'s card is in: ${parts.length ? parts.join(", ") : "nobody played"}.`, from: [...alibis.map((e) => e.seq), card.seq] });
+  }
+
   // Meetings: the shakedown's result says more than the vote that called it.
   const settled = new Set([...of("shakedownResolved"), ...of("shakedownCancelled")].map((e) => e.event.target));
   for (const e of of("shakedownResolved")) picks.push({ prio: 4, ...say(e) });
@@ -67,8 +78,8 @@ export function recapItems(events: readonly LoggedEvent[], view: PlayerView, ctx
 
   // Your case file: only your own entries are in it (viewFor), minus what you did yourself.
   const news = events.filter((e) => e.event.visibility.kind !== "public" && !OWN_ACTIONS.has(e.event.type));
-  if (news.length === 1) picks.push({ prio: 6, ...say(news[0]!), text: `Only you: ${describeEvent(news[0]!.event, ctx)}` });
-  else if (news.length > 1) picks.push({ prio: 6, seq: news.at(-1)!.seq, text: `${news.length} new entries in your case file (only you see them).`, from: news.map((e) => e.seq) });
+  if (news.length === 1) picks.push({ prio: 7, ...say(news[0]!), text: `Only you: ${describeEvent(news[0]!.event, ctx)}` });
+  else if (news.length > 1) picks.push({ prio: 7, seq: news.at(-1)!.seq, text: `${news.length} new entries in your case file (only you see them).`, from: news.map((e) => e.seq) });
 
   const next = nextUp(view);
   if (picks.length === 0) {
@@ -97,6 +108,8 @@ export function nextUp(view: PlayerView): string | null {
       return bailPromptOf(view) ? "Now: a shakedown is about to land on you. Use your Bail, or keep it." : "Now: a shakedown is about to land.";
     case "awaitingMeeting":
       return `Now: the ${MEETING_TITLE[p.meeting].toLowerCase()} is next.`;
+    case "alibi":
+      return `Now: round ${p.round}'s alibi window is open.`;
     case "result":
       return `Now: round ${p.round}'s result is in.`;
     default:

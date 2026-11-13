@@ -26,6 +26,7 @@ function marketGame(roundCap?: number): GameState {
   for (const c of [
     { type: "buyPerk", player: "p2", perk: { kind: "softShoes" } },
     { type: "advance", deadline: { kind: "round", round: 1 } },
+    { type: "advance", deadline: { kind: "alibi", round: 1 } },
     { type: "advance", deadline: { kind: "result", round: 1 } },
   ]) {
     const r = handleCommand(s, c as Parameters<typeof handleCommand>[1]);

@@ -55,6 +55,7 @@ function playedGame(): GameState {
   for (let r = 1; r <= 3; r++) {
     s = step(s, round(r));
     if (r === 1) s = step(s, { type: "postAlibi", player: "p2", round: 1, room: "vault" });
+    s = step(s, { type: "advance", deadline: { kind: "alibi", round: r } });
     s = step(s, { type: "advance", deadline: { kind: "result", round: r } });
   }
   return s;

@@ -1,5 +1,5 @@
 // /game/:id: the game screen, mounted in the GameShell (design §15.6). HUD, seats,
-// move panel, alibis, ledger and case file, and the game-over ranking, all
+// move panel, the alibi pop-up and the round's snapshot card (design §10), ledger and case file, and the game-over ranking, all
 // from the player's own view over the live channel, and the chat (M2-8b,
 // GameChat.tsx), meetings and votes (M2-7, Meetings.tsx) and the bank board
 // (M2-9 art, figures from the view only: game/board.ts), and (M2-10) the
@@ -21,6 +21,10 @@ import { BankCutaway } from "../art/BankCutaway";
 import type { BankRoomId } from "../art/bankLayout";
 import { CrookAvatar } from "../art/Crook";
 import { PlanBoard } from "../components/PlanBoard";
+import { AlibiPopup } from "../components/AlibiPopup";
+import { CardKey, SnapshotCard } from "../components/SnapshotCard";
+import { myMarks, snapshotOf, snapshotRounds } from "../game/snapshot";
+import { ALIBI_WINDOW_MS } from "@skimjob/content";
 import { EndingNote, Reveal } from "../components/Reveal";
 import { RulebookSheet } from "../components/Rulebook";
 import { AwayRecap } from "../components/AwayRecap";
@@ -36,7 +40,7 @@ import { Underline } from "../components/Underline";
 import { boardScene, seatLooks } from "../game/board";
 import { cardName, describeEvent, roleName, roomName } from "../game/describeEvent";
 import {
-  alibiState,
+  alibiDue,
   bankTotal,
   defaultRoom,
   jobOf,
@@ -149,7 +153,7 @@ export function Game({ id }: { id: string }) {
         </main>
       ) : (
         <>
-        {tips.me && <TeachingPopups view={view} player={tips.me.id} tips={tips.me.tips} saving={tips.saving} held={resultCardOf(view, cardDismissed) !== null} onTipsOff={() => tips.change(false)} />}
+        {tips.me && <TeachingPopups view={view} player={tips.me.id} tips={tips.me.tips} saving={tips.saving} held={resultCardOf(view, cardDismissed) !== null || alibiDue(view) !== null} onTipsOff={() => tips.change(false)} />}
         <Board
           view={view}
           timers={channel.timers}
@@ -228,10 +232,10 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
   const wide = useMedia(SHELL_WIDE_QUERY);
   const panels: readonly ShellPanel[] = [
     { id: "crew", title: "Crew", place: "left", tab: { icon: <Star /> }, node: <Seats view={view} presence={channel.presence} offset={offset} marks={board.board} /> },
-    { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} /> },
+    { id: "case", title: "Case", place: "left", tab: { icon: <Evidence /> }, node: <CaseBoard data={caseBoard} people={people} pins={pins} marks={board.board} card={(r) => <RoundCard view={view} send={send} round={r} />} /> },
     ...(outcome ? [] : [{ id: "notes", title: "Notes", place: "left", tab: { icon: <Pin /> }, node: <CrewBoard people={people} board={board} /> } satisfies ShellPanel]),
     { id: "chat", title: "Chat", place: "left", tab: { icon: <Bubble />, badge: chat.unread }, node: chat.node },
-    ...(wide ? [{ id: "plan", title: "Plan board", place: "centre", node: <PlanPanel view={view} send={send} channel={channel} bare /> } satisfies ShellPanel] : []),
+    ...(wide ? [{ id: "plan", title: "Plan board", place: "centre", node: <PlanPanel view={view} channel={channel} bare /> } satisfies ShellPanel] : []),
     {
       id: "round",
       title: outcome ? "The result" : "This round",
@@ -241,7 +245,7 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         <div className="round">
           {host && <GameHost gameId={gameId} game={host} view={view} control={channel.control} />}
           {outcome ? <GameOver view={view} /> : <Actions view={view} timers={timers} offset={offset} send={send} autoMeetings={autoMeetings} pick={pick} channel={channel} plan={!wide} />}
-          {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} />}
+          {view.reveal && <Reveal summary={view.reveal.summary} ctx={ctx} looks={seatLooks(view)} marks={myMarks(view)} />}
         </div>
       ),
     },
@@ -269,6 +273,8 @@ function Board({ view, timers, offset, send, autoMeetings, gameId, channel, dmNo
         open={open}
         onOpen={setOpen}
       />
+      {/* design §10: the alibi pop-up, over whichever panel is open. */}
+      <AlibiAsk view={view} timers={timers} offset={offset} send={send} />
       {/* design §9.6: the meeting's result card is a dialog of its own, so it shows whichever panel is open. */}
       <ResultDialog view={view} pins={pins} dismissed={cardDismissed} onDismiss={onCardDismiss} />
       <RulebookSheet open={rules} onClose={() => setRules(false)} view={view} />
@@ -458,7 +464,8 @@ function Actions({ view, timers, offset, send, autoMeetings, pick, channel, plan
     <>
       {p.kind === "meeting" && <MeetingNow view={view} timers={timers} offset={offset} send={send} />}
       {p.kind === "shakedownPending" && <DecidingPanel view={view} timers={timers} offset={offset} send={send} />}
-      {plan && <PlanPanel view={view} send={send} channel={channel} />}
+      {plan && <PlanPanel view={view} channel={channel} />}
+      <LatestCard view={view} send={send} />
       {p.kind === "planning" ? (
         <MovePanel key={p.round} view={view} round={p.round} timers={timers} offset={offset} send={send} pick={pick} />
       ) : voting ? null : (
@@ -470,8 +477,40 @@ function Actions({ view, timers, offset, send, autoMeetings, pick, channel, plan
   );
 }
 
-/** design §10: the live board while a round is planned, its snapshot after, and where you post an alibi for the round that just resolved (§11.3). */
-function PlanPanel({ view, send, channel, bare }: { view: PlayerView; send: BoardProps["send"]; channel: GameChannel; bare?: boolean }) {
+/** design §10: the alibi pop-up while the round's window is open and you haven't answered (also on arriving late). */
+function AlibiAsk({ view, timers, offset, send }: { view: PlayerView; timers: readonly Timer[]; offset: number; send: BoardProps["send"] }) {
+  const round = alibiDue(view);
+  const left = useCountdown(timers, round === null ? null : `alibi:${round}`, offset);
+  return (
+    <AlibiPopup
+      round={round}
+      rooms={roomOptions(view)}
+      left={left && { text: left.text, share: Math.min(1, left.ms / ALIBI_WINDOW_MS) }}
+      onPost={async (r, room) => void (await send({ type: "postAlibi", round: r, room }, "Alibi posted."))}
+    />
+  );
+}
+
+/** design §10: the latest round's snapshot card, from its alibi window's close until the next one's, and its key. */
+function LatestCard({ view, send }: { view: PlayerView; send: BoardProps["send"] }) {
+  const round = snapshotRounds(view).at(-1);
+  if (round === undefined) return null;
+  return (
+    <>
+      <RoundCard view={view} send={send} round={round} />
+      <CardKey />
+    </>
+  );
+}
+
+/** design §10: `round`'s snapshot card, once its alibi window has closed (This round and the case board). */
+function RoundCard({ view, send, round }: { view: PlayerView; send: BoardProps["send"]; round: number }) {
+  const snap = snapshotOf(view, round);
+  return snap && <SnapshotCard snap={snap} crew={seatLooks(view)} me={view.me.id} marks={myMarks(view)} bulbs={jobOf(view).alarm.bulbs} onMark={(r, target, mark) => void send({ type: "markAlibi", round: r, target, mark })} />;
+}
+
+/** design §10: the live board while a round is planned, and its snapshot after. */
+function PlanPanel({ view, channel, bare }: { view: PlayerView; channel: GameChannel; bare?: boolean }) {
   const toast = useToast();
   const looks = seatLooks(view);
   const round = view.phase.kind === "planning" ? view.phase.round : null;
@@ -486,8 +525,6 @@ function PlanPanel({ view, send, channel, bare }: { view: PlayerView; send: Boar
           if (!r.ok) toast(sentence(r.reason), "bad");
         }}
         last={lastPlan(view)}
-        alibi={alibiState(view)}
-        onAlibi={async (round, room) => void (await send({ type: "postAlibi", round, room: room as RoomId }, "Alibi posted."))}
       />
   );
   return bare ? (
@@ -508,7 +545,9 @@ function WaitPanel({ view }: { view: PlayerView }) {
   const p = view.phase;
   // design §9.1–§9.3: a regular meeting or briefing is due, or the result window (an emergency can be called).
   const text =
-    p.kind === "awaitingMeeting"
+    p.kind === "alibi"
+      ? `Round ${p.round}'s result is in. The crew is saying where they were.`
+      : p.kind === "awaitingMeeting"
       ? `${MEETING_TITLE[p.meeting]} opens next.`
       : p.kind === "result" && view.emergencies > 0
         ? `Round ${p.round}'s result is in. Anyone can call an emergency meeting before the next round.`

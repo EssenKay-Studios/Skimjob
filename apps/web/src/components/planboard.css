@@ -187,13 +187,9 @@ button.plan__line {
 .plan__actions > * {
   flex: 1 1 8rem;
 }
-.plan__pledge,
-div.plan__alibi {
+.plan__pledge {
   display: grid;
   gap: 8px;
-  margin: 0;
-}
-p.plan__alibi {
   margin: 0;
 }
 .plan__chips {

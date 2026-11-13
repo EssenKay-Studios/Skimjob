@@ -13,7 +13,7 @@ import {
   type VoteVisibility,
 } from "@skimjob/engine";
 import { caseData } from "./caseLeads";
-import { createGame } from "./deal.testkit";
+import { createGame, pastAlibi } from "./deal.testkit";
 import { describe, expect, it } from "vitest";
 import {
   bailPromptOf,
@@ -46,7 +46,7 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   for (const c of commands) {
     const r = handleCommand(state, c);
     if (!r.ok) throw new Error(`${c.type}: ${r.reason}`);
-    state = r.state;
+    state = pastAlibi(r.state);
   }
   return state;
 }

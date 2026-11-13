@@ -42,6 +42,11 @@ describe("describeEvent", () => {
     const alibi = said({ kind: "alibi", player: "ana", round: 1, room: "lobby" });
     expect(describeEvent(alibi, asAna)).toBe("You say you were in the Lobby in round 1.");
     expect(describeEvent(alibi, asCyd)).toBe("Ana says they were in the Lobby in round 1.");
+    // design §10: the alibi window's close, and your own secret trust marks.
+    expect(describeEvent(sampleEvents.alibiWindowClosed, asCyd)).toBe("Round 1's alibis are in.");
+    expect(describeEvent(sampleEvents.alibiMarked, asAna)).toBe("You marked Ben's alibi for round 1: Liar.");
+    expect(describeEvent({ ...sampleEvents.alibiMarked, mark: "trusted" }, asAna)).toBe("You marked Ben's alibi for round 1: Trusted.");
+    expect(describeEvent({ ...sampleEvents.alibiMarked, mark: null }, asAna)).toBe("You cleared your mark on Ben's alibi for round 1.");
     const claim = said({ kind: "role", player: "ana", role: "lookout", stretch: 1 });
     expect(describeEvent(claim, asAna)).toBe("You claim to be the Lookout.");
     expect(describeEvent(claim, asCyd)).toBe("Ana claims to be the Lookout.");
@@ -171,7 +176,6 @@ describe("describeEvent", () => {
   // design §12: every perk bought.
   const perks: SamplesOf<PerkUse> = {
     tail: [{ kind: "tail", room: "vault" }],
-    alibi: [{ kind: "alibi" }],
     ballot: [{ kind: "ballot", target: "ben" }],
     softShoes: [{ kind: "softShoes" }],
     blackout: [{ kind: "blackout", room: "office" }],

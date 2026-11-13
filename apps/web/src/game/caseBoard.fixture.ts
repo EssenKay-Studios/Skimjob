@@ -1,5 +1,5 @@
 // A hand-made case board for /dev/gallery and tests: the shape the adapter (caseLeads.ts)
-// must fill, with every trust level, a ⚠, a bell and a suspect (design §15.4).
+// must fill, with every trust level (and your own mark), a ⚠, a bell and a suspect (design §15.4).
 import type { CaseData, Lead } from "./caseBoard";
 
 export const FIXTURE_LEADS: readonly Lead[] = [
@@ -15,6 +15,8 @@ export const FIXTURE_LEADS: readonly Lead[] = [
       { id: "fact:r4.vault.bell", text: "The bell rang 3 times.", trust: "fact" },
       { id: "fact:r4.vault.saw", text: "You saw Ben here.", trust: "seen" },
       { id: "fact:r4.vault.claim", text: "Ben: “I was in Security.”", trust: "said" },
+      { id: "fact:r4.vault.noalibi", text: "Dot had no alibi: in the Vault, round 4", trust: "fact" },
+      { id: "fact:r4.vault.mark", text: "You trust Cy's alibi: the Vault, round 4", trust: "mark" },
     ],
   },
   {
@@ -43,4 +45,6 @@ export const FIXTURE_LEADS: readonly Lead[] = [
 export const FIXTURE: CaseData = {
   leads: FIXTURE_LEADS,
   suspect: { player: "p2", reason: "Said Security in R4; you saw him in the Vault." },
+  roundCap: 12,
+  played: 4,
 };

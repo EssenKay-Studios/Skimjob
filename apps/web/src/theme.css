@@ -77,6 +77,8 @@
   --tally-pass: #2f6b2a;
   /* The vote dialog's backdrop. */
   --scrim: #2a232066;
+  /* A crook's name tag on the trust-mark pop-over (design §10): light yellow, ink text. */
+  --note-yellow: #fbf0b8;
   /* Dashed rules between rows and under headers (ui-style §4). */
   --rule: #2a232040;
   /* Premium ("crew pass") card */
@@ -166,6 +168,8 @@
   --acc-6: #faf9f5;
 
   /* Type */
+  /* The snapshot card's key: one small size for every line (design §10). */
+  --fs-key: 12px;
   --font-hand: "Pangolin", "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
   --font-ui: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 

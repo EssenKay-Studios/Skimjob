@@ -1,12 +1,10 @@
-// QA (S4.3): the plan panel's history order, its words and where it offers an alibi, against
-// real engine views. design §10, §11.3
+// QA (S4.3): the plan panel's history order and its words. design §10
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { handleCommand, viewFor, type GameConfig, type GameState, type PlanEditRecord, type PlayerCommand, type SystemCommand } from "@skimjob/engine";
 import { PlanBoard } from "../components/PlanBoard";
 import { createGame } from "./deal.testkit";
-import { alibiState } from "./hud";
 import { beforeDeadline, historyOrder } from "./plan";
 
 const config = (n: number): GameConfig => ({
@@ -59,8 +57,6 @@ describe("history order (design §10)", () => {
         board: null,
         onEdit: async () => {},
         last: { round: 1, plan: { entries: [], history: [late, edit(null, "p2"), edit(600_000, "p1")] } },
-        alibi: null,
-        onAlibi: async () => {},
       }),
     );
     expect(html).not.toMatch(/2026|21:45|T21/);
@@ -69,49 +65,5 @@ describe("history order (design §10)", () => {
     expect(order[0]).toContain("bot");
     expect(order[1]).toContain("10 min before the deadline");
     expect(order[2]).toContain("under a minute before the deadline");
-    expect(html).not.toContain("alibi");
-  });
-});
-
-describe("where the alibi is offered (design §11.3)", () => {
-  it("offers, in every phase, only a round the engine takes; none before a round resolves or after the game ends", () => {
-    let s = createGame(config(3));
-    const offered: string[] = [];
-    const check = (st: GameState) => {
-      for (const p of ["p1", "p2", "p3"]) {
-        const a = alibiState(viewFor(st, p));
-        if (st.resolvedRound === 0 || st.phase.kind === "ended") {
-          expect(a, `${st.phase.kind} r${st.round}`).toBeNull();
-          continue;
-        }
-        // The latest resolved round, in every phase, and the engine takes it.
-        expect(a?.round, `${st.phase.kind} r${st.round}`).toBe(st.resolvedRound);
-        if (!a!.posted) expect(apply(st, { type: "postAlibi", player: p, round: a!.round, room: "office" }).ok).toBe(true);
-      }
-      offered.push(`${st.phase.kind}:${alibiState(viewFor(st, "p1"))?.round ?? "-"}`);
-    };
-    check(s);
-    for (let r = 1; r <= 3; r++) {
-      s = run(s, { type: "advance", deadline: { kind: "round", round: r } });
-      check(s);
-      s = run(s, { type: "advance", deadline: { kind: "result", round: r } });
-      check(s);
-    }
-    // An emergency meeting after round 3 keeps the offer at round 3.
-    s = run(s, { type: "advance", deadline: { kind: "round", round: 4 } });
-    const m = run(s, { type: "callEmergency", player: "p2" }, { type: "advance", deadline: { kind: "openMeeting", meetingId: "emergency-1" } });
-    expect(m.phase.kind).toBe("meeting");
-    check(m);
-    expect(offered).toEqual(["planning:-", "result:1", "planning:1", "result:2", "planning:2", "result:3", "planning:3", "meeting:4"]);
-  });
-
-  it("shows a posted alibi as posted and offers no second one for that round (the engine refuses it)", () => {
-    let s = run(createGame(config(3)), { type: "advance", deadline: { kind: "round", round: 1 } }, { type: "postAlibi", player: "p1", round: 1, room: "vault" });
-    expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: "vault" });
-    expect(apply(s, { type: "postAlibi", player: "p1", round: 1, room: "office" }).ok).toBe(false);
-    s = run(s, { type: "advance", deadline: { kind: "result", round: 1 } });
-    expect(alibiState(viewFor(s, "p1"))).toEqual({ round: 1, posted: "vault" });
-    // Another player's alibi is not taken for yours.
-    expect(alibiState(viewFor(s, "p2"))).toEqual({ round: 1, posted: null });
   });
 });

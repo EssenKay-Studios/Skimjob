@@ -21,7 +21,6 @@ const LAST_ROUND: Partial<Record<PerkId, string>> = {
 /** What a perk is aimed at; `buyPerk` carries it, so a purchase is its use. design §12 */
 const AIM: Readonly<Record<PerkId, { readonly player: boolean; readonly room: boolean }>> = {
   tail: { player: false, room: true },
-  alibi: { player: false, room: false },
   ballot: { player: true, room: false },
   softShoes: { player: false, room: false },
   blackout: { player: false, room: true },

@@ -1,6 +1,6 @@
 // /dev/gallery: the plan board (design §10) on a made-up crew, edited in the browser
 // only (no server): rooms, heads, claims, pledges, "I agree", a snapshot with its
-// history and an alibi.
+// history.
 import { useState } from "react";
 import type { PlanSnapshot } from "@skimjob/engine";
 import { PlanBoard, type PlanRoom, type PlanSeat } from "../components/PlanBoard";
@@ -40,7 +40,6 @@ function apply(board: Board, me: string, e: PlanEdit): Board {
 
 export function PlanDemo({ seed = "g-plan" }: { seed?: string }) {
   const [board, setBoard] = useState<Board>({ round: 5, entries: [{ player: "p6", placed: "serverRoom", room: "serverRoom", power: null, agreed: true }] });
-  const [alibi, setAlibi] = useState<string | null>(null);
   return (
     <PlanBoard
       seed={seed}
@@ -49,8 +48,6 @@ export function PlanDemo({ seed = "g-plan" }: { seed?: string }) {
       board={board}
       onEdit={async (e) => setBoard((b) => apply(b, "p1", e))}
       last={{ round: 4, plan: LAST }}
-      alibi={{ round: 4, posted: alibi }}
-      onAlibi={async (_round, room) => setAlibi(room)}
     />
   );
 }

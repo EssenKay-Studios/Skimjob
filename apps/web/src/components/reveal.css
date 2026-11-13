@@ -224,13 +224,69 @@
   gap: 2px 12px;
   min-width: 0;
 }
-.reveal__move.is-lie .reveal__alibi {
-  color: var(--bad);
-  font-weight: 650;
+/* A round's card, told true (design §15.5, §18 board 5): a row per room, each alibi stamped
+   TRUE or LIE, and each liar drawn in a red ring where they really were. */
+.reveal__truth,
+.reveal__lies ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.reveal__changed {
+.reveal__troom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 0;
+  border-bottom: 1.2px dashed var(--ink-faint);
+}
+.reveal__tname {
+  min-width: 6em;
+  font: 400 16px/1.2 var(--font-hand);
+}
+.reveal__crooks,
+.reveal__really {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.reveal__said {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.reveal__stamp {
+  padding: 0 5px;
+  border: 2px solid var(--good);
+  border-radius: var(--radius-chip);
+  color: var(--good);
+  font: 700 12px/1.4 var(--font-hand);
+  letter-spacing: 0.06em;
+  rotate: -6deg;
+}
+.reveal__said.is-lie .reveal__stamp {
+  border-color: var(--bad);
   color: var(--bad);
-  font-weight: 650;
+}
+.reveal__liar {
+  display: inline-flex;
+  padding: 2px;
+  border: 2.5px solid var(--bad);
+  border-radius: var(--radius-blob);
+}
+.reveal__lies {
+  display: grid;
+  gap: 4px;
+}
+.reveal__lies h5 {
+  margin: 0;
+  font: 400 16px/1.2 var(--font-hand);
+}
+.reveal__lies li {
   overflow-wrap: anywhere;
 }
 .reveal__sat-out {

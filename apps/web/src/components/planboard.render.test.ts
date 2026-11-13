@@ -1,4 +1,4 @@
-// Render checks for the plan board. design §10, §11.3, §15.6
+// Render checks for the plan board. design §10, §15.6
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -32,7 +32,7 @@ const plan: PlanSnapshot = {
   ],
 };
 const html = (p: Partial<PlanBoardProps> = {}) =>
-  renderToStaticMarkup(createElement(PlanBoard, { seats, rooms, board, onEdit: async () => {}, last: null, alibi: null, onAlibi: async () => {}, ...p }));
+  renderToStaticMarkup(createElement(PlanBoard, { seats, rooms, board, onEdit: async () => {}, last: null, ...p }));
 
 describe("the plan board (design §10)", () => {
   it("lists the ledger in seat order with a door for a room claim and a bolt for a pledge", () => {
@@ -70,15 +70,6 @@ describe("the plan board (design §10)", () => {
     expect(out).toContain("1 h 0 min before the deadline");
     expect(out).not.toMatch(/\d{1,2}:\d{2}|\bago\b/);
   });
-
-  it("offers an alibi for the resolved round until you post one (design §11.3)", () => {
-    const open = html({ alibi: { round: 1, posted: null } });
-    expect(open).toContain("Round 1 alibi: where were you?");
-    expect(open).toContain("Post alibi");
-    const posted = html({ alibi: { round: 1, posted: "vault" } });
-    expect(posted).toContain("Everyone can see it.");
-    expect(posted).not.toContain("Post alibi");
-  });
 });
 
 describe("heads (design §10)", () => {
@@ -96,12 +87,6 @@ describe("heads (design §10)", () => {
 });
 
 describe("plan board styles", () => {
-  it("keep a posted alibi one sentence: only the form is a grid, not the paragraph", () => {
-    const css = readFileSync(new URL("./planboard.css", import.meta.url), "utf8");
-    expect(css).not.toMatch(/(^|[\s,])\.plan__alibi\s*[,{]/m);
-    expect(css).toMatch(/div\.plan__alibi/);
-  });
-
   const code = readFileSync(new URL("./planboard.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
   it("use theme.css tokens only", () => {

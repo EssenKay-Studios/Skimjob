@@ -145,7 +145,7 @@
  "game-shell.qa.spec.ts > toasts at 390: clear of the tab bar and the dock, and the tabs take taps @shell": 2,
  "game-shell.qa.spec.ts > toasts at 768: clear of the tab bar and the dock, and the tabs take taps @shell": 1.9,
  "game-shell.qa.spec.ts > finished game: The result panel at every width @fast-clock @reveal": 83.6,
- "game.qa.spec.ts > reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 s rounds) @move": 103.7,
+ "game.qa.spec.ts > reloads, a killed socket, a skewed clock and the alibi pop-up after a reload (3h preset: 102 s rounds) @move": 103.7,
  "game.qa.spec.ts > 12 seats, 24-char names: a 15-min game to the end with moves changed, alibis, no leaks, no overflow @fast-clock @move": 62.9,
  "game.responsive.spec.ts > game screen at 360x740: no overflow, targets ≥44px @move": 7,
  "game.responsive.spec.ts > game screen at 360x740 touch: no overflow, targets ≥44px @move": 7.4,
@@ -296,8 +296,8 @@
  "notes.spec.ts > recap, the case board and the suspicion board at 1280x800: no overflow, targets ≥44px @caseboard": 1,
  "plan.qa.spec.ts > QA: each player sees the other's placement and claim live; a reconnect gets the board; strangers get no socket @plan": 3.6,
  "plan.spec.ts > two players plan together on the board, live, with the ledger linked to the heads @plan": 6.9,
- "planboard.qa.spec.ts > plan board at 6 seats: live, private moves stay off it, edits at once converge, snapshot and alibi @plan": 93.4,
- "planboard.qa.spec.ts > plan board at 12 seats: live, private moves stay off it, edits at once converge, snapshot and alibi @plan": 101.5,
+ "planboard.qa.spec.ts > plan board at 6 seats: live, private moves stay off it, edits at once converge, snapshot @plan": 93.4,
+ "planboard.qa.spec.ts > plan board at 12 seats: live, private moves stay off it, edits at once converge, snapshot @plan": 101.5,
  "press.qa.spec.ts > QA: the chat's New messages pill stays inside the viewport with no sideways scroll at 1280 and 390 px @chat": 10.6,
  "press.qa.spec.ts > QA: a pressed .btn keeps its box (>= 44 px) for every variant in the gallery (mobile) @board": 4.9,
  "press.qa.spec.ts > QA: a pressed .btn keeps its box (>= 44 px) for every variant in the gallery (desktop) @board": 5.5,
@@ -387,7 +387,7 @@
  "responsive.qa.spec.ts > tablets > 1024x768 > no button label spills out of its frame @lobby": 0.9,
  "responsive.qa.spec.ts > primary button contrast > label is at least 4.5:1 on the clay fill, at rest and on hover @lobby": 1,
  "reveal.qa.spec.ts > the reveal demo, every ending > raids reach Wanted 3 only on the bust, the sat-out round shows, no ballot opens @reveal": 2.1,
- "reveal.spec.ts > the reveal demo > every role, plan against moves, a sat-out round and each ending @reveal": 1.9,
+ "reveal.spec.ts > the reveal demo > every role, the card told true, a sat-out round and each ending @reveal": 1.9,
  "reveal.spec.ts > the reveal demo at 360 > 24-character names: no line pushes the page sideways, in any ending or round; 44 px scrub targets @reveal": 4.2,
  "reveal.spec.ts > the reveal demo at 390 > 24-character names: no line pushes the page sideways, in any ending or round; 44 px scrub targets @reveal": 2.5,
  "reveal.spec.ts > the reveal demo at 768 > 24-character names: no line pushes the page sideways, in any ending or round; 44 px scrub targets @reveal": 2.5,
@@ -477,5 +477,6 @@
  "tips.spec.ts > signed out, the landing page has no Tips setting @auth": 0.5,
  "tips.spec.ts > the Tips toggle fits every launch width with 44 px targets @auth": 2.4,
  "tips.spec.ts > while a save is in flight the Tips buttons keep keyboard focus and ignore presses @auth": 1,
- "overflow.qa.spec.ts > real 15-min game over with W×24, emoji×24 and combining-mark names: no overflow at 360/390/768 @fast-clock @reveal": 100.1
+ "overflow.qa.spec.ts > real 15-min game over with W×24, emoji×24 and combining-mark names: no overflow at 360/390/768 @fast-clock @reveal": 100.1,
+ "alibi.spec.ts > the alibi pop-up posts an alibi, the snapshot card shows says and facts, and marks stay yours @alibi": 34
 }

@@ -31,7 +31,7 @@ function run(s: GameState, ...cs: (PlayerCommand | SystemCommand)[]): GameState 
 }
 const shake = (player: PlayerId, target: PlayerId): PlayerCommand => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 
-/** A scheduler-ish step: varied rooms and pockets, alibis, meetings (the second shakes down p2), result windows, shakedowns resolve. */
+/** A scheduler-ish step: varied rooms and pockets, alibis in the alibi window, meetings (the second shakes down p2), result windows, shakedowns resolve. */
 function step(s: GameState): GameState {
   const p = s.phase;
   if (p.kind === "planning") {
@@ -42,7 +42,8 @@ function step(s: GameState): GameState {
     }
     return run(s, { type: "advance", deadline: { kind: "round", round: p.round } });
   }
-  if (p.kind === "result") return run(tryRun(s, { type: "postAlibi", player: "p2", round: p.round, room: s.rooms[0] } as PlayerCommand), { type: "advance", deadline: { kind: "result", round: p.round } });
+  if (p.kind === "alibi") return run(tryRun(s, { type: "postAlibi", player: "p2", round: p.round, room: s.rooms[0] } as PlayerCommand), { type: "advance", deadline: { kind: "alibi", round: p.round } });
+  if (p.kind === "result") return run(s, { type: "advance", deadline: { kind: "result", round: p.round } });
   if (p.kind === "awaitingMeeting") {
     if (!s.scheduledMeeting) s = run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: `s-${p.meetingId}` } as SystemCommand);
     return run(s, { type: "advance", deadline: { kind: "openMeeting", meetingId: p.meetingId } });

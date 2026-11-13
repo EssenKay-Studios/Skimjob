@@ -9,8 +9,8 @@ const round = (r: Partial<RoundFacts> = {}): RoundFacts => ({
   round: 4,
   card: null,
   rooms: new Map(),
-  plan: new Map(),
   alibis: new Map(),
+  noAlibi: new Map(),
   softShoes: 0,
   planted: 0,
   mySoftShoes: false,
@@ -28,14 +28,11 @@ const ctx = (c: Partial<CheckContext> = {}): CheckContext => ({
 });
 const kinds = (found: { warning: { kind: string } }[]) => found.map((f) => f.warning.kind);
 
-describe("Seen elsewhere — design §15.4", () => {
-  it("names a player you saw in one room whose plan spot or alibi says another", () => {
+describe("Seen elsewhere — design §15.4 (alibis only, owner 13 Nov)", () => {
+  it("names a player you saw in one room whose alibi says another", () => {
     const r = round({ rooms: new Map([["vault", room({ watched: true, seen: new Map([["p5", "feed"]]) })]]), alibis: new Map([["p5", "security"]]) });
     const [f] = storyChecks(r, "p1", name);
     expect(f).toEqual({ round: 4, room: "vault", warning: { kind: "seenElsewhere", names: ["p5"], text: "Said Security in R4; you saw Dev in the Vault." } });
-    // The plan spot when there is no alibi.
-    const planned = storyChecks({ ...r, alibis: new Map(), plan: new Map([["p5", "office"]]) }, "p1", name);
-    expect(planned[0]?.warning.text).toBe("Planned Office in R4; you saw Dev in the Vault.");
   });
 
   it("is quiet when the story matches, when there is no story, and never about you", () => {
@@ -55,31 +52,18 @@ describe("Seen elsewhere — design §15.4", () => {
 });
 
 describe("Not seen — design §15.4", () => {
-  it("names a player who claims a room you watched and wasn't seen there", () => {
-    const r = round({ rooms: new Map([["vault", room({ watched: true, seen: new Map([["p4", "feed"]]) })]]), plan: new Map([["p3", "vault"]]) });
+  it("names a player whose alibi is a room you watched and who wasn't seen there", () => {
+    const r = round({ rooms: new Map([["vault", room({ watched: true, seen: new Map([["p4", "feed"]]) })]]), alibis: new Map([["p3", "vault"]]) });
     expect(storyChecks(r, "p1", name)).toEqual([
-      { round: 4, room: "vault", warning: { kind: "notSeen", names: ["p3"], text: "Planned Vault in R4; you watched the Vault and didn't see Ben." } },
+      { round: 4, room: "vault", warning: { kind: "notSeen", names: ["p3"], text: "Said Vault in R4; you watched the Vault and didn't see Ben." } },
     ]);
   });
 
   it("is skipped for a blacked-out room, for a room you didn't watch, and for you", () => {
-    const plan = new Map([["p3", "vault"]]);
-    expect(storyChecks(round({ rooms: new Map([["vault", room({ watched: true, dark: true })]]), plan }), "p1", name)).toEqual([]);
-    expect(storyChecks(round({ rooms: new Map([["vault", room()]]), plan }), "p1", name)).toEqual([]);
-    expect(storyChecks(round({ rooms: new Map([["vault", room({ watched: true })]]), plan: new Map([["p1", "vault"]]) }), "p1", name)).toEqual([]);
-  });
-});
-
-describe("Changed story — design §15.4 (the plan snapshot, #179)", () => {
-  it("names a player whose alibi differs from their plan spot, on the planned room", () => {
-    const r = round({ plan: new Map([["p5", "office"]]), alibis: new Map([["p5", "security"]]) });
-    expect(storyChecks(r, "p1", name)).toEqual([{ round: 4, room: "office", warning: { kind: "changedStory", names: ["p5"], text: "Planned Office in R4; later said Security." } }]);
-  });
-
-  it("is quiet when they agree, or when either is missing", () => {
-    expect(storyChecks(round({ plan: new Map([["p5", "office"]]), alibis: new Map([["p5", "office"]]) }), "p1", name)).toEqual([]);
-    expect(storyChecks(round({ plan: new Map([["p5", "office"]]) }), "p1", name)).toEqual([]);
-    expect(storyChecks(round({ alibis: new Map([["p5", "office"]]) }), "p1", name)).toEqual([]);
+    const alibis = new Map([["p3", "vault"]]);
+    expect(storyChecks(round({ rooms: new Map([["vault", room({ watched: true, dark: true })]]), alibis }), "p1", name)).toEqual([]);
+    expect(storyChecks(round({ rooms: new Map([["vault", room()]]), alibis }), "p1", name)).toEqual([]);
+    expect(storyChecks(round({ rooms: new Map([["vault", room({ watched: true })]]), alibis: new Map([["p1", "vault"]]) }), "p1", name)).toEqual([]);
   });
 });
 
@@ -93,8 +77,8 @@ describe("Too quiet — design §15.4", () => {
     ]);
   });
 
-  it("counts claimants too, and you with your real grab", () => {
-    const r = round({ rooms: vault({ rings: 2, myCoins: 2 }), plan: new Map([["p3", "vault"]]) });
+  it("counts alibis too, and you with your real grab", () => {
+    const r = round({ rooms: vault({ rings: 2, myCoins: 2 }), alibis: new Map([["p3", "vault"]]) });
     expect(bellChecks(r, ctx(), name).map((f) => f.warning)).toEqual([{ kind: "tooQuiet", names: ["p3"], text: "The Vault rang 2 times in R4; Ben there should ring at least 3 with you." }]);
     // You wore Soft shoes: your coins rang nothing.
     expect(bellChecks({ ...r, mySoftShoes: true }, ctx(), name)).toEqual([]);
@@ -120,11 +104,23 @@ describe("Too quiet — design §15.4", () => {
     expect(bellChecks({ ...r, rooms: vault({ rings: 0, watched: true, seen }), softShoes: 2 }, ctx(), name)).toEqual([]);
   });
 
-  it("drops a feed sighting that may be planted, but never one from your own room or a claimant", () => {
+  it("counts a player's \"no alibi\" fact in its room (design §10), and only there", () => {
+    const r = round({ rooms: vault({ rings: 1 }), noAlibi: new Map([["p4", "vault"], ["p5", "vault"]]) });
+    expect(bellChecks(r, ctx(), name).map((f) => f.warning)).toEqual([
+      { kind: "tooQuiet", names: ["p4", "p5"], text: "The Vault rang once in R4; Cleo and Dev there should ring at least 2." },
+    ]);
+    // A feed showed Dev in the Office: planted, since the fact puts him in the Vault.
+    const office = room({ rings: 0, watched: true, seen: new Map([["p5", "feed"]]) });
+    const both = bellChecks({ ...r, rooms: new Map([["vault", room({ rings: 1 })], ["office", office]]) }, ctx(), name);
+    expect(both.map((f) => [f.room, f.warning.names])).toEqual([["vault", ["p4", "p5"]]]);
+  });
+
+  it("drops a feed sighting that may be planted, but never one from your own room, an alibi or a fact", () => {
     const seen = new Map<string, "room" | "feed">([["p4", "room"], ["p5", "feed"]]);
     const r = round({ rooms: vault({ rings: 1, watched: true, seen }), planted: 1 });
     expect(bellChecks(r, ctx(), name)).toEqual([]);
-    expect(kinds(bellChecks({ ...r, plan: new Map([["p5", "vault"]]) }, ctx(), name))).toEqual(["tooQuiet"]);
+    expect(kinds(bellChecks({ ...r, alibis: new Map([["p5", "vault"]]) }, ctx(), name))).toEqual(["tooQuiet"]);
+    expect(kinds(bellChecks({ ...r, noAlibi: new Map([["p5", "vault"]]) }, ctx(), name))).toEqual(["tooQuiet"]);
     expect(kinds(bellChecks({ ...r, rooms: vault({ rings: 1, watched: true, seen: new Map([["p4", "room"], ["p5", "room"]]) }) }, ctx(), name))).toEqual(["tooQuiet"]);
   });
 
@@ -154,7 +150,7 @@ describe("Too quiet — design §15.4", () => {
     expect(bellChecks(round({ rooms: new Map([["lobby", room({ rings: 0, watched: true, seen })]]) }), ctx(), name)).toEqual([]);
   });
 
-  it("still runs in a blacked-out room on what its claimants say (its bell rings)", () => {
+  it("still runs in a blacked-out room on what its alibis say (its bell rings)", () => {
     const r = round({ rooms: vault({ rings: 0, dark: true }), alibis: new Map([["p5", "vault"]]) });
     expect(kinds(bellChecks(r, ctx(), name))).toEqual(["tooQuiet"]);
   });
@@ -176,6 +172,9 @@ describe("Too loud — design §15.4", () => {
 
   it("needs someone counted or a room you watched: an unwatched, unclaimed room rings for anyone", () => {
     expect(bellChecks(round({ rooms: new Map([["vault", room({ rings: 3 })]]) }), ctx(), name)).toEqual([]);
+    // Counting the alibis and the "no alibi" facts there.
+    const counted = round({ rooms: new Map([["vault", room({ rings: 7 })]]), alibis: new Map([["p3", "vault"]]), noAlibi: new Map([["p4", "vault"]]) });
+    expect(bellChecks(counted, ctx(), name)[0]?.warning.text).toBe("The Vault rang 7 times in R4; who was there can ring at most 6.");
     expect(kinds(bellChecks(round({ rooms: new Map([["vault", room({ rings: 1, watched: true })]]) }), ctx(), name))).toEqual(["tooLoud"]);
   });
 });

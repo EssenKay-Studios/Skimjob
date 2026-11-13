@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { applyEvent, handleCommand, privateTo, viewFor, type GameState, type PlayerCommand, type PlayerView, type SystemCommand, type VoteVisibility } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
-import { createGame } from "../game/deal.testkit";
+import { createGame, pastAlibi } from "../game/deal.testkit";
 import type { PinsChannel } from "../game/notes";
 import { DecidingPanel, MeetingNow, MeetingsPanel, ResultDialog } from "./Meetings";
 
@@ -18,7 +18,7 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   for (const c of commands) {
     const r = handleCommand(state, c);
     if (!r.ok) throw new Error(`${c.type}: ${r.reason}`);
-    state = r.state;
+    state = pastAlibi(r.state);
   }
   return state;
 }

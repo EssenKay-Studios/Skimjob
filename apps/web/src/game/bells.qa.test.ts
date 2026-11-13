@@ -60,7 +60,9 @@ function toPlanning(s: GameState, r: number): GameState {
     const p = s.phase;
     if (p.kind === "planning" && p.round === r) return s;
     const deadline =
-      p.kind === "result"
+      p.kind === "alibi"
+        ? { kind: "alibi", round: p.round }
+        : p.kind === "result"
         ? { kind: "result", round: p.round }
         : p.kind === "awaitingMeeting"
           ? { kind: "openMeeting", meetingId: p.meetingId }

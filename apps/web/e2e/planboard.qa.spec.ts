@@ -8,11 +8,10 @@ import { openPanel, settle, DEFAULT_SEED } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 20_000 });
 
-// QA (S4.3, design §10, §11.3): the plan board in a real bot game at 6 and 12 seats with
+// QA (S4.3, design §10): the plan board in a real bot game at 6 and 12 seats with
 // 24-character names, at every launch width. A private move never shows on the board, two
 // players editing at once end up on the same board, the round's snapshot history has no wall
-// time and is ordered by time left (bots first), and the alibi is offered for the latest
-// resolved round, in the result window and through the next round's planning.
+// time and is ordered by time left (bots first).
 
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
 
@@ -80,7 +79,7 @@ const ledger = (p: Page) => panel(p).getByRole("list", { name: "Claims this roun
 const heads = (p: Page) => panel(p).locator(".plan__room").evaluateAll((rs) => rs.map((r) => `${r.getAttribute("data-room")}:${[...r.querySelectorAll(".plan__heads button")].map((b) => b.getAttribute("aria-label")!.replace(" (you)", "").split(".")[0]).join(",")}`));
 
 for (const seats of [6, 12]) {
-  test(`plan board at ${seats} seats: live, private moves stay off it, edits at once converge, snapshot and alibi @plan`, async ({ page, browser }) => {
+  test(`plan board at ${seats} seats: live, private moves stay off it, edits at once converge, snapshot @plan`, async ({ page, browser }) => {
     test.setTimeout(240_000);
     const guestCount = seats === 12 ? 2 : 1;
     const guests = await Promise.all(Array.from({ length: guestCount }, async () => (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage()));
@@ -151,7 +150,8 @@ for (const seats of [6, 12]) {
     });
 
     // Everyone human locks in; the round resolves and the snapshot shows.
-    await pickRoom(page, "Vault");
+    // The host lies low in the Lobby: with the guest's Vault grab, this seed's 12-seat round would raid three rooms (a bust, design §5.5).
+    await pickRoom(page, "Lobby");
     await grabAll(page);
     await page.getByRole("button", { name: "Lock it in" }).click();
     for (const g of guests.slice(1)) {
@@ -161,8 +161,7 @@ for (const seats of [6, 12]) {
     }
     const summary = panel(page).getByText("Round 1 plan", { exact: true });
     await expect(summary).toBeVisible({ timeout: 60_000 });
-    // The alibi is offered for round 1 in the result window (and stays through round 2's planning, below).
-    await expect(panel(page).getByText("Round 1 alibi: where were you?")).toBeVisible();
+    // The alibi pop-up (design §10) and any meeting's cards sit over the panel until their windows close.
     await clearMeeting(page);
     await summary.click();
     const history = panel(page).getByRole("list", { name: "How the round 1 plan changed" });
@@ -188,25 +187,11 @@ for (const seats of [6, 12]) {
     expect(botRows.every((r) => r.endsWith("· bot")), `bot rows: ${botRows.join(" | ")}`).toBe(true);
     await sweep(page, `s${seats}-snapshot`);
 
-    // Round 2's planning: the live board is fresh and the round 1 alibi is still on offer; post one (a lie).
+    // Round 2's planning: the live board is fresh.
     // A meeting that fell due first (chance) sits over the panels as modal cards: close them as a player would, then look.
     await clearMeeting(page);
     await expect(panel(page).getByText(/ of \d+ agreed/)).toBeVisible({ timeout: 60_000 });
     await expect(panel(page).getByRole("button", { name: new RegExp(`^${GUESTS[0]}: no claims\\.`) })).toBeVisible();
-    await sweep(page, `s${seats}-round2-alibi`);
-    // The offer names the latest resolved round: the planning round in the HUD minus one. That is round 1 unless a meeting held
-    // the game up (the player idles through it), so read the HUD, assert the offer and the posted alibi name exactly that round.
-    const planning = async () => Number((await page.locator(".hud__kicker").textContent())!.match(/Round (\d+)/)![1]);
-    let alibiRound = 0;
-    await expect(async () => {
-      alibiRound = (await planning()) - 1;
-      await expect(panel(page).getByText(`Round ${alibiRound} alibi: where were you?`)).toBeVisible({ timeout: 1000 });
-    }).toPass({ timeout: 10_000 });
-    await panel(page).getByRole("group", { name: "Alibi room" }).getByRole("button", { name: "Lobby" }).click();
-    await panel(page).getByRole("button", { name: "Post alibi" }).click();
-    await expect(panel(page).getByText(new RegExp(`You told the crew you were in the\\s*Lobby\\s*in round ${alibiRound}\\b`))).toBeVisible();
-    // Re-check bug 2: the posted alibi is one inline sentence, not a grid of rows.
-    expect(await panel(page).locator("p.plan__alibi").evaluate((el) => getComputedStyle(el).display)).toBe("block");
-    await sweep(page, `s${seats}-alibi-posted`);
+    await sweep(page, `s${seats}-round2`);
   });
 }

@@ -37,6 +37,11 @@ const looks = new Map([
   ["p3", { look: 2, bot: false }],
   ["p4", { look: 3, bot: true }],
 ]);
+/** Ana's own trust marks (design §10): Ben marked a liar in round 1, trusted in round 2. */
+const marks = new Map([
+  ["1/p2", "liar" as const],
+  ["2/p2", "trusted" as const],
+]);
 
 /** `player` grabbed `coins` in `room`, pocketing `pocket` of them. design §3.2 */
 const split = (player: string, round: number, room: string, coins: number, pocket: number, seized = 0): GameEvent => ({
@@ -169,6 +174,8 @@ const LOG: GameEvent[] = [
   split("p4", 2, "lobby", 4, 0, 4),
   raided(2, "lobby", 4, 1),
   resolved(2, 32, 12, 5, 22),
+  alibi("p2", 2, "office"),
+  alibi("p3", 2, "vault"),
   {
     type: "meetingOpened",
     visibility: PUBLIC,
@@ -294,7 +301,7 @@ export function RevealDemo() {
           Gallery
         </Button>
       </TopBar>
-      <Section id="reveal" title="End-of-game reveal" note="S4.9 · every role, who won and why, and each round's plan against what everyone really did">
+      <Section id="reveal" title="End-of-game reveal" note="S4.9 · every role, who won and why, and each round's card told true: TRUE or LIE, where each liar really was, and your own marks">
         <Segmented
           label="Ending"
           seed="g-reveal-ending"
@@ -317,7 +324,7 @@ export function RevealDemo() {
             { value: true, label: "24 characters" },
           ]}
         />
-        <Reveal key={ending} summary={summary} ctx={ctx} looks={looks} />
+        <Reveal key={ending} summary={summary} ctx={ctx} looks={looks} marks={marks} />
       </Section>
     </div>
   );
@@ -326,7 +333,7 @@ export function RevealDemo() {
 /** The gallery's entry for the reveal: a link to its page. */
 export function RevealSection() {
   return (
-    <Section id="reveal-link" title="End-of-game reveal" note="S4.9 · design §15.5 · plan against moves, sat-out rounds, the Hacker's hidden bell">
+    <Section id="reveal-link" title="End-of-game reveal" note="S4.9 · design §15.5 · each round's card told true, sat-out rounds, the Hacker's hidden bell">
       <Button variant="primary" seed="g-reveal-open" onClick={() => navigate("/dev/gallery/reveal")}>
         Open the reveal demo
       </Button>

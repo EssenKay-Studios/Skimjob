@@ -1,7 +1,7 @@
 // QA (PR #218, S4.8): try to break the meeting screens' helpers with real engine states.
 import { applyEvent, handleCommand, privateTo, viewFor, type GameState, type PlayerCommand, type PlayerView, type SystemCommand, type VoteVisibility } from "@skimjob/engine";
 import { describe, expect, it } from "vitest";
-import { createGame } from "./deal.testkit";
+import { createGame, pastAlibi } from "./deal.testkit";
 import { describeEvent } from "./describeEvent";
 import { bailPromptOf, emergencyOf, latestOutcome, openMeetingOf, voteTargets } from "./meeting";
 
@@ -12,7 +12,7 @@ function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): 
   for (const c of commands) {
     const r = handleCommand(state, c);
     if (!r.ok) throw new Error(`${c.type}: ${r.reason}`);
-    state = r.state;
+    state = pastAlibi(r.state);
   }
   return state;
 }

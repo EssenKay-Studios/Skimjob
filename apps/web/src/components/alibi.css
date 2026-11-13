@@ -1,0 +1,416 @@
+/* The alibi pop-up, the snapshot card, its key and the trust-mark pop-over (design §10). Theme tokens only. */
+
+/* ---------- Pop-up ---------- */
+.alibi {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.alibi__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.alibi__head > div {
+  flex: 1;
+  min-width: 0;
+}
+.alibi__head h2,
+.alibi__head p {
+  margin: 0;
+}
+.alibi__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.alibi__foot > .btn {
+  flex: 1;
+}
+.alibi__time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.alibi__bar {
+  flex: 1;
+  height: 9px;
+  border: 1.3px solid var(--ink);
+  border-radius: var(--radius-chip);
+  background: var(--paper2);
+  overflow: hidden;
+}
+.alibi__bar i {
+  display: block;
+  width: var(--left);
+  height: 100%;
+  background: var(--hatch), var(--clay);
+  transition: width 0.5s linear;
+}
+.alibi__rooms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+}
+.alibi__tile {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 44px;
+  padding: 6px;
+  border: 1.4px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper-hi);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s var(--spring);
+}
+.alibi__tile[aria-pressed="true"] {
+  background: var(--clay-l);
+  outline: 2.5px dashed var(--clay-d);
+  outline-offset: 2px;
+}
+.alibi__tile:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) {
+  .alibi__tile:hover {
+    transform: translateY(-1.5px) rotate(-1deg);
+  }
+}
+.alibi__tile:focus-visible {
+  outline: 2.5px solid var(--clay-d);
+  outline-offset: 3px;
+}
+.alibi__art {
+  width: 100%;
+  height: auto;
+  border: 1.2px solid var(--ink);
+  border-radius: var(--radius-clip);
+}
+.alibi__art > rect {
+  fill: var(--wall);
+}
+.alibi__name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 15px/1.2 var(--font-hand);
+}
+.alibi__note {
+  color: var(--ink2);
+  font-size: var(--fs-key);
+  line-height: 1.3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .alibi__bar i,
+  .alibi__tile {
+    transition: none;
+  }
+}
+
+/* ---------- Snapshot card ---------- */
+.snap {
+  --fr-fill: var(--paper);
+  display: grid;
+  gap: 6px;
+  padding: 10px 10px 8px;
+  min-width: 0;
+}
+.snap__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.snap__head h3 {
+  margin: 0;
+  font-size: 17px;
+}
+.snap__event {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1.2px solid var(--ink);
+  border-radius: var(--radius-chip);
+  background: var(--gold);
+  font: 600 var(--fs-key) / 1.4 var(--font-ui);
+}
+.snap__floor {
+  display: flex;
+  gap: 4px;
+}
+.snap__room {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 8px 4px 0;
+  border: 1.2px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper-hi);
+}
+/* The room's back-wall colour, as a band along its top. */
+.snap__room::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  border-radius: var(--radius-card);
+  background: var(--wall);
+}
+/* design §10: it rang with nobody saying or shown there. */
+.snap__room.is-quiet {
+  outline: 2px dashed var(--clay);
+  outline-offset: 1px;
+  background: var(--clay-l);
+}
+/* Police tape along the bottom of a raided room. */
+.snap__room.is-raided::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 6px;
+  background: repeating-linear-gradient(-45deg, var(--gold) 0 7px, var(--ink) 7px 10px);
+}
+.snap__room-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.snap__room-head .room-icon {
+  flex: none;
+}
+.snap__room-name {
+  min-width: 0;
+  font: 600 var(--fs-key) / 1.2 var(--font-ui);
+  overflow-wrap: break-word;
+}
+.snap__raid {
+  justify-self: start;
+  padding: 0 5px;
+  border-radius: var(--radius-chip);
+  background: var(--bad);
+  color: var(--cream);
+  font: 700 var(--fs-key) / 1.5 var(--font-ui);
+}
+.snap__crooks {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  /* Each crook is a 44 px target drawn as a small avatar: the boxes overlap their neighbours' padding, not their faces. */
+  padding: 8px 8px 10px;
+  list-style: none;
+}
+.snap__crooks > li {
+  display: contents;
+}
+.snap__crook {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+span.snap__crook {
+  cursor: default;
+}
+.snap__crook .avatar {
+  padding: 1.5px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-blob);
+  box-sizing: content-box;
+}
+.snap__crook--says .avatar {
+  border-style: dashed;
+}
+.snap__crook:focus-visible {
+  outline: 2.5px solid var(--clay-d);
+  outline-offset: -6px;
+}
+.snap__badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 13px;
+  height: 13px;
+  border: 1.2px solid var(--ink);
+  border-radius: var(--radius-blob);
+  background: var(--paper-hi);
+}
+.snap__badge svg,
+.cardkey__mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.snap__badge--trusted {
+  color: var(--good);
+}
+.snap__badge--liar {
+  color: var(--bad);
+}
+.snap__duffel {
+  margin: 0;
+}
+
+/* ---------- The key ---------- */
+.cardkey {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: var(--fs-key);
+}
+.cardkey__btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1.3px solid var(--ink);
+  border-radius: var(--radius-chip);
+  background: var(--paper);
+  color: var(--ink);
+  font: 600 var(--fs-key) / 1 var(--font-ui);
+  cursor: pointer;
+}
+.cardkey__btn:focus-visible {
+  outline: 2.5px solid var(--clay-d);
+  outline-offset: 3px;
+}
+.cardkey__chev {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: rotate 0.16s var(--spring);
+}
+.cardkey__btn[aria-expanded="true"] .cardkey__chev {
+  rotate: 180deg;
+}
+.cardkey__body {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 6px;
+  padding: 8px 4px 0;
+}
+.cardkey__rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cardkey__rows li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cardkey__ring {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-blob);
+}
+.cardkey__ring--says {
+  border-style: dashed;
+}
+.cardkey__mark {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.cardkey__tip {
+  margin: 0;
+  color: var(--ink2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cardkey__chev {
+    transition: none;
+  }
+}
+
+/* ---------- Trust-mark pop-over ---------- */
+.markpop {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: visible;
+  display: none;
+  justify-items: center;
+}
+.markpop:popover-open {
+  display: grid;
+}
+.markpop__name {
+  padding: 2px 8px;
+  border: 1.2px solid var(--ink);
+  border-radius: var(--radius-chip);
+  background: var(--note-yellow);
+  color: var(--ink);
+  font: 700 13px/1.3 var(--font-hand);
+  white-space: nowrap;
+}
+.markpop__opts {
+  display: flex;
+  margin-top: -8px;
+}
+.markpop__btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.markpop__dot {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 3px;
+  border: 1.4px solid var(--ink);
+  border-radius: var(--radius-blob);
+  background: var(--paper-hi);
+}
+.markpop__dot svg {
+  width: 100%;
+  height: 100%;
+}
+.markpop__btn--trusted .markpop__dot {
+  color: var(--good);
+}
+.markpop__btn--liar .markpop__dot {
+  color: var(--bad);
+}
+.markpop__btn--clear .markpop__dot {
+  border-style: dashed;
+}
+.markpop__btn:focus-visible {
+  outline: 2.5px solid var(--clay-d);
+  outline-offset: -4px;
+}

@@ -16,16 +16,18 @@ export interface AvatarProps {
   readonly status?: AvatarStatus | undefined;
   readonly bot?: boolean | undefined;
   readonly title?: string;
+  /** Shown instead of the name's initials: the crew-unique tag (seatLooks), so two "Sam"s tell apart. */
+  readonly initials?: string | undefined;
 }
 
-export function Avatar({ name, size = 40, seat, status, bot, title }: AvatarProps) {
+export function Avatar({ name, size = 40, seat, status, bot, title, initials }: AvatarProps) {
   const style = { "--av-size": `${size}px`, "--av-fill": crewVar(crookLook(seat ?? name).colour) } as CSSProperties;
   const cls = ["avatar", status && `avatar--${status}`].filter(Boolean).join(" ");
   const label = title ?? `${name}${bot ? " (bot)" : ""}${status === "ready" ? ", move in" : status === "away" ? ", away" : ""}`;
   return (
     <span className={cls} style={style} role="img" aria-label={label} title={label}>
       <span className="avatar__blob" aria-hidden="true">
-        {initialsOf(name)}
+        {initials ?? initialsOf(name)}
       </span>
       {bot && (
         <span className="avatar__bot" aria-hidden="true">

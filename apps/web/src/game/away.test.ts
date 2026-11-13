@@ -31,15 +31,16 @@ const ids = (s: GameState) => s.config.players.map((p) => p.id);
 const allMove = (s: GameState, room = "office") => run(s, ...ids(s).map((p) => ({ type: "submitMove", player: p, move: { room, duffel: BANK_JOB.rooms[room]?.coins ?? 0, pocket: 0 } }) as PlayerCommand));
 const round = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "round", round: r } });
 const resultClose = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "result", round: r } });
+const alibiClose = (r: number): SystemCommand => ({ type: "advance", deadline: { kind: "alibi", round: r } });
 const open = (id: string): SystemCommand => ({ type: "advance", deadline: { kind: "openMeeting", meetingId: id } });
 const close = (id: string): SystemCommand => ({ type: "advance", deadline: { kind: "closeMeeting", meetingId: id } });
 const shake = (player: PlayerId, target: PlayerId): PlayerCommand => ({ type: "castVote", player, vote: { kind: "shakedown", target } });
 const skip = (player: PlayerId): PlayerCommand => ({ type: "castVote", player, vote: { kind: "skip" } });
 
-/** Plays a round (everyone to `room`, all in) into its result window (design §9.3). */
+/** Plays a round (everyone to `room`, all in) through its alibi window (nobody posts one) into its result window (design §9.3, §10). */
 function toResult(s: GameState, room = "office"): GameState {
   const r = s.phase.kind === "planning" ? s.phase.round : -1;
-  return run(allMove(s, room), round(r));
+  return run(allMove(s, room), round(r), alibiClose(r));
 }
 
 /** Plays a round through its result window (nobody calls an emergency). */
@@ -119,6 +120,20 @@ describe("while you were away (design §13)", () => {
     expect(lines.at(-1)).toBe(`Now: round ${r + 1}. Pick your room before the deadline.`);
   });
 
+  it("the latest snapshot card: what the alibis said and who had none (design §10)", () => {
+    let s = run(allMove(createGame(config())), round(1));
+    expect(nextUp(viewFor(s, "p1"))).toBe("Now: round 1's alibi window is open.");
+    const before = s;
+    s = run(
+      s,
+      { type: "postAlibi", player: "p2", round: 1, room: "vault" },
+      { type: "postAlibi", player: "p3", round: 1, room: "vault" },
+      { type: "postAlibi", player: "p4", round: 1, room: "office" },
+      alibiClose(1),
+    );
+    expect(recapBetween(before, s)).toContain("Round 1's card is in: 2 said the Vault, 1 said the Office, 2 had no alibi.");
+  });
+
   it("your case file: one entry in full, several as a count; your own moves aren't news", () => {
     const s = createGame(config());
     // Everyone goes to the Security room and watches the vault: a sighting and a camera result each.
@@ -141,7 +156,7 @@ describe("while you were away (design §13)", () => {
   });
 });
 
-/** One scheduler-ish step: everyone moves (Ana pockets 1), an alibi in the result window, meetings open and close with skips. */
+/** One scheduler-ish step: everyone moves (Ana pockets 1), an alibi in the alibi window, meetings open and close with skips. */
 function step(s: GameState): GameState {
   const p = s.phase;
   if (p.kind === "planning") {
@@ -153,10 +168,11 @@ function step(s: GameState): GameState {
     }
     return run(s, round(p.round));
   }
-  if (p.kind === "result") {
+  if (p.kind === "alibi") {
     const r = handleCommand(s, { type: "postAlibi", player: "p2", round: p.round, room: s.rooms[0] } as PlayerCommand);
-    return run(r.ok ? r.state : s, resultClose(p.round));
+    return run(r.ok ? r.state : s, alibiClose(p.round));
   }
+  if (p.kind === "result") return run(s, resultClose(p.round));
   if (p.kind === "awaitingMeeting") {
     if (!s.scheduledMeeting) s = run(s, { type: "scheduleMeeting", meetingId: p.meetingId, slot: `s-${p.meetingId}` });
     return run(s, open(p.meetingId));

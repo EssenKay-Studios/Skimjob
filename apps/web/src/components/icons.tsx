@@ -118,6 +118,15 @@ export function Close() {
   );
 }
 
+/** A trust mark: Trusted. */
+export function Tick() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M4.4 10.6c1.6 1.4 3 2.9 4.2 4.6 2.2-4 4.6-7.3 7.2-10" {...S} strokeWidth={2.3} />
+    </svg>
+  );
+}
+
 /** Evidence cards: a clipped polaroid. */
 export function Evidence() {
   return (

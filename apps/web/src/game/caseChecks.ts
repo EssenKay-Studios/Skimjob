@@ -10,7 +10,7 @@
 import { MAX_ROLE_COPIES, ROLES, type JobDef, type RoleId, type RoomId } from "@skimjob/content";
 import { ringsOf, roundJob, type EventTable, type PlayerId } from "@skimjob/engine";
 import type { Warning } from "./caseBoard";
-import { roleName, roomName } from "./describeEvent";
+import { roleName, roomName, the } from "./describeEvent";
 
 /** One room in one round, as your view shows it. */
 export interface RoomRound {
@@ -34,9 +34,9 @@ export interface RoundFacts {
   /** The event card that changed the round's numbers (Shift change), or null. */
   readonly card: { readonly round: number; readonly id: string; readonly room: RoomId | null } | null;
   readonly rooms: ReadonlyMap<RoomId, RoomRound>;
-  /** Plan spots (room claims) from the round's plan snapshot. */
-  readonly plan: ReadonlyMap<PlayerId, RoomId>;
   readonly alibis: ReadonlyMap<PlayerId, RoomId>;
+  /** design §10: who posted no alibi, in the room they really were in (a public fact as the alibi window closed). */
+  readonly noAlibi: ReadonlyMap<PlayerId, RoomId>;
   /** Soft shoes bought the round before by someone else (sold less yours): that many players may ring nothing. */
   readonly softShoes: number;
   /** Plant evidence bought this round by someone else: that many feed sightings may be planted. */
@@ -65,48 +65,31 @@ export interface Found {
 }
 
 const list = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
-/** "the Vault", but "Security". */
-const the = (room: RoomId) => (roomName(room) === "Security" ? "Security" : `the ${roomName(room)}`);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const times = (n: number) => (n === 1 ? "once" : `${n} times`);
-
-/** A player's story for the round: their alibi, else their plan spot. */
-const storyOf = (r: RoundFacts, p: PlayerId): { room: RoomId; said: "Said" | "Planned" } | null => {
-  const alibi = r.alibis.get(p);
-  if (alibi !== undefined) return { room: alibi, said: "Said" };
-  const spot = r.plan.get(p);
-  return spot === undefined ? null : { room: spot, said: "Planned" };
-};
 
 /** Whether you or your feeds saw `p` in any room this round. */
 const seenAnywhere = (r: RoundFacts, p: PlayerId): boolean => [...r.rooms.values()].some((rr) => rr.seen.has(p));
 
-/** design §15.4 Seen elsewhere, Not seen and Changed story, for one round. */
+/** design §15.4 Seen elsewhere and Not seen, for one round: what you saw against the alibis. */
 export function storyChecks(r: RoundFacts, me: PlayerId, name: (p: PlayerId) => string): Found[] {
   const found: Found[] = [];
   const R = `R${r.round}`;
   for (const [room, rr] of r.rooms) {
-    // Seen elsewhere: you or your power saw them here, their story says another room.
+    // Seen elsewhere: you or your power saw them here, their alibi says another room.
     for (const [p, how] of rr.seen) {
-      const story = storyOf(r, p);
-      if (p === me || !story || story.room === room) continue;
+      const alibi = r.alibis.get(p);
+      if (p === me || alibi === undefined || alibi === room) continue;
       const planted = how === "feed" && r.planted > 0 ? " A sighting can be planted." : "";
-      found.push({ round: r.round, room, warning: { kind: "seenElsewhere", names: [p], text: `${story.said} ${roomName(story.room)} in ${R}; you saw ${name(p)} in ${the(room)}.${planted}` } });
+      found.push({ round: r.round, room, warning: { kind: "seenElsewhere", names: [p], text: `Said ${roomName(alibi)} in ${R}; you saw ${name(p)} in ${the(room)}.${planted}` } });
     }
   }
-  const claimants = new Set([...r.plan.keys(), ...r.alibis.keys()]);
-  for (const p of claimants) {
+  for (const [p, alibi] of r.alibis) {
     if (p === me) continue;
-    const story = storyOf(r, p)!;
-    // Not seen: they claim a room you watched, and you didn't see them there. Skipped in a blacked-out room.
-    const rr = r.rooms.get(story.room);
+    // Not seen: their alibi is a room you watched, and you didn't see them there. Skipped in a blacked-out room.
+    const rr = r.rooms.get(alibi);
     if (rr && rr.watched && !rr.dark && !rr.seen.has(p))
-      found.push({ round: r.round, room: story.room, warning: { kind: "notSeen", names: [p], text: `${story.said} ${roomName(story.room)} in ${R}; you watched ${the(story.room)} and didn't see ${name(p)}.` } });
-    // Changed story: the alibi differs from the plan spot.
-    const spot = r.plan.get(p);
-    const alibi = r.alibis.get(p);
-    if (spot !== undefined && alibi !== undefined && spot !== alibi)
-      found.push({ round: r.round, room: spot, warning: { kind: "changedStory", names: [p], text: `Planned ${roomName(spot)} in ${R}; later said ${roomName(alibi)}.` } });
+      found.push({ round: r.round, room: alibi, warning: { kind: "notSeen", names: [p], text: `Said ${roomName(alibi)} in ${R}; you watched ${the(alibi)} and didn't see ${name(p)}.` } });
   }
   return found;
 }
@@ -144,7 +127,8 @@ const sumWithoutTop = (xs: readonly number[], k: number): { sum: number; rest: n
 
 /**
  * design §15.4 Too quiet and Too loud, for one round. Counted in a room: the
- * players seen there or whose story is that room, and you if you grabbed there.
+ * players seen there, whose alibi is that room or who had no alibi there (a
+ * fact), and you if you grabbed there.
  * No bell check runs on a hidden bell (or any bell whose rings you can't know).
  */
 export function bellChecks(r: RoundFacts, ctx: CheckContext, name: (p: PlayerId) => string): Found[] {
@@ -155,9 +139,11 @@ export function bellChecks(r: RoundFacts, ctx: CheckContext, name: (p: PlayerId)
   for (const [room, rr] of r.rooms) {
     if (rr.rings === null || !Object.hasOwn(job.rooms, room)) continue;
     const def = job.rooms[room]!;
-    const counted = new Set<PlayerId>(rr.seen.keys());
-    // A player seen anywhere this round counts only where they were seen; otherwise where their latest story puts them.
-    for (const p of new Set([...r.plan.keys(), ...r.alibis.keys()])) if (!seenAnywhere(r, p) && storyOf(r, p)?.room === room) counted.add(p);
+    // A "no alibi" fact puts a player in its room for sure (a sighting elsewhere was planted).
+    const counted = new Set<PlayerId>([...rr.seen.keys()].filter((p) => (r.noAlibi.get(p) ?? room) === room));
+    for (const [p, at] of r.noAlibi) if (at === room) counted.add(p);
+    // A player seen anywhere this round counts only where they were seen; otherwise where their alibi puts them.
+    for (const [p, at] of r.alibis) if (at === room && !seenAnywhere(r, p)) counted.add(p);
     counted.delete(ctx.me);
     const others = [...counted];
     const mine = rr.myCoins === null ? 0 : r.mySoftShoes ? 0 : ringsOf(def, rr.myCoins, muffleOf(ctx.myRole));
@@ -167,8 +153,8 @@ export function bellChecks(r: RoundFacts, ctx: CheckContext, name: (p: PlayerId)
     // Too quiet: the least they can ring, in the best case for each of them.
     if (!rr.raided && others.length > 0) {
       const least = ringsOf(def, r.bankEmptied ? 0 : Math.min(1, def.coins), muffle);
-      // Plant evidence: that many feed-only sightings (with no claim on the room) may not be there at all.
-      const feedOnly = others.filter((p) => rr.seen.get(p) === "feed" && storyOf(r, p)?.room !== room);
+      // Plant evidence: that many feed-only sightings (with no alibi or fact on the room) may not be there at all.
+      const feedOnly = others.filter((p) => rr.seen.get(p) === "feed" && r.alibis.get(p) !== room && r.noAlibi.get(p) !== room);
       const fixed = others.filter((p) => !feedOnly.includes(p));
       const afterPlant = sumWithoutTop(feedOnly.map(() => least), r.planted);
       // Soft shoes: that many of them may ring nothing.

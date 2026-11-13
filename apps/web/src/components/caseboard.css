@@ -264,6 +264,42 @@
 .cb__fact--shared .cb__trust {
   background: var(--gold);
 }
+/* Your own trust mark on an alibi (design §10): dashed, it is your call, not evidence. */
+.cb__fact--mark .cb__trust {
+  border-style: dashed;
+}
+
+/* The round picker: square 44 px buttons; the picked one gold; a round not played yet dashed. */
+.cb__picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cb__picker .cb__h {
+  margin: 0 4px 0 0;
+}
+.cb__rbtn {
+  width: 44px;
+  height: 44px;
+  border: 1.6px solid var(--ink);
+  border-radius: var(--radius-chip);
+  background: var(--paper-hi);
+  color: var(--ink);
+  font: 700 15px/1 var(--font-ui);
+  cursor: pointer;
+}
+.cb__rbtn[aria-pressed="true"] {
+  background: var(--gold);
+  box-shadow: var(--shadow-card);
+}
+.cb__rbtn:disabled {
+  border-style: dashed;
+  background: transparent;
+  color: var(--ink2);
+  opacity: 0.6;
+  cursor: default;
+}
 .cb__filter {
   display: flex;
   align-items: center;

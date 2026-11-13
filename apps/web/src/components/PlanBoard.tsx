@@ -1,8 +1,7 @@
 // The plan board's body (design §10; the panel around it gives the heading): a miniature bank where anyone puts crew avatars on
 // rooms, your own room claim and pledge, "I agree", and the plan ledger linked both
 // ways with the heads. After a round the same panel shows its snapshot (the final
-// plan and how it changed, by time left, never wall time) and offers an alibi for it
-// (§11.3). Edits go out through `onEdit`; the board comes from the live channel.
+// plan and how it changed, by time left, never wall time). Edits go out through `onEdit`; the board comes from the live channel.
 import { useState } from "react";
 import type { PlanSnapshot, PlayerId } from "@skimjob/engine";
 import { CrookAvatar } from "../art/Crook";
@@ -36,15 +35,12 @@ export interface PlanBoardProps {
   readonly onEdit: (edit: PlanEdit) => Promise<void>;
   /** The latest round with a snapshot (the engine logs none when nobody used the board). */
   readonly last: { readonly round: number; readonly plan: PlanSnapshot } | null;
-  /** The latest resolved round, and the room you claimed for it. */
-  readonly alibi: { readonly round: number; readonly posted: string | null } | null;
-  readonly onAlibi: (round: number, room: string) => Promise<void>;
   readonly seed?: string;
 }
 
 const roleName = (id: string) => pledgeRoles().find((r) => r.id === id)?.name ?? id;
 
-export function PlanBoard({ seats, rooms, board, onEdit, last, alibi, onAlibi, seed = "plan" }: PlanBoardProps) {
+export function PlanBoard({ seats, rooms, board, onEdit, last, seed = "plan" }: PlanBoardProps) {
   const roomName = (id: string) => rooms.find((r) => r.id === id)?.name ?? id;
   const name = (id: PlayerId) => seats.find((s) => s.id === id)?.name ?? id;
   return (
@@ -55,7 +51,6 @@ export function PlanBoard({ seats, rooms, board, onEdit, last, alibi, onAlibi, s
       </div>
       {board ? <Live seats={seats} rooms={rooms} board={board} onEdit={onEdit} roomName={roomName} name={name} seed={seed} /> : <p className="meta plan__none">The board opens with the next round.</p>}
       {last && <Snapshot last={last} seats={seats} name={name} roomName={roomName} />}
-      {alibi && <Alibi alibi={alibi} rooms={rooms} roomName={roomName} onAlibi={onAlibi} seed={seed} />}
     </div>
   );
 }
@@ -280,33 +275,5 @@ function Snapshot({ last, seats, name, roomName }: { last: NonNullable<PlanBoard
         </ol>
       )}
     </details>
-  );
-}
-
-/** An alibi for the latest resolved round: a room, true or not; everyone sees it. design §11.3 */
-function Alibi({ alibi, rooms, roomName, onAlibi, seed }: { alibi: NonNullable<PlanBoardProps["alibi"]>; rooms: readonly PlanRoom[]; roomName: (id: string) => string; onAlibi: (round: number, room: string) => Promise<void>; seed: string }) {
-  const [room, setRoom] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  if (alibi.posted) {
-    return (
-      <p className="plan__alibi">
-        You told the crew you were in the <b>{roomName(alibi.posted)}</b> in round {alibi.round}. Everyone can see it.
-      </p>
-    );
-  }
-  return (
-    <div className="plan__alibi">
-      <p className="hand">Round {alibi.round} alibi: where were you?</p>
-      <div className="plan__chips" role="group" aria-label="Alibi room">
-        {rooms.map((r) => (
-          <Button key={r.id} variant="toggle" seed={`${seed}-alibi-${r.id}`} pressed={room === r.id} onClick={() => setRoom(r.id)}>
-            {r.name}
-          </Button>
-        ))}
-      </div>
-      <Button variant="secondary" seed={`${seed}-alibi-post`} disabled={!room || busy} onClick={async () => { setBusy(true); await onAlibi(alibi.round, room!); setBusy(false); }}>
-        Post alibi
-      </Button>
-    </div>
   );
 }

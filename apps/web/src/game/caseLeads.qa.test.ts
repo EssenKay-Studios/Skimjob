@@ -32,7 +32,7 @@ const grab = (room: string, coins = 1): Move => ({ room, duffel: coins, pocket: 
 const plan = (spots: [string, string][]): PlanSnapshot => ({ entries: spots.map(([player, room]) => ({ player, placed: null, room, power: null, agreed: true })), history: [] });
 
 /** Round 1 with the given roles, moves (p1..p5) and plan spots, then the given commands. */
-function round1(roles: string[], moves: Move[], spots: [string, string][], ...after: PlayerCommand[]): GameState {
+function round1(roles: string[], moves: Move[], spots: [string, string][], ...after: (PlayerCommand | SystemCommand)[]): GameState {
   let s = createGame(config, roles);
   s = run(s, ...moves.map((m, i) => move(`p${i + 1}`, m)), { type: "advance", deadline: { kind: "round", round: 1, plan: plan(spots) } });
   return run(s, ...after);
@@ -40,16 +40,17 @@ function round1(roles: string[], moves: Move[], spots: [string, string][], ...af
 const warned = (s: GameState) => caseData(viewFor(s, "p1"), new Set()).leads.flatMap((l) => l.warnings.map((w) => ({ lead: l.id, kind: w.kind, names: w.names })));
 
 describe("QA: Too quiet must not point at an innocent player — design §15.4", () => {
-  it("doesn't count in the Vault a planner you saw in your own room, so Ava alone in the Vault isn't named", () => {
-    // Ben planned the Vault but changed his mind (plans aren't binding): you stood in the Office with him.
+  it("doesn't count in the Vault a liar you saw in your own room, so Ava alone in the Vault isn't named", () => {
+    // Ben says the Vault, but you stood in the Office with him.
     // Ava grabbed 1 in the Vault, says so truthfully, and it rang once, exactly her grab. The best case for Ben is that he was
     // where you saw him, so nothing in the Vault fails to add up for Ava.
-    const s = round1(ROLES, [grab("office"), grab("vault"), grab("office"), grab("lobby"), grab("lobby")], [["p3", "vault"]], {
-      type: "postAlibi",
-      player: "p2",
-      round: 1,
-      room: "vault",
-    });
+    const s = round1(
+      ROLES,
+      [grab("office"), grab("vault"), grab("office"), grab("lobby"), grab("lobby")],
+      [],
+      { type: "postAlibi", player: "p2", round: 1, room: "vault" },
+      { type: "postAlibi", player: "p3", round: 1, room: "vault" },
+    );
     const w = warned(s);
     // Ben's own contradiction is still there.
     expect(w).toContainEqual({ lead: "r1.room.office", kind: "seenElsewhere", names: ["p3"] });
@@ -100,12 +101,16 @@ describe("QA: leaks — design §18", () => {
 
 describe("QA: pin ids — design §15.4", () => {
   it("every lead and fact id passes the server's pin id rule and is unique", () => {
-    const s = round1(ROLES, [grab("office"), grab("vault"), grab("office"), grab("lobby"), grab("lobby")], [["p3", "vault"], ["p5", "office"]], {
-      type: "postAlibi",
-      player: "p5",
-      round: 1,
-      room: "security",
-    });
+    // With the "no alibi" facts and your own marks (design §10).
+    const s = round1(
+      ROLES,
+      [grab("office"), grab("vault"), grab("office"), grab("lobby"), grab("lobby")],
+      [["p3", "vault"], ["p5", "office"]],
+      { type: "postAlibi", player: "p5", round: 1, room: "security" },
+      { type: "advance", deadline: { kind: "alibi", round: 1 } },
+      { type: "markAlibi", player: "p1", round: 1, target: "p5", mark: "liar" },
+      { type: "markAlibi", player: "p1", round: 1, target: "p2", mark: "trusted" },
+    );
     const ids = caseData(viewFor(s, "p1"), new Set()).leads.flatMap((l) => [l.id, ...l.facts.map((f) => f.id)]);
     for (const id of ids) expect(id).toMatch(/^[A-Za-z0-9_.:-]{1,80}$/);
     expect(new Set(ids).size).toBe(ids.length);
@@ -153,7 +158,7 @@ describe("QA: the suspect — design §15.4", () => {
 
 describe("QA: Too quiet best cases combined — design §15.4", () => {
   const ctx: CheckContext = { me: "p1", myRole: "lookout", job: BANK_JOB, events: EVENTS, roleList: { list: "exact", roles: ROLES }, crewSize: 5 };
-  const base: RoundFacts = { round: 3, card: null, rooms: new Map(), plan: new Map(), alibis: new Map(), softShoes: 0, planted: 0, mySoftShoes: false, bankEmptied: false };
+  const base: RoundFacts = { round: 3, card: null, rooms: new Map(), alibis: new Map(), noAlibi: new Map(), softShoes: 0, planted: 0, mySoftShoes: false, bankEmptied: false };
   const vault = (seen: [string, "room" | "feed"][], rings: number) =>
     new Map([["vault", { rings, raided: false, dark: false, watched: true, seen: new Map(seen), myCoins: null }]]);
 

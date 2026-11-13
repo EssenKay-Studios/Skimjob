@@ -1,13 +1,14 @@
 // The case board's data shape and the pure helpers over it (design §15.4). The
 // board shows what the adapter (caseLeads.ts) returns from the player's own view.
+import { BANK_JOB } from "@skimjob/content";
 import type { PlayerId } from "@skimjob/engine";
 
-/** Where a fact comes from (§15.4 trust levels). */
-export type Trust = "fact" | "seen" | "shared" | "said";
-export const TRUST_LABELS: Readonly<Record<Trust, string>> = { fact: "Fact", seen: "Seen by you", shared: "Shared evidence", said: "Said" };
+/** Where a fact comes from (§15.4 trust levels), and your own trust marks on alibis (§10). */
+export type Trust = "fact" | "seen" | "shared" | "said" | "mark";
+export const TRUST_LABELS: Readonly<Record<Trust, string>> = { fact: "Fact", seen: "Seen by you", shared: "Shared evidence", said: "Said", mark: "Your mark" };
 
 /** The ⚠ kinds (§15.4). */
-export type WarningKind = "seenElsewhere" | "notSeen" | "changedStory" | "tooQuiet" | "tooLoud" | "overClaimed";
+export type WarningKind = "seenElsewhere" | "notSeen" | "tooQuiet" | "tooLoud" | "overClaimed";
 
 export interface Fact {
   /** Unique across the board and stable between views: it is what a pin remembers. */
@@ -50,10 +51,13 @@ export interface Suspect {
 export interface CaseData {
   readonly leads: readonly Lead[];
   readonly suspect: Suspect | null;
+  /** The round picker: the job's round cap, and the rounds resolved so far (design §10, §15.4). */
+  readonly roundCap: number;
+  readonly played: number;
 }
 
 /** No leads and no suspect: a game with nothing on the board yet. */
-export const NO_LEADS: CaseData = { leads: [], suspect: null };
+export const NO_LEADS: CaseData = { leads: [], suspect: null, roundCap: BANK_JOB.roundCap, played: 0 };
 
 /** Newest first: the later round first, and within a round the adapter's order. */
 export const newestFirst = (leads: readonly Lead[]): Lead[] => leads.map((l, i) => ({ l, i })).sort((a, b) => b.l.round - a.l.round || a.i - b.i).map((x) => x.l);

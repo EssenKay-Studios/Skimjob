@@ -21,6 +21,8 @@ const ALL_ROOMS = Object.fromEntries(Object.values(JOBS).flatMap((j) => Object.v
 export const roomName = (room: RoomId): string => ALL_ROOMS[room] ?? room;
 /** A role's display name, e.g. "Smooth Talker". */
 export const roleName = (role: string): string => ROLES[role]?.name ?? role;
+/** "the Vault", but "Security". */
+export const the = (room: RoomId): string => (roomName(room) === "Security" ? "Security" : `the ${roomName(room)}`);
 /** A power claim names a player (Detective, Priest) rather than a room. design §10 */
 const aimsAtPlayer = (role: string): boolean => {
   const kind = ROLES[role]?.power.kind;
@@ -181,8 +183,14 @@ function line(e: GameEvent, ctx: DescribeContext): string {
       return `Round ${e.round}: ${verb(e.player, "bought", "bought")} ${perkName(e.perk.kind)} for ${e.cost} coin${e.cost === 1 ? "" : "s"}${perk(e.perk, who)}.`;
     case "bailChosen":
       return `${verb(e.player, "chose", "chose")} ${e.use ? "to use Bail" : "not to use Bail"}.`;
-    case "alibiVerified":
-      return `Verified: ${who(e.player)} really ${you(e.player) ? "were" : "was"} in the ${roomName(e.room)} in round ${e.round}.`;
+    case "alibiWindowClosed":
+      // design §10: the round's card is out; who posted no alibi is a fact, on the case board.
+      return `Round ${e.round}'s alibis are in.`;
+    case "alibiMarked":
+      // design §10: secret to the marker, so only ever "you".
+      return e.mark === null
+        ? `You cleared your mark on ${whose(e.target)} alibi for round ${e.round}.`
+        : `You marked ${whose(e.target)} alibi for round ${e.round}: ${e.mark === "liar" ? "Liar" : "Trusted"}.`;
     case "gameAborted":
       return "The host ended the game.";
     case "gameEnded": {
@@ -246,7 +254,6 @@ function perk(p: PerkUse, who: (p: PlayerId) => string): string {
       return `: the ${roomName(p.room)} goes dark next round`;
     case "plantEvidence":
       return `: ${who(p.target)} on the ${roomName(p.room)}'s cameras this round`;
-    case "alibi":
     case "softShoes":
     case "bail":
       return "";
