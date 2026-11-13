@@ -275,6 +275,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         fact(lead("end", round, "The end"), `${seq}`, text(), trust, e.outcome.winners);
         break;
       // Housekeeping (setup, lock-ins, your own move edits, meeting-time proposals) lives on the seats and the panels.
+      case "gameAborted":
       case "gameCreated":
       case "roomsSet":
       case "bankFilled":

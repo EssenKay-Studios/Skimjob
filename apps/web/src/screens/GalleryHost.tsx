@@ -32,12 +32,11 @@ export function HostSection() {
   const [mine, setMine] = useState(true);
   const seat = (id: number) => SEATS.find((s) => s.seat === id)!.playerId;
   return (
-    <Section id="host" title="Host controls" note="M2-13 · pause / resume, add time, replace an idle seat with a bot, hand back">
+    <Section id="host" title="Host controls" note="M2-13 · pause / resume, add time, replace an idle seat with a bot, hand back, end the game early">
       <div className="game-host">
         {control.pausedAt !== null && <PausedBanner />}
         {mine && <StandInBanner busy={false} onTakeBack={() => setMine(false)} />}
         <HostPanel
-          open
           paused={control.pausedAt !== null}
           canExtend
           offers={seatOffers(control, SEATS, "p1")}
@@ -47,6 +46,7 @@ export function HostSection() {
           onExtend={() => toast("Added 2 min.", "good")}
           onReplace={(s) => setControl((c) => ({ ...c, standIns: [...c.standIns, seat(s)], idle: c.idle.filter((p) => p !== seat(s)) }))}
           onHandBack={(s) => setControl((c) => ({ ...c, standIns: c.standIns.filter((p) => p !== seat(s)) }))}
+          onEnd={() => toast("Ended early (gallery only).", "good")}
         />
       </div>
     </Section>

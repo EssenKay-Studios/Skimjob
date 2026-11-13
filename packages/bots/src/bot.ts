@@ -6,6 +6,7 @@
 // commands. Their seed is their own, not the game's (which is secret).
 import type { JobDef, RoomId } from "@skimjob/content";
 import {
+  isOver,
   nextUint32,
   ringsOf,
   roomDef,
@@ -112,7 +113,7 @@ function weighted<T>(items: readonly (readonly [T, number])[], random: Random): 
 /** Everything the bot wants to do given this view. */
 export function decide(view: PlayerView, p: Personality, random: Random, crewSeed: string): PlayerCommand[] {
   const phase = view.phase;
-  if (phase.kind === "ended" || phase.kind === "setup") return [];
+  if (isOver(phase) || phase.kind === "setup") return [];
   const player = view.me.id;
   const out: PlayerCommand[] = [];
   // design §11.3: an alibi for the latest round as it resolves (alibis have no window).

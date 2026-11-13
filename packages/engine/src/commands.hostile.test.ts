@@ -99,7 +99,7 @@ function baseCommands(s: GameState): Record<string, unknown>[] {
   const ids = s.playerOrder;
   const other = (id: string) => ids.find((x) => x !== id) as string;
   const room = s.rooms.find((r) => r !== "security") as string;
-  const out: Record<string, unknown>[] = [];
+  const out: Record<string, unknown>[] = [{ type: "abortGame" }]; // no fields to mutate. design §6.2
   for (const player of ids) {
     const p = s.players[player] as PlayerState;
     // Moves: a plain one, one from a watcher room, and one using the role's power. design §5.1, §6.1, §8

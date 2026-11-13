@@ -222,6 +222,59 @@ describe("extend (design §15)", () => {
   });
 });
 
+describe("end the game early (design §6.2, §16)", () => {
+  it("host only; the event reaches every socket; bots and deadlines stop; ending twice is fine", async () => {
+    const { id, seats } = await startGame(2);
+    const clients = await Promise.all(seats.map((s) => Client.open(id, s.who)));
+    for (const c of clients) await c.send({ cmd: lobbyMove });
+    await clients[0]!.barrier();
+    expect((await deadlines(id)).length).toBeGreaterThan(0);
+
+    expect((await req("POST", `/games/${id}/end`, seats[1]!.who)).status).toBe(403);
+    expect((await req("POST", `/games/${id}/end`, null)).status).toBe(401);
+    expect((await load(id)).phase.kind).not.toBe("aborted");
+
+    expect((await req("POST", `/games/${id}/end`, seats[0]!.who)).status).toBe(200);
+    expect((await load(id)).phase).toEqual({ kind: "aborted" });
+    expect((await req("GET", `/games/${id}`, seats[0]!.who)).body.status).toBe("ended");
+    expect(await deadlines(id)).toEqual([]);
+    for (const c of clients) {
+      await c.barrier();
+      const views = c.messages.flatMap((m) => ("view" in m ? [m.view] : []));
+      expect(views.at(-1)!.phase).toEqual({ kind: "aborted" });
+      expect(views.at(-1)!.reveal).toBeNull();
+      expect(views.at(-1)!.ledger.some((x) => x.event.type === "gameAborted")).toBe(true);
+    }
+
+    const events = (await load(id)).log.length;
+    expect((await req("POST", `/games/${id}/end`, seats[0]!.who)).status).toBe(200);
+    expect((await load(id)).log.length).toBe(events);
+    // A guest still can't, and nothing else on an ended game is open.
+    expect((await req("POST", `/games/${id}/end`, seats[1]!.who)).status).toBe(403);
+    expect((await req("POST", `/games/${id}/pause`, seats[0]!.who)).status).toBe(409);
+  });
+
+  it("a lobby game can't be ended this way, and a stranger's game is not found", async () => {
+    const host = (await req("POST", "/auth/guest", null, { nickname: "Host" })).session!;
+    const game = (await req("POST", "/games", host, { settings: HOUR })).body;
+    expect((await req("POST", `/games/${game.id}/end`, host)).status).toBe(409);
+    const stranger = (await req("POST", "/auth/guest", null, { nickname: "Nobody" })).session!;
+    expect((await req("POST", `/games/${game.id}/end`, stranger)).status).toBe(404);
+  });
+
+  it("bots stop: after the end they never act again", async () => {
+    const host = (await req("POST", "/auth/guest", null, { nickname: "Host" })).session!;
+    const game = (await req("POST", "/games", host, { settings: HOUR })).body;
+    for (let i = 0; i < 3; i++) await req("POST", `/games/${game.id}/bots`, host);
+    await req("POST", `/games/${game.id}/start`, host);
+    expect((await req("POST", `/games/${game.id}/end`, host)).status).toBe(200);
+    const events = (await load(game.id)).log.length;
+    await app.live.settle(game.id);
+    expect((await load(game.id)).log.length).toBe(events);
+    expect(app.live.botRefusals.filter((r) => r.gameId === game.id)).toEqual([]);
+  });
+});
+
 describe("replace an inactive player with a bot, and hand the seat back (design §15)", () => {
   it(`offered after ${REPLACE_AFTER_MISSED_ROUNDS} missed rounds in a row; the bot plays the seat; the player or host takes it back`, async () => {
     const { id, seats } = await startGame(2, { sessionLength: "1h" });

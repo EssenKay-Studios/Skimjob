@@ -50,6 +50,7 @@ import type { WebSocket } from "ws";
 import { createBot, PERSONALITIES, type PersonalityId, type Rejection } from "@skimjob/bots";
 import { REPLACE_AFTER_MISSED_ROUNDS } from "@skimjob/content";
 import {
+  isOver,
   handleCommand,
   viewFor,
   type Command,
@@ -158,6 +159,12 @@ export interface Live {
    * re-plans and pushes, as after any change. Throws HttpError 404 if the game hasn't started.
    */
   hostAction<T>(gameId: string, fn: (state: GameState) => Promise<T>): Promise<T>;
+  /**
+   * The host ended the game early (design §16): in the game's lock, the engine's
+   * `abortGame`, then bots dropped and views pushed as after any change. A game
+   * that is already over is left as it is.
+   */
+  abort(gameId: string): Promise<void>;
   /** The latest bot commands the engine refused. A correct bot makes none. */
   readonly botRefusals: readonly (Rejection & { readonly gameId: string })[];
 }
@@ -338,20 +345,20 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
    */
   const runBots = async (gameId: string, start: GameState): Promise<GameState> => {
     let state = start;
-    if (state.phase.kind === "ended") return state;
+    if (isOver(state.phase)) return state;
     const seats = await botsFor(gameId);
     const seen = botSeen.get(gameId)!;
     for (let pass = 0; pass < MAX_BOT_PASSES; pass++) {
       let changed = false;
       for (const seat of seats) {
-        if (state.phase.kind === "ended") break;
+        if (isOver(state.phase)) break;
         const view = viewFor(state, seat.player);
         const hash = sha256(JSON.stringify(botTrigger(view)));
         if (seen.get(seat.player) === hash) continue;
         seen.set(seat.player, hash);
         const agent = createBot({ player: seat.player, personality: PERSONALITIES[seat.personality], seed: botSeed(state.config.seed, seat.player, hash), crewSeed: crewSeed(state.config.seed) });
         for (const command of agent.act(view)) {
-          if (state.phase.kind === "ended") break;
+          if (isOver(state.phase)) break;
           const r = await apply(gameId, state, { ...command, player: agent.player });
           if (!r.ok) {
             app.log.warn({ gameId, player: agent.player, type: command.type, reason: r.reason }, "bot command refused");
@@ -398,7 +405,7 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   /** The game's `control` for the views (M2-13). Idle seats come from public lock-in marks; an ended game has none. */
   const controlOf = async (gameId: string, state: GameState): Promise<Control> => {
     const rows = await controlRows(gameId);
-    const idle = state.phase.kind === "ended" ? [] : state.playerOrder.filter((p) => (state.players[p]?.consecutiveMissedMoves ?? 0) >= REPLACE_AFTER_MISSED_ROUNDS);
+    const idle = isOver(state.phase) ? [] : state.playerOrder.filter((p) => (state.players[p]?.consecutiveMissedMoves ?? 0) >= REPLACE_AFTER_MISSED_ROUNDS);
     return { ...rows, idle };
   };
   /** Sends `conn` its view if it (or a timer, or the control) changed since the last one sent. */
@@ -483,13 +490,13 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
   /** After a change: bots, then every seat's fresh view. An ended game's bots are dropped. */
   const afterChange = async (gameId: string, state: GameState) => {
     const settled = await runBots(gameId, state);
-    if (settled.phase.kind === "ended") {
+    if (isOver(settled.phase)) {
       bots.delete(gameId);
       botSeen.delete(gameId);
     }
     await options.onChange?.(gameId, settled).catch((err: unknown) => app.log.error({ err, gameId }, "after-change hook failed"));
     await push(gameId, settled);
-    if (settled.phase.kind === "ended") controls.delete(gameId);
+    if (isOver(settled.phase)) controls.delete(gameId);
     return settled;
   };
 
@@ -527,6 +534,12 @@ export function liveRoutes(app: FastifyInstance, db: Db, store: GameStore, s: Se
         botSeen.delete(gameId);
         await afterChange(gameId, state);
         return out;
+      }),
+    abort: (gameId) =>
+      store.withGameLock(gameId, async () => {
+        const state = await store.load(gameId);
+        if (!state) throw new HttpError(404, "game not found or not started");
+        if (!isOver(state.phase)) await runSystem(gameId, { type: "abortGame" });
       }),
     settle: (gameId) =>
       store.withGameLock(gameId, async () => {

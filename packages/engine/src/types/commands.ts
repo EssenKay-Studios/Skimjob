@@ -174,6 +174,8 @@ export type Deadline =
   | { readonly kind: "resolveShakedown"; readonly meetingId: string };
 
 export type SystemCommand =
+  /** The host ended the game early (the server checks who asked). design §6.2, §16 */
+  | { readonly type: "abortGame" }
   | { readonly type: "advance"; readonly deadline: Deadline }
   /**
    * Nobody locked in a slot for the meeting the round called (`meetingId`, the

@@ -1,28 +1,16 @@
 /* Host controls (M2-13, design §15): HostPanel.tsx. */
 .host-panel {
-  padding: 4px 14px;
+  display: grid;
+  gap: 8px;
   min-width: 0;
 }
 .host-panel__summary {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
-  cursor: pointer;
-  list-style: none;
+  margin: 0;
   font: 700 17px/1.2 var(--font-hand);
   color: var(--ink);
-}
-.host-panel__summary::-webkit-details-marker {
-  display: none;
-}
-.host-panel__summary::before {
-  content: "▸";
-  color: var(--clay-d);
-  transition: transform 0.15s;
-}
-.host-panel details[open] > .host-panel__summary::before {
-  transform: rotate(90deg);
 }
 .host-panel__state {
   margin-left: auto;
@@ -69,11 +57,6 @@
 }
 .host-note > span {
   flex: 1 1 220px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .host-panel__summary::before {
-    transition: none;
-  }
 }
 .game-host {
   display: grid;

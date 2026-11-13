@@ -269,6 +269,8 @@ function applyChange(state: GameState, event: GameEvent): GameState {
         phase: resolved.meetingDue ? { kind: "awaitingMeeting", meeting: resolved.meetingDue, meetingId: nextMeetingId(resolved) } : resultWindow(resolved),
       };
     }
+    case "gameAborted":
+      return { ...state, phase: { kind: "aborted" } };
     case "gameEnded":
       return { ...state, phase: { kind: "ended", outcome: event.outcome } };
     // ------------------------------------------------ events deck. design §13

@@ -5,6 +5,8 @@
 //   then moves on by its pause. Players can still plan, vote and chat.
 // - `POST /games/:id/extend`: adds the preset's `extendMs` to the current
 //   round's planning (and its early end), result window or vote window.
+// - `POST /games/:id/end`: the host ends the game early (design §16): no winner,
+//   no reveal. Idempotent.
 // - `POST /games/:id/seats/:seat/stand-in` `{ personality? }`: a bot plays a
 //   person's seat, offered once they missed `REPLACE_AFTER_MISSED_ROUNDS`
 //   rounds in a row. `DELETE` the same hands the seat back (the host, or the
@@ -16,7 +18,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { PERSONALITIES, type PersonalityId } from "@skimjob/bots";
 import { REPLACE_AFTER_MISSED_ROUNDS } from "@skimjob/content";
-import type { GameState } from "@skimjob/engine";
+import { isOver, type GameState } from "@skimjob/engine";
 import type { Sessions, User } from "./auth";
 import type { Clock } from "./clock";
 import type { Db } from "./db";
@@ -68,7 +70,7 @@ export function hostRoutes(app: FastifyInstance, db: Db, s: Sessions, live: Live
       const [game] = await db.query<GameRow>("select status, host_user_id, paused_at is not null as paused from games where id = $1", [gameId]);
       if (!game) return refuse(404, "game not found");
       if (hostOnly && game.host_user_id !== user.id) refuse(403, "only the host can do that");
-      if (game.status !== "running" || state.phase.kind === "ended") refuse(409, "the game isn't running");
+      if (game.status !== "running" || isOver(state.phase)) refuse(409, "the game isn't running");
       const seats = await db.query<SeatRow>("select seat_no, player_id, user_id, stand_in from seats where game_id = $1 order by seat_no", [gameId]);
       return fn({ game, seats, user, state });
     });
@@ -76,6 +78,22 @@ export function hostRoutes(app: FastifyInstance, db: Db, s: Sessions, live: Live
 
   const seatOf = (seats: readonly SeatRow[], raw: string) =>
     seats.find((x) => String(x.seat_no) === raw && x.user_id !== null && x.player_id !== null) ?? refuse(404, "no player in that seat");
+
+  // End the game early: host-only, and ending twice is fine (the game just stays ended).
+  app.post<{ Params: { id: string } }>("/games/:id/end", async (req) => {
+    const user = (await s.user(req)) ?? refuse(401, "not signed in");
+    const gameId = req.params.id;
+    if (!UUID.test(gameId)) refuse(404, "game not found");
+    const [game] = await db.query<{ host_user_id: string; status: string }>(
+      "select g.host_user_id, g.status from games g join seats s on s.game_id = g.id where g.id = $1 and s.user_id = $2",
+      [gameId, user.id],
+    );
+    if (!game) return refuse(404, "game not found");
+    if (game.host_user_id !== user.id) refuse(403, "only the host can do that");
+    if (game.status === "lobby") refuse(409, "the game isn't running");
+    await live.abort(gameId);
+    return { ok: true };
+  });
 
   app.post<{ Params: { id: string } }>("/games/:id/pause", (req) =>
     control(req, true, async ({ game }) => {

@@ -12,6 +12,7 @@ import type { GameEvent, GameState, RngState } from "./types";
 import { PUBLIC, REVEAL, privateTo } from "./types";
 import { pick, randomInt, shuffle } from "./rng";
 import { applyEvent } from "./reduce";
+import { isOver } from "./end";
 import { checkMove, resolveRound } from "./round";
 import { isObject, playerFor, show } from "./check";
 import { claimRole, planSaid, postAlibi } from "./said";
@@ -114,6 +115,7 @@ const advance: Handler = (state, command, draw) => {
 };
 
 const HANDLERS: Readonly<Record<string, Handler>> = {
+  abortGame: () => [{ type: "gameAborted", visibility: PUBLIC }],
   submitMove,
   postAlibi,
   claimRole,
@@ -135,7 +137,7 @@ export const COMMAND_TYPES: readonly string[] = Object.keys(HANDLERS);
 /** Apply one command. Never throws for bad input; a rejection leaves state as it was. */
 export function handleCommand(state: GameState, command: unknown): CommandResult {
   if (!isObject(command) || typeof command.type !== "string") return { ok: false, reason: "command must be an object with a type" };
-  if (state.phase.kind === "ended") return { ok: false, reason: "the game is over" };
+  if (isOver(state.phase)) return { ok: false, reason: "the game is over" };
   if (state.phase.kind === "setup") return { ok: false, reason: "the game has not started" };
   const handler = Object.hasOwn(HANDLERS, command.type) ? HANDLERS[command.type] : undefined;
   if (!handler) return { ok: false, reason: `command ${command.type} is not supported` };

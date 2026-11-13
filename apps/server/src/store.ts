@@ -1,7 +1,7 @@
 // GameStore: games and their event logs in the database. The log is the
 // truth; the state is `replay(config, log)` (design §17.2 "event-sourced"),
 // cached in memory for running games (one server process).
-import { applyEvent, createGame, replay, type GameConfig, type GameEvent, type GameState } from "@skimjob/engine";
+import { applyEvent, createGame, isOver, replay, type GameConfig, type GameEvent, type GameState } from "@skimjob/engine";
 import type { Db, Queryable } from "./db";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -82,7 +82,7 @@ export function createGameStore(db: Db): GameStore {
       if (!state) throw new Error(`game ${gameId} has not started`);
       if (events.length === 0) return state;
       const next = events.reduce(applyEvent, state);
-      const status: GameStatus = next.phase.kind === "ended" ? "ended" : "running";
+      const status: GameStatus = isOver(next.phase) ? "ended" : "running";
       try {
         await db.transaction(async (tx) => {
           await insertEvents(tx, gameId, state.log.length, events);

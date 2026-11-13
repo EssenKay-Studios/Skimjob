@@ -185,6 +185,8 @@ The game ends after the round in which:
 - the **round cap** is reached: **12 rounds** [tunable]; or
 - **a bust** happens (§5.5), at once, mid-resolution.
 
+The host can also **end the game early** (§16) at any time while it runs. That is not an ending in the sense above: nobody wins, nothing is scored (no ranking, no getaway) and there is no reveal. Every player sees a short "The host ended the game" screen. *(owner, 10 Nov, provisional)*
+
 There are no acts, checkpoints or targets. A game that empties the bank early simply ends early. No meeting is held after the last round *(owner, 6 Nov: the end checks run straight after the round)*.
 
 ### 6.3 The getaway car
@@ -486,7 +488,7 @@ When the game ends, every reveal event opens (§18): every role, every move and 
 ## 16. Host controls
 
 - **Setup:** session length (§17, default 1 hour), vote visibility (§9.5), role list shown (§11.3), events on/off (§13), DM notices (§15.2), meeting window length (§9.4).
-- **During the game:** pause and resume (every clock stops; players can still plan and chat); extend the current round or meeting by a per-preset amount; replace a seat with a bot (Opportunist) after 2 missed rounds in a row (never the host's seat), handed back by the host or the player. Details: `docs/decisions.md` "Host controls" *(owner, 6 Nov)*.
+- **During the game:** pause and resume (every clock stops; players can still plan and chat); extend the current round or meeting by a per-preset amount; replace a seat with a bot (Opportunist) after 2 missed rounds in a row (never the host's seat), handed back by the host or the player. **End game early** (host only, after a confirm step) aborts the game as in §6.2: every clock stops, bots stop, nobody wins. These controls live in the game Menu, not in "This round" *(owner, 10 Nov, provisional)*; the paused and stand-in notes stay where every player sees them. Details: `docs/decisions.md` "Host controls" *(owner, 6 Nov)*.
 - Quiet hours (no deadlines or notifications at night) come with the mobile apps (M3) and must freeze deadlines.
 
 ---

@@ -6,7 +6,7 @@
 // ledger / case file sheet, the "While you were away" recap and the private
 // suspicion board (game/notes.ts), the host strip (M2-13, GameHost.tsx) and
 // (M2-11) the end-of-game reveal (components/Reveal.tsx, from `view.reveal.summary`).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { PlayerView, RoomId } from "@skimjob/engine";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
@@ -59,7 +59,7 @@ import { api, ApiError, sentence, UNREACHABLE, type LobbyView } from "../api";
 import { navigate } from "../router";
 import { useGameChat } from "./GameChat";
 import { MovePanel } from "./MovePanel";
-import { GameHost } from "./GameHost";
+import { GameHost, HostMenu } from "./GameHost";
 import { GameMenu } from "../components/GameMenu";
 import { TeachingPopups } from "../components/TeachingPopup";
 import { useTips, type TipsState } from "../game/useTips";
@@ -125,8 +125,22 @@ export function Game({ id }: { id: string }) {
   const view = channel.view;
   return (
     <div className="page">
-      <GameTop connection={access.kind === "ok" ? channel.connection : null} tips={tips} />
-      {!view ? (
+      <GameTop
+        connection={access.kind === "ok" ? channel.connection : null}
+        tips={tips}
+        host={access.kind === "ok" && access.game.youAreHost && view && view.phase.kind !== "ended" && view.phase.kind !== "aborted" ? <HostMenu gameId={id} game={access.game} view={view} control={channel.control} /> : null}
+      />
+      {view?.phase.kind === "aborted" ? (
+        <main className="game">
+          <SketchFrame as="section" seed="game-aborted" radius={20} tape tilt={-0.5} className="sheet game-msg enter-sheet" aria-labelledby="game-aborted-h">
+            <h1 id="game-aborted-h">The host ended the game</h1>
+            <p>Nobody wins and nothing is scored.</p>
+            <Button variant="primary" seed="game-aborted-go" onClick={() => navigate("/")}>
+              Back to the start
+            </Button>
+          </SketchFrame>
+        </main>
+      ) : !view ? (
         <main className="game" aria-busy="true">
           <SketchFrame seed="game-load" radius={20} className="sheet game-msg" aria-live="polite">
             <h1>Casing the joint…</h1>
@@ -155,12 +169,12 @@ export function Game({ id }: { id: string }) {
   );
 }
 
-function GameTop({ connection, tips }: { connection: Connection | null; tips?: TipsState }) {
+function GameTop({ connection, tips, host }: { connection: Connection | null; tips?: TipsState; host?: ReactNode }) {
   const label = connection === "reconnecting" ? "Reconnecting…" : connection === "connecting" ? "Connecting…" : connection === "signedOut" ? "Signed out" : null;
   return (
     <TopBar>
       <span aria-live="polite">{label && <Chip colour={connection === "signedOut" ? "var(--bad)" : "var(--gold)"}>{label}</Chip>}</span>
-      {tips?.me && <GameMenu tips={tips.me.tips} busy={tips.saving} onChange={tips.change} />}
+      {tips?.me && <GameMenu tips={tips.me.tips} busy={tips.saving} onChange={tips.change}>{host}</GameMenu>}
     </TopBar>
   );
 }
