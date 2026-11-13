@@ -114,15 +114,15 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 - **Voting** as today: shake down one player or skip; a shakedown passes with at least half the crew voting and more than half of the votes cast. Vote visibility stays a host setting.
 - **A shakedown opens the target's stash** and compares it with their share. Whatever is above the share (the pocketed coins still held) is set aside in the duffel for the next split. **Coins already spent on perks are gone and are not taken.** A target at or below the share is clean, and nothing happens.
 
-### A7. The plan board (planning without meetings)
+### A7. Alibis, the snapshot card and trust marks *(owner, 13 Nov)*
 
-- **A shared board for each round**, open the whole round: a miniature of the bank where anyone drags crew avatars onto rooms ("A → Office"), and each player marks their own spot (✋).
-- **Pledges:** "I'll use my power on the Vault." A pledge is a claim, not a commitment, and can be a bluff.
-- **Nothing is binding;** breaking the plan is the betrayal. Seats show who has agreed.
-- **Async-friendly:** the plan persists and can change until the deadline.
-- **Bots** take a sensible spot and sometimes break it.
-- **The plan is evidence** (see B6): each round's final plan, its pledges and a compact edit history ("B moved themselves to the Vault 2 minutes before the deadline") go into the ledger when the round resolves.
-- **Build note:** the live board can work like chat (server-side, fast to update); only the per-round snapshot is written into the game log, so bots, the case board and the reveal can read it.
+There is no shared board for planning: the alibi is the real claim, and it comes after the round, when everyone knows where they were.
+
+- **The alibi window:** after every round that doesn't end the game, a 20-second window [tunable] opens before the meeting, the result window or the next round's planning. A pop-up ("Psst. Where were you?") offers a tile per room; each player posts **one alibi per round**, true or a lie, as a public "said" entry. There is no other way to post one, and none for an older round.
+- **No answer is a fact:** at the window's close, everyone who played the round without an alibi is shown in the room they were really in.
+- **The snapshot card:** each round's card appears as its window ends, built only from alibis and public facts (bells, raids, the event card, missing coins): a dashed ring is "says", a solid ring is "no alibi". The latest card is in "This round"; every round's card is in the case board.
+- **Trust marks:** tap a crook on a card to mark their alibi for that round Trusted or Liar. Only you ever see your marks, even after the game; they show in your case board. Bots don't mark.
+- **Bots** post in the window from their own view; their personality decides when they lie.
 
 ### A8. Roles: tools, not sides
 
@@ -164,7 +164,6 @@ Two fixes: **Part A** remakes the rules around a few visible things (coins, bell
 | Cost | Perk | Effect |
 |---|---|---|
 | 1 | **Tail** | Next round, also see who was in one extra room. |
-| 1 | **Stamped alibi** | Your real room this round is stamped "verified" in the ledger (only if your alibi is true). |
 | 1 | **Check ballot** | See one player's vote at the next meeting. |
 | 2 | **Soft shoes** | Next round, your coins don't ring at all. |
 | 2 | **Blackout** | Next round, one room goes dark: no sightings, cameras offline. Its bell still rings. |
@@ -203,7 +202,7 @@ Tokens and their 20 triggers; the R6 shop and perk pool; temperament tags; the R
 2. **The case board's trust levels are generic.** "Fact", "Seen by you", "Shared evidence" and "Said" are data, and an entry's level comes from its event's source, so Advanced adds one level per role ("Reported by the Teller", "Reported by the Lookout"), each with its badge from content, without redesigning the ledger.
 3. **Rulesets are content.** A game names its ruleset (`simplified`), and the ruleset only selects content (fact visibility, rooms, its own role list, perks, events). The engine and UI never branch on the ruleset's name; Advanced is another ruleset entry with its own roles, never a fork.
 4. **Roles, perks and events register by id:** a content entry plus one handler, **including any role-specific win rule** (the Mole's and Fixer's win lives in their handlers, not in the end-of-game code). A role can be removed from or added to a ruleset without touching anything else.
-5. **Player statements are one "said" event type** (plans, claims, alibis, pledges). Advanced's records are **one generic record command** whose per-role format comes from content, so a 10th role needs no new command, event type or screen; records show in the case board through seam 2.
+5. **Player statements are one "said" event type** (alibis and role claims). Advanced's records are **one generic record command** whose per-role format comes from content, so a 10th role needs no new command, event type or screen; records show in the case board through seam 2.
 6. **Bots read facts only through `viewFor`,** so hidden facts need no bot rewrite.
 7. **Whether a role's holder is secret or announced, and whether its result goes privately to the holder or into a record they file, is a content setting per role.** In R7 every holder is secret and every result private, and **R7 builds only that path**: the setting exists as data, with no unused announced/filed code until Advanced.
 8. **The deal reads its counts from content:** how many roles of which kinds, by player count. Nothing hard-codes a number of roles.
@@ -218,7 +217,7 @@ Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, eve
 
 1. **One screen, no long scroll:**
    - The bank board in the middle, with every room's coins, bell and tape.
-   - A **"This round"** panel: your move, its preview, the plan board and the event card.
+   - A **"This round"** panel: your move, its preview, the latest snapshot card and the event card.
    - **The ledger, chat and rules** in tabs or drawers.
    - Phones: swipeable bottom sheets. Laptops: three columns.
    - Nothing needed for this round sits below the fold at 360–1280 px.
@@ -232,12 +231,12 @@ Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, eve
 4. **Info on everything:** one shared `InfoTip` component (tap on phones, hover and focus on desktop, ≥ 44 px target) on every icon, room, bell, perk, role name and meter, with one line plus "More". The text comes from content, so the UI, rulebook and tips never drift apart.
 5. **"This game" rulebook:** only the roles dealt (or possible, per the role-list setting), the rooms in play, the events that can come up, and this game's 3 shop items. Reachable from anywhere in one tap.
 6. **The ledger becomes a case board:**
-   - **Evidence only.** Lock-in marks, presence, meeting-time proposals and other housekeeping move to the seats and the meeting panel. The ledger keeps public facts (coins taken, the duffel split, missing, bells, raids, Wanted, purchases, events), what you saw or learned, what people said (plans, pledges, alibis, role claims), and what the crew did (votes, shakedowns).
+   - **Evidence only.** Lock-in marks, presence, meeting-time proposals and other housekeeping move to the seats and the meeting panel. The ledger keeps public facts (coins taken, the duffel split, missing, bells, raids, Wanted, purchases, events), what you saw or learned, what people said (alibis, role claims), the "no alibi" facts, your own trust marks, and what the crew did (votes, shakedowns).
    - **Every entry shows how far to trust it:**
      - **Fact:** a solid card in print, from the game.
      - **Seen by you:** a solid card with an eye icon, from you or your power.
      - **Shared evidence:** stamped "from X's case file".
-     - **Said:** a dashed outline in handwriting (plans, alibis, claims, pledges).
+     - **Said:** a dashed outline in handwriting (alibis, claims).
    - **Colour by type** (theme tokens only): money gold, noise and police red/blue, sightings blue, said grey, votes purple, events their card art.
    - **One Leads list, newest first:** each lead combines the facts about one thing in one round (a room, a meeting, the black market, missing coins, Wanted, the round, the crew); tap one to open its facts.
    - **⚠ "doesn't add up" warnings, never verdicts,** each naming the players it points at (design §15.4). The checks are pure functions over your own view, with tests.
@@ -252,7 +251,7 @@ Rule changes keep the engine's non-negotiables (`CLAUDE.md`): deterministic, eve
 8. **Opponents' roles:**
    - The roles-in-play strip opens each role's full card, including "How to spot it".
    - When something happens that a role could cause, the explanation names the candidates ("a room rang with nobody claiming it: the Mole, or someone lying").
-9. **The reveal** replays each round's plan against what everyone really did.
+9. **The reveal** shows each round's snapshot card with every alibi stamped true or a lie, against what everyone really did.
 
 **UI rules still apply** (`CLAUDE.md`, `docs/ui-style.md`): one notebook look, theme tokens and shared components only, new components in `/dev/gallery`, checked at 360/390/768/1024/1280 px.
 
@@ -315,7 +314,7 @@ Each step runs on the account, host and model the ticket's labels choose (`docs/
 - Ask the owner only about genuinely new questions.
 
 **S1 — spec freeze (docs only, one Opus developer).**
-- Rewrite `docs/design.md` as the **single** rules spec from Part A: rooms and coins, bells, raids and busts, the bank and the end, equal shares and the kitty, honesty and winning, meetings and shakedowns, the plan board, roles, perks, events. Nothing from R6 that R7 drops stays in it.
+- Rewrite `docs/design.md` as the **single** rules spec from Part A: rooms and coins, bells, raids and busts, the bank and the end, equal shares and the kitty, honesty and winning, meetings and shakedowns, alibis and the snapshot card, roles, perks, events. Nothing from R6 that R7 drops stays in it.
 - Move the R6 extension spec, the M2 plan and the R6 balance report to `docs/archive/`; fix every reference (including code comments citing them or old design sections).
 - Add a **"Content text"** section: the one-line texts for every room, role ("power", "How you win", "How to spot it"), perk and event, read by the UI through content.
 - Set the S5 balance gates.
@@ -336,7 +335,7 @@ Each step runs on the account, host and model the ticket's labels choose (`docs/
 
 **S2 — mockups (no code).**
 - One agent (Opus) creates the mockups from the **Design** artifact type, with the notebook look from `docs/ui-style.md`:
-  1. the game screen on a phone and a laptop: the board with coins, bells, tape and Wanted stars, the "This round" panel with the coins-into-two-bags move, and the plan board;
+  1. the game screen on a phone and a laptop: the board with coins, bells, tape and Wanted stars, and the "This round" panel with the coins-into-two-bags move;
   2. the case board: Leads, ⚠ warnings, pins and the suspect card;
   3. a role card and the "This game" rulebook;
   4. a teaching pop-up and a tip;
@@ -353,14 +352,14 @@ Each step runs on the account, host and model the ticket's labels choose (`docs/
   6. roles (A8), with powers and frequencies, including the Mole and Fixer's win rule in their handlers (A12 seam 4; steps 3–4 build the ending without it);
   7. perks and the shop (A9);
   8. the 4-card event deck at a 4-in-10 chance;
-  9. the plan-board snapshot as a public event.
+  9. player statements (alibis, role claims) as one public "said" event.
 
   Each PR deletes the R6 code it replaces (its audit list-3 items), updates bots and the sim's metrics for its rule, adds its events to the leak scrub and property tests, and runs a sim smoke. The web app may show the old screens against new rules in between; that is fine.
 - **(b) Interface foundations:**
   1. `InfoTip` + content-text plumbing, in `/dev/gallery`;
   2. the one-screen layout shell and bottom sheets at all five widths;
   3. the per-user Tips setting (one field on the user, default on);
-  4. the plan board's live server channel (like chat);
+  4. the alibi window's server deadline, closed like a round;
   5. the case board shell: Leads, pins, the Players strip and the suspect card (data from a typed adapter, filled in S4).
 
 **Seams for Skimjob Advanced:** every S3/S4 PR follows A12's ten seams; the reviewer checks them.
@@ -368,13 +367,13 @@ Each step runs on the account, host and model the ticket's labels choose (`docs/
 **S4 — wire the screens:**
 1. the board art (bells, tape, Wanted, the bank pile);
 2. the move (coins into two bags) with previews;
-3. the plan board UI;
+3. the alibi pop-up, the snapshot card and trust marks;
 4. the case board data and ⚠ checks;
 5. role cards, the rulebook and opponents' explanations;
 6. teaching pop-ups;
 7. the black market;
 8. the meeting and shakedown screens;
-9. the reveal (plan vs. what happened);
+9. the reveal (each round's card, told true or a lie);
 10. **Learn the game**, the single-player guided mode (A11.3), as its own PR.
 
 Each deletes the old screen, component, gallery page and e2e spec it replaces. Then a test deploy for the owner.
