@@ -42,6 +42,8 @@ export const bankTotal = (view: PlayerView): number => jobOf(view).bank.coinsPer
 /** A seat in the crew, in seat order (you included). */
 export interface SeatInfo {
   readonly id: PlayerId;
+  /** 0-based seat number: it fixes the crew colour and look for the whole game. */
+  readonly seat: number;
   readonly name: string;
   readonly isBot: boolean;
   readonly you: boolean;
@@ -89,11 +91,15 @@ export function presenceInfo(seat: Pick<SeatInfo, "id" | "isBot" | "you">, prese
   return { kind: "seen", text: `seen ${agoText(now - p.lastSeen)}` };
 }
 
+/** The seat of an engine player id: `p1` is seat 0 (the server's playerIdFor). */
+export const seatOf = (id: PlayerId): number => Number(id.slice(1)) - 1;
+
 export function seatsOf(view: PlayerView): SeatInfo[] {
   const order = setupOf(view)?.players ?? [...view.players, { id: view.me.id, name: "You", isBot: false }];
   const locked = new Set(view.lockedIn);
   return order.map((p) => ({
     id: p.id,
+    seat: seatOf(p.id),
     name: p.name,
     isBot: p.isBot,
     you: p.id === view.me.id,

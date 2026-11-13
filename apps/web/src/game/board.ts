@@ -10,7 +10,6 @@
 // public alibi claim for the round as a dashed ghost. Nothing else: never another player's
 // move or room unless the view itself says so.
 import { BANK_JOB, EVENTS, type RoomId } from "@skimjob/content";
-import { seatOfPlayer } from "../components/avatarLooks";
 import type { PlayerId, PlayerView } from "@skimjob/engine";
 import type { BankOccupant, RoomBell, TimeOfDay } from "../art/BankCutaway";
 import { crewTags } from "../art/crookLooks";
@@ -34,7 +33,7 @@ export interface BoardScene {
   readonly time: TimeOfDay;
 }
 
-/** Seat index, display name, bot flag and crew-unique tag by player id. */
+/** Seat number, display name, bot flag and crew-unique tag by player id. */
 export interface SeatLook {
   readonly look: number;
   readonly name: string;
@@ -45,7 +44,7 @@ export interface SeatLook {
 export function seatLooks(view: PlayerView): ReadonlyMap<PlayerId, SeatLook> {
   const seats = seatsOf(view);
   const tags = crewTags(seats.map((s) => plainName(s.name)));
-  return new Map(seats.map((s, i) => [s.id, { look: seatOfPlayer(s.id) ?? i, name: plainName(s.name), bot: s.isBot, tag: tags[i]! }]));
+  return new Map(seats.map((s, i) => [s.id, { look: s.seat, name: plainName(s.name), bot: s.isBot, tag: tags[i]! }]));
 }
 
 /** Seat names carry a "Bot · " prefix for bots; the art draws its own bot badge. */

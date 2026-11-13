@@ -1,7 +1,8 @@
 // Blob avatar: a slightly non-round ink circle in a crew colour with the
 // player's initials in Pangolin (ui-style §6, "Player avatars").
 import type { CSSProperties } from "react";
-import { crewColour, initialsOf } from "./avatarLooks";
+import { crewVar, crookLook } from "../art/crookLooks";
+import { initialsOf } from "./avatarLooks";
 
 export type AvatarStatus = "ready" | "away" | "turn";
 
@@ -18,7 +19,7 @@ export interface AvatarProps {
 }
 
 export function Avatar({ name, size = 40, seat, status, bot, title }: AvatarProps) {
-  const style = { "--av-size": `${size}px`, "--av-fill": crewColour(seat ?? name) } as CSSProperties;
+  const style = { "--av-size": `${size}px`, "--av-fill": crewVar(crookLook(seat ?? name).colour) } as CSSProperties;
   const cls = ["avatar", status && `avatar--${status}`].filter(Boolean).join(" ");
   const label = title ?? `${name}${bot ? " (bot)" : ""}${status === "ready" ? ", move in" : status === "away" ? ", away" : ""}`;
   return (

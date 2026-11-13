@@ -21,12 +21,12 @@ export const HATS = [
   "pompom", // 4 pink
   "bandana", // 5 violet
   "beret", // 6 sky
-  "fedora", // 7 mustard
+  "fedora", // 7 gold
   "tophat", // 8 brown
   "earmuffs", // 9 teal
   "goggles", // 10 grey
-  "stripes", // 11 lilac: a striped beanie
-  "propeller", // 12 cream
+  "stripes", // 11 purple: a striped beanie
+  "propeller", // 12 red
 ] as const;
 export type Hat = (typeof HATS)[number];
 
@@ -59,8 +59,8 @@ const HAT_COLOUR: Record<Hat, number> = {
   propeller: 2,
 };
 
-// Hat colours that would vanish on a body colour (navy on navy, gold on mustard…).
-const CLASH: Partial<Record<number, number>> = { 2: 4, 3: 5, 7: 3, 12: 6 };
+// Hat colours that would vanish on a body colour (navy on navy, gold on dark gold…).
+const CLASH: Partial<Record<number, number>> = { 2: 4, 3: 5, 7: 3 };
 
 const hatColourFor = (hat: Hat, colour: number) => {
   const c = HAT_COLOUR[hat];
@@ -93,11 +93,6 @@ export function crewLooks(count: number): CrookLook[] {
 
 export const crewVar = (n: number) => `var(--crew-${n})`;
 export const accVar = (n: number) => `var(--acc-${n})`;
-
-/** Light-bodied crooks (mustard, lilac, cream) get a darker mask outline. */
-export function isLightBody(colour: number): boolean {
-  return colour === 7 || colour === 11 || colour === 12;
-}
 
 const EXPRESSION_WORDS: Record<Expression, string> = {
   neutral: "",

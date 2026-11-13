@@ -334,6 +334,16 @@ describe("seat numbers", () => {
     const started = await call("POST", `/games/${game.id}/start`, who);
     expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Karthik", "p1"], ["Cy", "p2"], ["Bo", "p3"]]);
   });
+
+  it("a game started with a gap in the seats plays p1, p3, p4", async () => {
+    const { who, game } = await host();
+    const ana = (await join(game.inviteCode, "Ana")).session;
+    await join(game.inviteCode, "Bo");
+    await join(game.inviteCode, "Cy");
+    await call("POST", `/games/${game.id}/leave`, ana);
+    const started = await call("POST", `/games/${game.id}/start`, who);
+    expect(started.body.seats!.map((s) => [s.nickname, s.seat, s.playerId])).toEqual([["Karthik", 0, "p1"], ["Bo", 2, "p3"], ["Cy", 3, "p4"]]);
+  });
 });
 
 // Owner request (decisions.md M2-5b): before the start the host can hand the host role to another person, then leave.
