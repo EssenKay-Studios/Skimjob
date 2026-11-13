@@ -419,7 +419,7 @@
   padding: 0 var(--gutter-r) 0 var(--gutter-l);
 }
 .page:has(.shell--wide) .game-away {
-  max-width: 1400px;
+  max-width: var(--shell-max-w);
 }
 
 /* ---------- Laptop columns (the shell's side tabs and right column are narrow) ---------- */

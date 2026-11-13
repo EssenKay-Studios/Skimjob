@@ -292,3 +292,33 @@ for (const viewport of [{ width: 360, height: 740 }, { width: 390, height: 844 }
     await ctx.close();
   });
 }
+
+// #234: on laptops and big monitors the game fills the window (less the page gutters), up to 1920 px, then sits centred.
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
+  { width: 2560, height: 1440 },
+]) {
+  for (const touch of [false, true]) {
+    test(`game at ${viewport.width}x${viewport.height}${touch ? " touch" : ""} fills the width up to 1920 px @shell`, async ({ browser }, info) => {
+      const ctx = await browser.newContext({ viewport, hasTouch: touch });
+      const page = await ctx.newPage();
+      const game = await startGame(page.request, { bots: 5, sessionLength: "1w" });
+      await page.goto(`/game/${game.id}`);
+      await expect(page.locator(".shell--wide")).toBeVisible();
+      await check(page, viewport.width);
+      await page.screenshot({ path: info.outputPath(`game-${viewport.width}${touch ? "-touch" : ""}.png`) });
+
+      const gutter = 20; // --gutter in screens.css
+      const column = Math.min(viewport.width, 1920);
+      const margin = (viewport.width - column) / 2;
+      const strip = await box(page, ".shell__status");
+      expect(Math.abs(strip.x - (margin + gutter)), "the shell starts at the gutter").toBeLessThanOrEqual(1);
+      expect(Math.abs(strip.x + strip.width - (viewport.width - margin - gutter)), "the shell ends at the gutter").toBeLessThanOrEqual(1);
+      // The top bar shares the shell's column.
+      const home = await box(page, ".topbar__home > :first-child");
+      expect(Math.abs(home.x - strip.x)).toBeLessThanOrEqual(1);
+      await ctx.close();
+    });
+  }
+}

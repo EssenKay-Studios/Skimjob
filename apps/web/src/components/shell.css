@@ -105,7 +105,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   gap: var(--shell-gap) 14px;
   height: calc(100dvh - var(--topbar-h));
-  max-width: 1400px;
+  max-width: var(--shell-max-w);
   margin: 0 auto;
   padding: 0 var(--gutter-r) 16px var(--gutter-l);
 }
