@@ -4,7 +4,7 @@
 
 ## The idea in one paragraph
 
-Skimjob (R7) hides **who you are**: roles are secret, and the system shows the facts (every room's bell, how many coins left the bank, how many went missing, the honesty meter). **Skimjob Advanced flips it: every role is public, and every player has a task.** Roles are **announced at the start** and can **change hands mid-game by a crew vote**. Most of the facts R7 shows are instead seen privately by the player whose job it is, who publishes them for the crew, and **can fake them**. The only place to cheat is the job itself (and the pocket). The question stops being "who is the Mole?" and becomes "is the Teller's count true?". Rooms, coins, bells, raids, the bank, equal shares, perks, meetings, the plan board and the case board are R7's.
+Skimjob (R7) hides **who you are**: roles are secret, and the system shows the facts (every room's bell, how many coins left the bank, how many went missing, the honesty meter). **Skimjob Advanced flips it: every role is public, and every player has a task.** Roles are **announced at the start** and can **change hands mid-game by a crew vote**. Most of the facts R7 shows are instead seen privately by the player whose job it is, who publishes them for the crew, and **can fake them**. The only place to cheat is the job itself (and the pocket). The question stops being "who is the Mole?" and becomes "is the Teller's count true?". Rooms, coins, bells, raids, the bank, equal shares, perks, meetings, alibis, the snapshot card and the case board are R7's.
 
 **What it adds:** the strongest hook of the original redesign. The crew relies on records that its own members keep, and any record keeper might be lying.
 
