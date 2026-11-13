@@ -564,7 +564,11 @@ export function BankCutaway({
   const tags = new Map([...people.keys()].map((id, i) => [id, auto[i]!] as const));
   const pxPerUnit = width ? width / lay.width : 1;
   return (
-    <div ref={ref} className={["bank", `bank--${time}`, `bank--${mode}`, pickable && "bank--pickable", className].filter(Boolean).join(" ")}>
+    <div
+      ref={ref}
+      className={["bank", `bank--${time}`, `bank--${mode}`, pickable && "bank--pickable", className].filter(Boolean).join(" ")}
+      style={{ "--bank-aspect": lay.width / lay.height } as CSSProperties}
+    >
       <svg
         viewBox={`0 0 ${lay.width} ${lay.height}`}
         className="bank__svg"
