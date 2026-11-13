@@ -65,9 +65,9 @@ describe("rings light bulbs — design §5.1, §5.2, §4.2 step 2", () => {
     for (const id of s.playerOrder) expect(viewFor(s, id)).toMatchObject({ bells: s.bells, taped: {}, wanted: 0 });
   });
 
-  it("each noisy coin rings once and the rings in a room add up; the Lobby is silent, the Office's 1st coin too, every Vault coin rings", () => {
+  it("each noisy coin rings once and the rings in a room add up; the Lobby is silent, every other coin rings once", () => {
     const s = run(game(5), mv("p0", "vault", 1), mv("p1", "vault", 0, 2), mv("p2", "office", 2), mv("p3", "lobby", 1), mv("p4", "depositBoxes", 1), ROUND);
-    expect(rung(s)).toEqual({ vault: 3, office: 1, lobby: 0, security: 0, rooftop: 0, depositBoxes: 0, serverRoom: 0 });
+    expect(rung(s)).toEqual({ vault: 3, office: 2, lobby: 0, security: 0, rooftop: 0, depositBoxes: 1, serverRoom: 0 });
   });
 
   it("the bells are a public fact, from the content fact catalogue (design §19 seam 1)", () => {
@@ -96,14 +96,14 @@ describe("rings light bulbs — design §5.1, §5.2, §4.2 step 2", () => {
 describe("cooling — design §5.6, §4.2 step 6", () => {
   it("every room turns off 1 bulb, never below 0, after the round's rings", () => {
     const s = run(game(3), mv("p0", "vault", 2), mv("p1", "office", 2), ROUND);
-    expect(rung(s)).toMatchObject({ vault: 2, office: 1, lobby: 0 });
-    expect(ofType(lastRound(s), "bellsCooled")).toEqual([{ type: "bellsCooled", visibility: PUBLIC, round: 1, bells: { vault: 1, office: 0, lobby: 0, security: 0, rooftop: 0 } }]);
-    expect(s.bells).toEqual({ vault: 1, office: 0, lobby: 0, security: 0, rooftop: 0 });
+    expect(rung(s)).toMatchObject({ vault: 2, office: 2, lobby: 0 });
+    expect(ofType(lastRound(s), "bellsCooled")).toEqual([{ type: "bellsCooled", visibility: PUBLIC, round: 1, bells: { vault: 1, office: 1, lobby: 0, security: 0, rooftop: 0 } }]);
+    expect(s.bells).toEqual({ vault: 1, office: 1, lobby: 0, security: 0, rooftop: 0 });
   });
 
   it("each Rooftop player cools the hottest room by 1 more, one after another, each time the hottest at that moment", () => {
     // Vault 3, Office 1 → after −1: Vault 2, Office 0 → two on the Rooftop: Vault 1, then Vault 0.
-    const s = run(game(4), mv("p0", "vault", 3), mv("p1", "office", 2), mv("p2", "rooftop"), mv("p3", "rooftop"), ROUND);
+    const s = run(game(4), mv("p0", "vault", 3), mv("p1", "office", 1), mv("p2", "rooftop"), mv("p3", "rooftop"), ROUND);
     expect(rung(s)).toMatchObject({ vault: 3, office: 1 });
     expect(s.bells).toMatchObject({ vault: 0, office: 0 });
     // Vault 4, Office 1 → 3, 0 → three Rooftop players: 2, 1, 0; nothing goes below 0.
@@ -111,7 +111,7 @@ describe("cooling — design §5.6, §4.2 step 6", () => {
   });
 
   it("ties for the hottest are broken with the game's seeded randomness; no tie, no draw (design §5.6)", () => {
-    const tied = run(game(4), mv("p0", "vault", 2), mv("p1", "office", 2), mv("p2", "office", 2), mv("p3", "rooftop"));
+    const tied = run(game(4), mv("p0", "vault", 2), mv("p1", "office", 1), mv("p2", "office", 1), mv("p3", "rooftop"));
     const before = tied.log.length;
     const s = run(tied, ROUND);
     // Vault 2, Office 2 → 1 and 1: the Rooftop player cools one of them, drawn.
@@ -132,10 +132,10 @@ describe("cooling — design §5.6, §4.2 step 6", () => {
 });
 
 describe("raids — design §5.3, §4.2 step 3", () => {
-  /** Round 1: p0 and p1 grab 3 and 2 in the Vault (5 rings ≥ 4 bulbs); p2 hands 2 in from the Office. Then its briefing. */
+  /** Round 1: p0 and p1 grab 3 and 2 in the Vault (5 rings ≥ 5 bulbs); p2 hands 2 in from the Office. Then its briefing. */
   const raided = () => run(game(3), mv("p0", "vault", 1, 2), mv("p1", "vault", 2), mv("p2", "office", 2), ROUND, ...BRIEFING);
 
-  it("the 4th bulb raids the room: its visitors' grabs are seized before the split, everyone else's stands", () => {
+  it("the 5th bulb raids the room: its visitors' grabs are seized before the split, everyone else's stands", () => {
     const s = raided();
     expect(ofType(lastRound(s), "coinsGrabbed").map((e) => [e.player, e.duffel, e.pocket, e.seized])).toEqual([
       ["p0", 0, 0, 3],
@@ -171,14 +171,14 @@ describe("raids — design §5.3, §4.2 step 3", () => {
   });
 
   it("raids come before cooling: the Rooftop can't save a room in the same round (design §4.2)", () => {
-    const s = run(game(4), mv("p0", "vault", 3), mv("p1", "vault", 1), mv("p2", "rooftop"), mv("p3", "rooftop"), ROUND);
+    const s = run(game(4), mv("p0", "vault", 3), mv("p1", "vault", 2), mv("p2", "rooftop"), mv("p3", "rooftop"), ROUND);
     expect(ofType(s.log, "roomRaided").map((e) => e.room)).toEqual(["vault"]);
   });
 
   it("two raids in one round raise Wanted twice (design §5.4)", () => {
-    // Vault: 3 + 1 rings; Deposit boxes: four grabs of 2 ring once each.
-    const both = run(game(6), mv("p0", "vault", 3), mv("p1", "vault", 1), ...["p2", "p3", "p4", "p5"].map((p) => mv(p, "depositBoxes", 2)), ROUND);
-    expect(ofType(both.log, "roomRaided").map((e) => [e.room, e.seized, e.wanted])).toEqual([["vault", 4, 1], ["depositBoxes", 8, 2]]);
+    // Vault: 3 + 2 rings; Deposit boxes: four grabs of 2 ring 8.
+    const both = run(game(6), mv("p0", "vault", 3), mv("p1", "vault", 2), ...["p2", "p3", "p4", "p5"].map((p) => mv(p, "depositBoxes", 2)), ROUND);
+    expect(ofType(both.log, "roomRaided").map((e) => [e.room, e.seized, e.wanted])).toEqual([["vault", 5, 1], ["depositBoxes", 8, 2]]);
     expect([both.wanted, both.taped]).toEqual([2, { vault: 3, depositBoxes: 3 }]);
   });
 
@@ -189,7 +189,7 @@ describe("raids — design §5.3, §4.2 step 3", () => {
   });
 
   it("the bell size, the tape and the bust line are content numbers [tunable] (design §5.1, §5.3, §5.5)", () => {
-    expect(BANK_JOB.alarm).toEqual({ bulbs: 4, tapedRounds: 2, bustStars: 3 });
+    expect(BANK_JOB.alarm).toEqual({ bulbs: 5, tapedRounds: 2, bustStars: 3 });
     const s = run(game(3, [], { alarm: { bulbs: 2, tapedRounds: 1 } }), mv("p0", "vault", 2), ROUND);
     expect(ofType(s.log, "roomRaided")[0]).toMatchObject({ room: "vault", seized: 2, closedThrough: 2 });
   });
@@ -200,7 +200,7 @@ describe("the bust and the Rooftop escape — design §5.5, §4.2 step 4, §8.3"
   const busted = (roles: string[] = [], stash: Record<string, number> = {}) => {
     const g = game(3, roles);
     const players = Object.fromEntries(Object.entries(g.players).map(([id, p]) => [id, { ...p, stash: stash[id] ?? 0 }]));
-    return run({ ...g, wanted: 2, players }, mv("p0", "vault", 2, 1), mv("p1", "vault", 1), mv("p2", "rooftop"), ROUND);
+    return run({ ...g, wanted: 2, players }, mv("p0", "vault", 2, 1), mv("p1", "vault", 2), mv("p2", "rooftop"), ROUND);
   };
 
   it("Wanted 3 ends the game at once: no cooling, no result window; only the Rooftop escapes", () => {
@@ -213,16 +213,16 @@ describe("the bust and the Rooftop escape — design §5.5, §4.2 step 4, §8.3"
   });
 
   it("a bust on a meeting's last round ends the game instead of waiting for the meeting", () => {
-    // Rounds 1–2 in the Lobby (silent), then the 4th Vault bulb in round 3 at Wanted 2.
+    // Rounds 1–2 in the Lobby (silent), then the 5th Vault bulb in round 3 at Wanted 2.
     const lobby = [mv("p0", "lobby", 1), mv("p1", "lobby", 1), mv("p2", "lobby", 1), ROUND];
-    const s = run({ ...run(game(3), ...lobby, ...lobby), wanted: 2 }, mv("p0", "vault", 3), mv("p1", "vault", 1), mv("p2", "lobby", 1), ROUND);
+    const s = run({ ...run(game(3), ...lobby, ...lobby), wanted: 2 }, mv("p0", "vault", 3), mv("p1", "vault", 2), mv("p2", "lobby", 1), ROUND);
     expect(s.wanted).toBe(3);
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { reason: "bust" } });
     expect(ofType(s.log, "roundStarted").map((e) => e.round)).toEqual([1, 2, 3]);
   });
 
   it("the biggest stash among the escapees wins, every escapee tied for it, any role (the Mole included)", () => {
-    const hot = (g: GameState): GameState => ({ ...g, wanted: 2, bells: { ...g.bells, vault: 1 } });
+    const hot = (g: GameState): GameState => ({ ...g, wanted: 2, bells: { ...g.bells, vault: 2 } });
     const s = run(hot(game(4, ["mole"])), mv("p0", "rooftop"), mv("p1", "rooftop"), mv("p2", "vault", 3), mv("p3", "rooftop"), ROUND);
     expect(s.phase).toMatchObject({ outcome: { reason: "bust", escapees: ["p0", "p1", "p3"], winners: ["p0", "p1", "p3"] } });
     const rich = (stash: Record<string, number>) => {
@@ -237,7 +237,7 @@ describe("the bust and the Rooftop escape — design §5.5, §4.2 step 4, §8.3"
 
   it("nobody on the Rooftop: nobody wins; the ranking still shows every stash", () => {
     const g = game(3);
-    const s = run({ ...g, wanted: 2, bells: { ...g.bells, vault: 1 } }, mv("p0", "vault", 3), mv("p1", "lobby", 0, 1), mv("p2", "office", 0, 2), ROUND);
+    const s = run({ ...g, wanted: 2, bells: { ...g.bells, vault: 2 } }, mv("p0", "vault", 3), mv("p1", "lobby", 0, 1), mv("p2", "office", 0, 2), ROUND);
     expect(s.phase).toMatchObject({ kind: "ended", outcome: { reason: "bust", escapees: [], winners: [] } });
     if (s.phase.kind !== "ended") throw new Error("not ended");
     expect(s.phase.outcome.ranking.map((r) => [r.player, r.stash])).toEqual([["p2", 2], ["p1", 1], ["p0", 0]]);
@@ -265,15 +265,15 @@ describe("the Mole's ring — design §5.2, §5.3, §11.1", () => {
 
   it("rings any open room once, like an ordinary ring; only the Mole is told", () => {
     const s = run(game(3, ["mole"]), RING("office"), mv("p1", "office", 2), ROUND);
-    expect(rung(s)?.office).toBe(2);
+    expect(rung(s)?.office).toBe(3);
     const used = ofType(s.log, "abilityResolved");
     expect(used).toEqual([{ type: "abilityResolved", visibility: { kind: "private", player: "p0" }, player: "p0", round: 1, ability: { kind: "ring", room: "office" } }]);
     expect(viewFor(s, "p1").caseFile.some((e) => e.event.type === "abilityResolved")).toBe(false);
   });
 
-  it("can cause a raid (the 4th bulb), at once", () => {
-    const s = run(game(3, ["mole"]), RING("vault"), mv("p1", "vault", 3), ROUND);
-    expect(ofType(s.log, "roomRaided")).toMatchObject([{ room: "vault", seized: 3, wanted: 1 }]);
+  it("can cause a raid (the 5th bulb), at once", () => {
+    const s = run(game(3, ["mole"]), RING("vault"), mv("p1", "vault", 3), mv("p2", "vault", 1), ROUND);
+    expect(ofType(s.log, "roomRaided")).toMatchObject([{ room: "vault", seized: 4, wanted: 1 }]);
   });
 
   it("not the Rooftop, not a taped-off room, not a room out of play; once between meetings", () => {
@@ -290,8 +290,8 @@ describe("the Mole's ring — design §5.2, §5.3, §11.1", () => {
 });
 
 describe("the Fixer's reopen — design §5.3, §11.1", () => {
-  /** Round 1: the Vault is raided (p1 grabs 3, p2 grabs 1); p0 is the Fixer. */
-  const taped = () => run(game(3, ["fixer"]), mv("p0", "lobby", 1), mv("p1", "vault", 3), mv("p2", "vault", 1), ROUND, ...BRIEFING);
+  /** Round 1: the Vault is raided (p1 grabs 3, p2 grabs 2); p0 is the Fixer. */
+  const taped = () => run(game(3, ["fixer"]), mv("p0", "lobby", 1), mv("p1", "vault", 3), mv("p2", "vault", 2), ROUND, ...BRIEFING);
   const REOPEN = (room: string) => mv("p0", "lobby", 1, 0, { ability: { kind: "reopen", room } });
 
   it("tears the tape off a taped-off room: public, without a name; the room is open next round, its bell at 0", () => {
@@ -324,14 +324,14 @@ describe("a missed move into a taped-off default room sits the round out — des
     expect(ofType(round, "coinsGrabbed").map((e) => e.player)).toEqual(["p0", "p1"]);
     expect(ofType(round, "roomSighting").map((e) => e.player)).toEqual(["p0", "p1"]);
     expect(ofType(round, "roomSighting")[0]?.others).toEqual(["p1"]);
-    expect(rung(after)).toMatchObject({ office: 2 }); // only p0's and p1's 2nd coins
+    expect(rung(after)).toMatchObject({ office: 4 }); // only p0's and p1's coins
     // design §7.2: the duffel is split among all players, so the 4 handed in still give p2 its cut of 1.
     expect(after.players.p2?.stash).toBe(1);
     expect(after.players.p2?.consecutiveMissedMoves).toBe(1);
   });
 
   it("is not on the Rooftop: a bust that round leaves it behind (design §5.5)", () => {
-    const s = run({ ...game(3), ...LOBBY_TAPED, bells: { ...LOBBY_TAPED.bells, vault: 1 }, wanted: 2 }, mv("p0", "vault", 3), mv("p1", "rooftop"));
+    const s = run({ ...game(3), ...LOBBY_TAPED, bells: { ...LOBBY_TAPED.bells, vault: 2 }, wanted: 2 }, mv("p0", "vault", 3), mv("p1", "rooftop"));
     const after = run(s, ROUND);
     expect(after.phase).toMatchObject({ kind: "ended", outcome: { reason: "bust", escapees: ["p1"], winners: ["p1"] } });
   });

@@ -19,7 +19,7 @@ export interface RoomDef {
   /**
    * The room's noise: each visitor's first `quietCoins` coins are silent, and
    * every coin after them rings once (lights one bulb of the room's bell)
-   * [tunable]. The Lobby's one coin is silent; the Office's first coin is.
+   * [tunable]. Only the Lobby's one coin is silent.
    * design §3.1, §5.2
    */
   readonly quietCoins: number;

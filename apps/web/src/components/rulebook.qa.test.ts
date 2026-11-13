@@ -33,11 +33,11 @@ describe("QA: the rulebook follows content overrides — design §17.4, §20", (
   it("shows overridden bank, rounds, bulbs, raid, Wanted and perk prices, not the defaults", () => {
     const shop = viewFor(replay(config(), setupEvents(config())), "p1").shop.map((s) => s.perk);
     const perks = Object.fromEntries(shop.map((p, i) => [p, { cost: 7 + i }]));
-    const v = view(config({ contentOverrides: { bank: { coinsPerPlayer: 20 }, alarm: { bulbs: 5, tapedRounds: 3, bustStars: 4 }, roundCap: 9, perks } }));
+    const v = view(config({ contentOverrides: { bank: { coinsPerPlayer: 20 }, alarm: { bulbs: 6, tapedRounds: 3, bustStars: 4 }, roundCap: 9, perks } }));
     const t = text(v);
     expect(t).toContain("100 coins (20 a player)");
     expect(t).toContain("up to 9");
-    expect(t).toContain("5 bulbs; the 5th is a raid");
+    expect(t).toContain("6 bulbs; the 6th is a raid");
     expect(t).toContain("closed 3 rounds");
     expect(t).toContain("4 stars is a bust");
     for (const [i, p] of shop.entries()) {
@@ -122,7 +122,7 @@ describe("QA: no plain-string numbers in the §20.5 lines — design §20.5", ()
 
 describe("QA round 3: the Terms read the game's own alarm numbers — design §20.5", () => {
   it("raid, Wanted and Bust follow an alarm override, with no default left in the Terms", () => {
-    for (const [bulbs, bustStars, ord, word] of [[5, 4, "5th", "Four"], [1, 1, "1st", "One"], [12, 2, "12th", "Two"]] as const) {
+    for (const [bulbs, bustStars, ord, word] of [[6, 4, "6th", "Four"], [1, 1, "1st", "One"], [12, 2, "12th", "Two"]] as const) {
       const t = text(view(config({ contentOverrides: { alarm: { bulbs, bustStars } } })));
       const terms = t.slice(t.indexOf("Terms"));
       expect(terms).toContain(`The ${ord} bulb lights`);

@@ -121,12 +121,12 @@ describe("M2-9 art", () => {
       const out = html(
         createElement(BankCutaway, {
           ...wide,
-          bulbs: 4,
+          bulbs: 5,
           bells: { vault: { lit: 3 }, office: { lit: 1, preview: 2 }, lobby: { lit: 0, hidden: true }, security: { lit: 0 } },
         }),
       );
       expect(out.match(/data-bell="/g)).toHaveLength(4);
-      expect(out).toContain('aria-label="Bell: 3 of 4 lit"');
+      expect(out).toContain('aria-label="Bell: 3 of 5 lit"');
       expect(out).toContain("your grab adds 2");
       expect(out).toContain('aria-label="Bell: hidden"');
       expect(html(createElement(BankCutaway, wide))).not.toContain("data-bell");

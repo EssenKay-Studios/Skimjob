@@ -17,24 +17,24 @@ describe("bot bell reading — design §5", () => {
   });
 
   it("raid risk is the lit bulbs plus the grab's own rings, ÷ the bell (design §5.2, §5.3)", () => {
-    const v = view({ bells: { ...view().bells, vault: 1, office: 3 } });
+    const v = view({ bells: { ...view().bells, vault: 2, office: 3 } });
     expect(raidRisk(v, BANK_JOB, "vault", 3)).toBe(1);
-    expect(raidRisk(v, BANK_JOB, "office", 1)).toBe(0.75);
+    expect(raidRisk(v, BANK_JOB, "office", 1)).toBe(0.8);
     expect(raidRisk(v, BANK_JOB, "office", 2)).toBe(1);
     expect(raidRisk(v, BANK_JOB, "lobby", 1)).toBe(0);
   });
 
   it("a quiet grab is the most coins that don't raid the room alone, at least 1", () => {
-    const v = view({ bells: { ...view().bells, vault: 1, office: 3 } });
+    const v = view({ bells: { ...view().bells, vault: 2, office: 3 } });
     expect(quietGrab(v, BANK_JOB, "vault", 3)).toBe(2);
     expect(quietGrab(v, BANK_JOB, "office", 2)).toBe(1);
-    expect(quietGrab({ ...v, bells: { ...v.bells, vault: 3 } }, BANK_JOB, "vault", 3)).toBe(3);
+    expect(quietGrab({ ...v, bells: { ...v.bells, vault: 4 } }, BANK_JOB, "vault", 3)).toBe(3);
   });
 
   it("the Locksmith's coins ring one time fewer, so its grab adds no rings and needs no holding back (design §5.2, §11.1)", () => {
     const v = view({ bells: { ...view().bells, vault: 3, office: 3 } }, "locksmith");
-    expect(raidRisk(v, BANK_JOB, "vault", 3)).toBe(0.75);
-    expect(raidRisk(v, BANK_JOB, "office", 2)).toBe(0.75);
+    expect(raidRisk(v, BANK_JOB, "vault", 3)).toBe(0.6);
+    expect(raidRisk(v, BANK_JOB, "office", 2)).toBe(0.6);
     expect(quietGrab(v, BANK_JOB, "vault", 3)).toBe(3);
   });
 

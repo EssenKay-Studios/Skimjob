@@ -162,7 +162,7 @@ describe("QA: the split and the kitty with 3 and 12 players — design §7.1, §
 
 describe("QA: honesty counts each coin once — design §7.4, §7.5", () => {
   it("seized coins count neither as taken nor as missing, and never reach the split", () => {
-    // Shipped bells (4 bulbs): two Vault grabs of 3 ring 6 → raid; the Office hand-in is safe.
+    // Shipped bells (5 bulbs): two Vault grabs of 3 ring 6 → raid; the Office hand-in is safe.
     const s = round(game(3, null), { p0: ["vault", 3], p1: ["vault", 1, 2], p2: ["office", 2] });
     expect(ofType(s, "roomRaided")).toHaveLength(1);
     expect(ofType(s, "roundResolved")[0]).toMatchObject({ bank: 48 - 8, taken: 2, missing: 0, honesty: { reached: 2, taken: 2 } });

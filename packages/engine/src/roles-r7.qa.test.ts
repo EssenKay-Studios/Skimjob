@@ -388,8 +388,8 @@ describe("QA each power at its edges; invalid and out-of-phase uses — design �
 
   it("the Priest absolves from planning only; an absolve of a sitting-out player still takes what's above the share", () => {
     // Lobby taped off: missed moves sit the round out (design §3.3). p1 pockets 2 in round 1.
-    const s = game(3, ["priest"], { alarm: { bulbs: 1, bustStars: 9 }, rooms: { lobby: { quietCoins: 0 } } });
-    // p0's Lobby coin rings (quietCoins 0) and raids it; p1 pockets the Office's silent first coin.
+    const s = game(3, ["priest"], { alarm: { bulbs: 1, bustStars: 9 }, rooms: { lobby: { quietCoins: 0 }, office: { quietCoins: 1 } } });
+    // p0's Lobby coin rings (quietCoins 0) and raids it; p1's Office coin is made silent, so it isn't seized.
     const x = nextRound(resolve(s, mv("p0", "lobby"), mv("p1", "office", 0, { duffel: 0, pocket: 1 }), mv("p2", "rooftop")));
     expect(x.taped).toHaveProperty("lobby");
     const above = stash(x, "p1") - x.share;

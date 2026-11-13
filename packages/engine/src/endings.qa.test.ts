@@ -115,7 +115,7 @@ describe("the bank empties — design §6.1, §6.2, §3.2", () => {
   });
 
   it("an empty bank ends the game even when every coin of the last round was seized", () => {
-    // 3 × 2 = 6 coins; two Vault grabs take all 6, ring 6 and raid (4 bulbs). Nothing taken counts, so honesty reads full.
+    // 3 × 2 = 6 coins; two Vault grabs take all 6, ring 6 and raid (5 bulbs). Nothing taken counts, so honesty reads full.
     const s = round(game(3, [], { bank: { coinsPerPlayer: 2 } }), [["vault", 3], ["vault", 3], ["rooftop", 0]]);
     expect(s.bank).toBe(0);
     expect(s.seized).toBe(6);
@@ -169,7 +169,7 @@ describe("a bust wins over the bank and the cap in the same round — design §4
   });
 
   it("12 players, shipped numbers: three raids in one round jump Wanted 0 → 3 (a bust), both Rooftop players win tied", () => {
-    // Vault: 2 × 3 rings = 6. Office: 4 × 1 ring (1st coin quiet). Deposit boxes: 4 × 1. Two on the Rooftop.
+    // Vault: 2 × 3 rings = 6. Office: 4 × 2 rings. Deposit boxes: 4 × 2. Two on the Rooftop.
     const moves: [string, number, number?][] = [
       ["vault", 3], ["vault", 3],
       ["office", 2], ["office", 2], ["office", 2], ["office", 2],

@@ -55,7 +55,7 @@ describe("QA: the old starter/Quick mode is refused or dropped, never half-appli
 describe("QA: the 15-min preset is a normal game (shop and events), 3/8/12 players", () => {
   for (const n of [3, 8, 12]) {
     it(`${n} players: runs to gameEnded with a 3-perk shop and event cards flipped`, () => {
-      const cfg = gameConfig(quick(), seats(n), `qa-quick-${n}`);
+      const cfg = gameConfig(quick(), seats(n), `qa-quick-${n}-3`);
       expect(cfg.eventsEnabled).toBe(true);
       expect(validateConfig(cfg)).toEqual([]);
       const agents = createBots(cfg.players, (_s, i) => Object.values(PERSONALITIES)[i % Object.values(PERSONALITIES).length]!, cfg.seed);
