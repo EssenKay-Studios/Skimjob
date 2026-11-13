@@ -71,7 +71,7 @@ export function MovePanel({ view, round, timers, offset, send, pick }: MovePanel
   const control = useMemo(() => powerControl(view), [view]);
   const mine = view.me.move;
   const { room, setRoom } = pick;
-  const [wanted, setWanted] = useState<number | null>(mine ? mine.duffel + mine.pocket : null);
+  const [wanted, setWanted] = useState(mine ? mine.duffel + mine.pocket : 0);
   const [pocket, setPocket] = useState(mine?.pocket ?? 0);
   const [watch, setWatch] = useState<RoomId | null>(mine?.watch ?? null);
   const [powerRooms, setPowerRooms] = useState<readonly RoomId[]>(() => {
@@ -87,9 +87,10 @@ export function MovePanel({ view, round, timers, offset, send, pick }: MovePanel
   const bags = bagsOf(grab, pocket);
   const missed = justMissed(view);
   const ability = abilityOf(control, powerRooms, powerPlayer);
-  const move: Move | null = picked && picked.closed === null && (!picked.watcher || watch) ? { room: picked.id, duffel: bags.duffel, pocket: bags.pocket, ...(picked.watcher && watch ? { watch } : {}), ...(ability ? { ability } : {}) } : null;
+  // design §3.2: a coin room needs at least 1 coin in a bag to lock in.
+  const move: Move | null = picked && picked.closed === null && (picked.coins === 0 || grab > 0) && (!picked.watcher || watch) ? { room: picked.id, duffel: bags.duffel, pocket: bags.pocket, ...(picked.watcher && watch ? { watch } : {}), ...(ability ? { ability } : {}) } : null;
   const changed = !mine || !sameMove(mine, move);
-  const preview = picked && grab > 0 ? bellPreview(view, picked, grab) : null;
+  const preview = picked && picked.coins > 0 ? bellPreview(view, picked, grab) : null;
 
   const lock = async () => {
     if (!move) return;
@@ -187,7 +188,7 @@ export function MovePanel({ view, round, timers, offset, send, pick }: MovePanel
             bell={<AlarmBell bulbs={preview.bulbs} lit={preview.lit ?? 0} preview={preview.adds} hidden={preview.lit === null} />}
           />
           {/* design §5.3: the others' rings are unknown, so only your own grab is warned about. */}
-          {preview.raid && <p className="move__warn">Your grab alone would light the last bulb: a raid, and you'd lose the grab.</p>}
+          {preview.raid && grab > 0 && <p className="move__warn">Your grab alone would light the last bulb: a raid, and you'd lose the grab.</p>}
           <p className="meta move__share" aria-live="polite">
             {bags.duffel > 0
               ? `Share is ${view.share}. Your ${bags.duffel} duffel ${bags.duffel === 1 ? "coin adds" : "coins add"} about ${Math.round(shareEach(view, bags.duffel) * 10) / 10} to each share.`

@@ -4,7 +4,7 @@
 // source; the gallery's "A power cut" label), so only a bare "Power cut", the old card's name, is banned.
 import { expect, test, type Page } from "@playwright/test";
 import { gameOver, keepRoundOpen, startGame } from "./setupGame";
-import { pickRoom } from "./move";
+import { grabAll, pickRoom } from "./move";
 
 const DROPPED = /Quiet night|Payday|(?<!a )Power cut(?! in the )|Raid rumou?r|Double[- ]cross|pocket count|how many (players )?pocketed/i;
 const KEPT = /Shift change|Lockdown|Audit|Inside tip/;
@@ -41,6 +41,7 @@ test("a 15-min game with events on, played to the end: kept cards flip, no dropp
     if (await lock.isVisible().catch(() => false)) {
       seen.push(await text(page));
       await pickRoom(page, "Office", 1000).catch(() => {});
+      await grabAll(page, 1000).catch(() => {});
       if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) await lock.click({ timeout: 1000 }).catch(() => {});
     }
     await page.waitForTimeout(250); // sleep: paces a retry loop that polls the live game for a window

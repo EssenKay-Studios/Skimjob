@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { closePanel, expectRankingReadable, gameOver, isWide, keepRoundOpen, openLeads, openPanel, showResult, startGame, settle } from "./setupGame";
-import { dragTo, pickRoom, pileCoins, tapMove } from "./move";
+import { dragTo, grabAll, pickRoom, pileCoins, tapMove } from "./move";
 
 // M2-6 acceptance (docs/m2-plan.md): a host and a guest play a 15-min game
 // against bots to the end in the browser and see the ranking.
@@ -74,6 +74,7 @@ test("a host and a guest play a 15-min game against bots to the end @move", asyn
       await keepRoundOpen(page);
       if (!(await page.getByRole("button", { name: "Lock it in" }).isVisible().catch(() => false))) return;
       await pickRoom(page, "Office", 5000).catch(() => {});
+      await grabAll(page, 5000).catch(() => {});
       await click(page.getByRole("button", { name: "Lock it in" }));
       if (await landed(page.getByText(/Locked in: Office/))) moves++;
     };
@@ -151,7 +152,14 @@ test("the move panel: pick a room, coins into the bags, lock it in, change it; r
 
   // The Vault's 3 coins, all in the duffel at first: tap one to pick it up, tap the Pocket to drop it; a drag sends another (design §3.2).
   await pickRoom(page, "Vault");
+  // A fresh move holds nothing: the 3 coins are in the Grab row and Lock it in waits for one in a bag.
+  await expect(pileCoins(page, "room")).toHaveCount(3);
+  await expect(pileCoins(page, "duffel")).toHaveCount(0);
+  await expect(pileCoins(page, "pocket")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
+  await tapMove(page, "room", "duffel");
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeEnabled();
+  await grabAll(page);
   await expect(pileCoins(page, "duffel")).toHaveCount(3);
   await tapMove(page, "duffel", "pocket");
   await expect(pileCoins(page, "pocket")).toHaveCount(1);
@@ -227,6 +235,7 @@ test("the bank board: tap a room to pick it, see who you saw and the alibi claim
   await expect(board.locator(".bank-room[data-room=vault]")).toHaveAttribute("aria-pressed", "false");
   // Only you stand in the bank while planning: nobody else's pick is drawn.
   await expect(board.locator(".bank-room .crook-fig")).toHaveCount(1);
+  await grabAll(page);
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByText("Locked in: Office")).toBeVisible();
 

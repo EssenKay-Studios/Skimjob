@@ -70,6 +70,10 @@
   cursor: grabbing;
   rotate: -8deg;
 }
+/* Each bag is its own stacking context (.sk-frame isolates), so lift the whole bag that holds the dragged coin above the other. */
+.bag:has(.coin-btn.is-dragging) {
+  z-index: 3;
+}
 .coin-bags {
   display: grid;
   gap: 8px;

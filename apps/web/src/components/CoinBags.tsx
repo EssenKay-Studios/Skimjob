@@ -142,7 +142,7 @@ function BagBox({ bag, coins, held, open, onTap, onDrop }: PileProps & { bag: Ba
 export interface CoinBagsProps {
   /** The most coins this room lets you grab (design §3.1). */
   readonly limit: number;
-  /** The coins grabbed, split into the two bags (1 up to the limit in all). */
+  /** The coins grabbed, split into the two bags (none up to the limit in all). */
   readonly bags: Bags;
   /** A coin moved: the bags after it. */
   readonly onBags: (bags: Bags) => void;
@@ -159,8 +159,8 @@ export function CoinBags({ limit, bags, onBags, bell }: CoinBagsProps) {
     setHeld(null);
     onBags(moveCoin(bags, from, to, limit));
   };
-  // The held coin may go to any other pile, but the room takes one back only while more than 1 is grabbed. design §3.2 step 2
-  const open = (pile: Pile) => held !== null && held.from !== pile && (pile !== "room" || grab > 1);
+  // The held coin may go to any other pile. design §3.2 step 2
+  const open = (pile: Pile) => held !== null && held.from !== pile;
   // A tap on a coin drops the held one in that coin's pile when it may go there; otherwise it picks this coin up (or puts it down).
   const tap = (pile: Pile, index: number) => {
     if (held && open(pile)) move(held.from, pile);
@@ -198,7 +198,7 @@ export function CoinBags({ limit, bags, onBags, bell }: CoinBagsProps) {
           ? "Tap a coin to pick it up, or drag it."
           : held.from === "room"
             ? "Tap the Duffel or the Pocket to drop it."
-            : `Tap the ${held.from === "duffel" ? "Pocket" : "Duffel"} to drop it${grab > 1 ? ", or the Grab row to leave it" : ""}.`}
+            : `Tap the ${held.from === "duffel" ? "Pocket" : "Duffel"} to drop it, or the Grab row to leave it.`}
       </p>
       <div className="coin-bags__bags">
         <BagBox bag="duffel" coins={bags.duffel} open={open("duffel")} {...pile} />

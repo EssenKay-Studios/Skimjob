@@ -5,8 +5,8 @@ import { powerOf, ringsOf, type AbilityUse, type Move, type PlayerId, type Playe
 import type { RolePower } from "@skimjob/content";
 import { crewSize, jobOf, setupOf, type RoomOption } from "./hud";
 
-/** The coins grabbed: the player's choice, at least 1 in a coin room and at most its limit; 0 where there are none. design §3.2 */
-export const grabOf = (coins: number, wanted: number | null): number => (coins === 0 ? 0 : Math.min(coins, Math.max(1, wanted ?? coins)));
+/** The coins grabbed: the player's choice, from none (a fresh move) up to the room's limit; 0 where there are none. The least that locks in is 1. design §3.2 */
+export const grabOf = (coins: number, wanted: number): number => Math.min(coins, Math.max(0, wanted));
 
 /** The grab split into its two bags. design §3.2 step 3 */
 export interface Bags {
@@ -24,13 +24,13 @@ export type Pile = "room" | keyof Bags;
 
 /**
  * One coin moves from `from` to `to`: out of the room into a bag (the grab goes up, never past
- * `limit`), between the bags, or back into the room (the grab goes down, never below 1).
+ * `limit`), between the bags, or back into the room (the grab goes down).
  * Nothing moves when `from` has no coin to give. design §3.2 steps 2-3
  */
 export function moveCoin(bags: Bags, from: Pile, to: Pile, limit: number): Bags {
   const grab = bags.duffel + bags.pocket;
   const has = from === "room" ? grab < limit : bags[from] > 0;
-  if (from === to || !has || (to === "room" && grab <= 1)) return bags;
+  if (from === to || !has) return bags;
   const take = from === "room" ? bags : { ...bags, [from]: bags[from] - 1 };
   return to === "room" ? take : { ...take, [to]: take[to] + 1 };
 }

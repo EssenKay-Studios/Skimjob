@@ -3,7 +3,7 @@
 import { existsSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { openPanel, startGame, settle } from "./setupGame";
-import { pickRoom } from "./move";
+import { grabAll, pickRoom } from "./move";
 
 const WIDTHS = [360, 390, 768, 1024, 1280];
 const seat = (page: Page, name: string) => page.locator(".crew-seat:not(.is-you)").filter({ hasText: name });
@@ -38,6 +38,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
 
   // The host locks in: the guest sees the mark, never the room or split.
   await pickRoom(host, "Vault");
+  await grabAll(host);
   await host.getByRole("button", { name: "Lock it in" }).click();
   await expect(host.getByRole("button", { name: "Locked in" })).toBeDisabled();
   await expect(seat(page, "Host").locator(".crook-avatar--ready")).toBeVisible();

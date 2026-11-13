@@ -1,6 +1,6 @@
 import { expect as baseExpect, test, type Browser, type Page } from "@playwright/test";
 import { chatTab, openChat, openPanel, startGame, settle } from "./setupGame";
-import { pickRoom } from "./move";
+import { grabAll, pickRoom } from "./move";
 
 // Several browsers and a server share the machine: allow for slow round trips.
 const expect = baseExpect.configure({ timeout: 15_000 });
@@ -41,6 +41,7 @@ test("crew chat reaches everyone; a DM reaches only its two players @chat", asyn
   // A move gives the host a shareable case-file entry (role cards can't be shared).
   await openPanel(page, "This round");
   await pickRoom(page, "Office");
+  await grabAll(page);
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByRole("button", { name: "Locked in" })).toBeVisible();
 

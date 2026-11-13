@@ -14,6 +14,11 @@ export async function tapMove(page: Page, from: Pile, to: Pile, timeout = 30_000
   await page.locator(`[data-pile=${to}]`).locator(to === "room" ? ".coin-bags__label" : ".bag__name").click({ timeout });
 }
 
+/** A fresh move holds nothing: tap every coin left in the Grab row into the duffel (Lock it in needs one in a bag). */
+export async function grabAll(page: Page, timeout = 30_000): Promise<void> {
+  while ((await pileCoins(page, "room").count()) > 0) await tapMove(page, "room", "duffel", timeout);
+}
+
 const rooms = (page: Page) => page.getByRole("group", { name: "Rooms", exact: true });
 
 async function showRooms(page: Page, timeout: number): Promise<void> {

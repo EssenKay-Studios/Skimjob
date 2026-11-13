@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { expect as baseExpect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { clearMeeting } from "./meetingCards";
-import { pickRoom } from "./move";
+import { grabAll, pickRoom } from "./move";
 import { openPanel, settle, DEFAULT_SEED } from "./setupGame";
 
 const expect = baseExpect.configure({ timeout: 20_000 });
@@ -101,6 +101,7 @@ for (const seats of [6, 12]) {
 
     // design §10 / visibility: the guest locks in a private move (Vault); the host's board never shows it.
     await pickRoom(guest, "Vault");
+    await grabAll(guest);
     await guest.getByRole("button", { name: "Lock it in" }).click();
     await expect(guest.getByRole("button", { name: "Locked in" })).toBeDisabled();
     await expect(panel(page).getByRole("button", { name: new RegExp(`^${GUESTS[0]}: no claims\\.`) })).toBeVisible();
@@ -151,9 +152,11 @@ for (const seats of [6, 12]) {
 
     // Everyone human locks in; the round resolves and the snapshot shows.
     await pickRoom(page, "Vault");
+    await grabAll(page);
     await page.getByRole("button", { name: "Lock it in" }).click();
     for (const g of guests.slice(1)) {
       await pickRoom(g, "Office");
+      await grabAll(g);
       await g.getByRole("button", { name: "Lock it in" }).click();
     }
     const summary = panel(page).getByText("Round 1 plan", { exact: true });

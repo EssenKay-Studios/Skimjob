@@ -1,9 +1,9 @@
 // #232: the move's coins with a finger: tap a coin to pick it up, tap a bag to
-// drop it; drag it into either bag; and the room's last coin can be taken (the
-// grab is 1 coin up to the room's limit). design §3.2 steps 2-3, §15.6
+// drop it; drag it into either bag; and the room's last coin can be taken (a
+// fresh move holds none). design §3.2 steps 2-3, §15.6
 import { expect, test, type Page } from "@playwright/test";
 import { openPanel, startGame } from "./setupGame";
-import { pickRoom, pileCoins, touchDragTo } from "./move";
+import { grabAll, pickRoom, pileCoins, touchDragTo } from "./move";
 
 test.use({ hasTouch: true });
 
@@ -18,6 +18,10 @@ test("touch: tap to pick a coin and tap a bag to drop it, drag into either bag, 
   await page.goto(`/game/${game.id}`);
   await openPanel(page, "This round");
   await pickRoom(page, "Office");
+  // A fresh move holds nothing: both coins start in the Grab row.
+  await expect.poll(() => count(page)).toEqual({ room: 2, duffel: 0, pocket: 0 });
+  await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
+  await grabAll(page);
   await expect.poll(() => count(page)).toEqual({ room: 0, duffel: 2, pocket: 0 });
 
   // A tap lifts the coin (and nothing moves yet); a tap on the Grab row leaves it in the room.
@@ -26,12 +30,6 @@ test("touch: tap to pick a coin and tap a bag to drop it, drag into either bag, 
   await expect(coin).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("Tap the Pocket to drop it, or the Grab row to leave it.")).toBeVisible();
   await expect.poll(() => count(page)).toEqual({ room: 0, duffel: 2, pocket: 0 });
-  await page.locator("[data-pile=room] .coin-bags__label").tap();
-  await expect.poll(() => count(page)).toEqual({ room: 1, duffel: 1, pocket: 0 });
-
-  // At 1 coin the room takes none back (at least 1 coin, design §3.2 step 2): no drop place there, and a tap on it does nothing.
-  await pileCoins(page, "duffel").first().tap();
-  await expect(page.getByRole("button", { name: "Drop the coin in the room" })).toHaveCount(0);
   await page.locator("[data-pile=room] .coin-bags__label").tap();
   await expect.poll(() => count(page)).toEqual({ room: 1, duffel: 1, pocket: 0 });
 

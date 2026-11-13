@@ -7,7 +7,7 @@ import { mkdirSync } from "node:fs";
 import { closePanel, gameOver, keepRoundOpen, openPanel, showResult, settle, DEFAULT_SEED } from "./setupGame";
 import { expect, test, type APIRequestContext, type Browser, type Page, type WebSocketRoute } from "@playwright/test";
 import { openLeads } from "./setupGame";
-import { pickOtherRoom, pickRoom, tapMove } from "./move";
+import { grabAll, pickOtherRoom, pickRoom, tapMove } from "./move";
 import { clickAfterCards, showsAfterCards } from "./meetingCards";
 
 const SHOTS = process.env.SHOTS_DIR;
@@ -155,6 +155,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
           // Vault, pocket what the slider allows, lock; then change to another open room
           // (a Lockdown event can close a room for the round, design §13).
           await pickRoom(host, "Vault", 1000).catch(() => {});
+          await grabAll(host, 500).catch(() => {});
           for (const _ of [1, 2]) await tapMove(host, "duffel", "pocket", 500).catch(() => {});
           await once("move-picked", host);
           if (await lock.isEnabled({ timeout: 500 }).catch(() => false)) await tap(host, lock).catch(() => {});
@@ -168,6 +169,7 @@ test("12 seats, 24-char names: a 15-min game to the end with moves changed, alib
           if (r % 2 === 0) {
             await keepRoundOpen(guest);
             await pickRoom(guest, "Lobby", 1000).catch(() => {});
+            await grabAll(guest, 1000).catch(() => {});
             await tap(guest, guest.getByRole("button", { name: "Lock it in" })).catch(() => {});
             for (const x of await leaks(host)) leaked.add(`host sees guest round ${r}: ${x}`);
           }
@@ -257,6 +259,7 @@ test("reloads, a killed socket, a skewed clock and a late alibi (3h preset: 102 
 
   // Lock in, then reload mid-round: the move is still there.
   await pickRoom(host, "Vault");
+  await grabAll(host);
   await host.getByRole("button", { name: "Lock it in" }).click();
   const status = host.locator(".move__status");
   await expect(status).toContainText("Locked in: Vault");
