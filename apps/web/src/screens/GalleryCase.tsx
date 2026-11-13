@@ -67,7 +67,7 @@ export function CaseSections() {
         {away ? (
           <AwayRecap
             seed="g-away"
-            lines={["Rounds 1–2 done: 21 taken, 7 went missing, 51 coins left in the bank.", "Only you: Round 1: in the Vault, you saw Ben.", "Now: round 3. Pick your room before the deadline."]}
+            lines={["Rounds 1–2: 21 taken, 7 coins went missing, 51 coins left in the bank.", "Only you: Round 1: in the Vault, you saw Ben.", "Now: round 3. Pick your room before the deadline."]}
             onDismiss={() => setAway(false)}
           />
         ) : (
