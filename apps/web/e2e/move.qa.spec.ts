@@ -178,3 +178,84 @@ test("a dragged coin is the topmost thing over the Duffel and the Pocket, in bot
   expect(await topAt("duffel", "room")).toBe(true);
   expect(await topAt("pocket", "room")).toBe(true);
 });
+
+// QA #288: a locked move reopens as locked; pulling every coin back leaves nothing to lock (design §3.2: at
+// least 1 coin), with the bags and the bell still on screen; a room switch keeps the grab within the new room; a
+// room with no coins locks in with nothing grabbed.
+test("a locked move reopens as locked; emptied it can't lock at 0; a room switch keeps the coins; no-coin rooms lock empty @move", async ({ page }) => {
+  const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
+  await page.goto(`/game/${game.id}`);
+  await openPanel(page, "This round");
+  const lock = page.locator(".move__lock");
+  await pickRoom(page, "Vault");
+  await tapMove(page, "room", "duffel");
+  await tapMove(page, "room", "pocket");
+  await lock.click();
+  await expect(page.getByText("Locked in: Vault, pocket 1.", { exact: false })).toBeVisible();
+
+  await page.reload();
+  await openPanel(page, "This round");
+  await expect.poll(() => count(page)).toEqual({ room: 1, duffel: 1, pocket: 1 });
+  await expect(lock).toHaveText("Locked in");
+  await expect(lock).toBeDisabled();
+
+  // Every coin back in the Grab row: the bags and the bell stay, no raid warning, and 0 coins can't be locked in.
+  await tapMove(page, "duffel", "room");
+  await tapMove(page, "pocket", "room");
+  await expect.poll(() => count(page)).toEqual({ room: 3, duffel: 0, pocket: 0 });
+  await expect(page.locator("[data-pile=duffel]")).toBeVisible();
+  await expect(page.locator("[data-pile=pocket]")).toBeVisible();
+  await expect(page.locator(".coin-bags .bell")).toBeVisible();
+  await expect(page.locator(".move__warn")).toHaveCount(0);
+  await expect(lock).toBeDisabled();
+  await expect(page.getByText("Locked in: Vault, pocket 1.", { exact: false })).toBeVisible(); // the locked move still stands
+
+  // 3 grabbed in the Vault, then the Office (2 coins): the grab stays within the room and no coin is lost or made.
+  await grabAll(page);
+  await pickRoom(page, "Office");
+  await expect.poll(() => count(page)).toEqual({ room: 0, duffel: 2, pocket: 0 });
+  await expect(lock).toBeEnabled();
+
+  // The Rooftop has no coins: nothing to grab, and it locks in empty.
+  await pickRoom(page, "Rooftop");
+  await expect(page.getByText("No coins to grab here.")).toBeVisible();
+  await expect(page.locator("[data-pile]")).toHaveCount(0);
+  await lock.click();
+  await expect(page.getByText("Locked in: Rooftop", { exact: false })).toBeVisible();
+});
+
+// QA #288: the same layering with a finger: a coin dragged by touch hovers over the other bag both ways. design §15.6
+test.describe("touch", () => {
+  test.use({ hasTouch: true });
+  test("a coin dragged by touch is the topmost thing over the other bag, Duffel to Pocket and back @move", async ({ page }) => {
+    const game = await startGame(page.request, { bots: 3, sessionLength: "1w" });
+    await page.goto(`/game/${game.id}`);
+    await openPanel(page, "This round");
+    await pickRoom(page, "Vault");
+    await tapMove(page, "room", "duffel");
+    await tapMove(page, "room", "pocket");
+
+    const topAt = async (from: "duffel" | "pocket", to: "duffel" | "pocket") => {
+      const coin = pileCoins(page, from).first();
+      await coin.scrollIntoViewIfNeeded();
+      const a = (await coin.boundingBox())!;
+      const b = (await page.locator(`[data-pile=${to}]`).boundingBox())!;
+      const [ax, ay, bx, by] = [a.x + a.width / 2, a.y + a.height / 2, b.x + b.width / 2, b.y + b.height / 2];
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: ax, y: ay }] });
+      for (let i = 1; i <= 8; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: ax + ((bx - ax) * i) / 8, y: ay + ((by - ay) * i) / 8 }] });
+      // The last touch move renders a frame later, so wait for the coin to arrive.
+      const onTop = await expect
+        .poll(() => page.evaluate(([px, py]) => document.elementFromPoint(px!, py!)?.closest(".coin-btn.is-dragging") !== null, [bx, by]), { timeout: 3000 })
+        .toBe(true)
+        .then(() => true, () => false);
+      for (let i = 1; i <= 4; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: bx + ((ax - bx) * i) / 4, y: by + ((ay - by) * i) / 4 }] });
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); // back on its own pile: nothing moves
+      await cdp.detach();
+      return onTop;
+    };
+    expect(await topAt("duffel", "pocket")).toBe(true);
+    expect(await topAt("pocket", "duffel")).toBe(true);
+    await expect.poll(() => count(page)).toEqual({ room: 1, duffel: 1, pocket: 1 });
+  });
+});
