@@ -30,8 +30,10 @@ describe("the move panel", () => {
     const out = html(viewAs("detective"), "office");
     expect(out).toContain("Change");
     expect(out).toContain('data-pile="duffel"');
-    expect(out).toContain("Bell: 0 of 4 lit, your grab adds 1");
-    expect(out).toContain("Your 2 duffel coins add about 0.4 to each share.");
+    // A fresh move holds nothing yet: the bags and the bell show with 0 coins grabbed.
+    expect(out).toContain("Bell: 0 of 4 lit");
+    expect(out).toContain("Nothing from you goes to the share.");
+    expect(out).toContain('move__lock" disabled=""'); // design §3.2: Lock it in waits for 1 coin in a bag
   });
 
   it("has no coins to grab in Security or on the Rooftop (design §3.1)", () => {
