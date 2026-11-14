@@ -5,7 +5,7 @@
 // and subject; a fact adds its seq in your view), so pins survive new events.
 import type { RoleId, RoomId } from "@skimjob/content";
 import { eventsFor, marksOf, type CaseFileEvent, type GameEvent, type LoggedEvent, type PlayerId, type PlayerView, type PublicEvent } from "@skimjob/engine";
-import { suspectOf, type CaseData, type Fact, type Lead, type Trust, type Warning } from "./caseBoard";
+import { suspectOf, type CaseData, type Fact, type Lead, type LeadKind, type Trust, type Warning } from "./caseBoard";
 import { bellChecks, overClaimed, storyChecks, type CheckContext, type RoomRound, type RoundFacts } from "./caseChecks";
 import { cardName, describeEvent, perkName, roomName, the } from "./describeEvent";
 import { jobOf, namesOf, seatsOf, setupOf } from "./hud";
@@ -13,6 +13,7 @@ import { MEETING_TITLE, slotText } from "./meeting";
 
 interface Draft {
   readonly id: string;
+  readonly kind: LeadKind;
   readonly round: number;
   title: string;
   summary: string[];
@@ -54,18 +55,18 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
   const job = jobOf(view);
 
   const drafts = new Map<string, Draft>();
-  const lead = (id: string, round: number, title: string): Draft => {
+  const lead = (kind: LeadKind, id: string, round: number, title: string): Draft => {
     let d = drafts.get(id);
-    if (!d) drafts.set(id, (d = { id, round, title, summary: [], bell: false, names: new Set(), facts: [], warnings: [] }));
+    if (!d) drafts.set(id, (d = { id, kind, round, title, summary: [], bell: false, names: new Set(), facts: [], warnings: [] }));
     return d;
   };
   const fact = (d: Draft, id: string, text: string, trust: Trust, names: readonly PlayerId[] = []) => {
     d.facts.push({ id: `${d.id}:${id}`, text, trust });
     for (const p of names) if (p !== me) d.names.add(p);
   };
-  const roomLead = (round: number, room: RoomId) => lead(`r${round}.room.${room}`, round, roomName(room));
-  const meetingLead = (round: number, meetingId: string) => lead(`m.${meetingId}`, round, "Meeting");
-  const crewLead = (round: number) => lead(`r${round}.crew`, round, "Crew");
+  const roomLead = (round: number, room: RoomId) => lead("room", `r${round}.room.${room}`, round, roomName(room));
+  const meetingLead = (round: number, meetingId: string) => lead("meeting", `m.${meetingId}`, round, "Meeting");
+  const crewLead = (round: number) => lead("crew", `r${round}.crew`, round, "Crew");
 
   const rounds = new Map<number, MutableRound>();
   const roundOf = (r: number): MutableRound => {
@@ -102,14 +103,14 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         break;
       case "eventFlipped": {
         roundOf(e.round).card = { round: e.round, id: e.card, room: e.room };
-        const d = lead(`r${e.round}.event`, e.round, cardName(e.card));
+        const d = lead("round", `r${e.round}.event`, e.round, cardName(e.card));
         if (e.room) d.summary.push(`${roomName(e.room)} closed`);
         fact(d, `${seq}`, text(), trust);
         break;
       }
       case "auditReport":
       case "insideTip": {
-        const d = e.type === "insideTip" ? crewLead(e.round) : lead(`r${e.round}.event`, e.round, "Audit");
+        const d = e.type === "insideTip" ? crewLead(e.round) : lead("round", `r${e.round}.event`, e.round, "Audit");
         fact(d, `${seq}`, text(), trust, e.type === "insideTip" ? [e.subject] : []);
         break;
       }
@@ -125,12 +126,12 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
       }
       case "defaultMoveAssigned":
       case "duffelSplit":
-        fact(lead(`r${e.round}.haul`, e.round, "Haul"), `${seq}`, text(), trust);
+        fact(lead("missing", `r${e.round}.haul`, e.round, "Haul"), `${seq}`, text(), trust);
         break;
       case "roundResolved": {
         played = e.round;
         roundOf(e.round).bankEmptied = e.bank === 0;
-        const d = lead(`r${e.round}.haul`, e.round, "Haul");
+        const d = lead("missing", `r${e.round}.haul`, e.round, "Haul");
         if (e.missing > 0) {
           d.title = "Missing";
           d.summary.push(`${e.missing} ${e.missing === 1 ? "coin" : "coins"} never reached the duffel`);
@@ -166,7 +167,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         const d = roomLead(e.round, e.room);
         d.bell = true;
         fact(d, `${seq}`, text(), trust);
-        fact(lead(`r${e.round}.wanted`, e.round, "Wanted"), `${seq}`, `Wanted rose to ${e.wanted} of ${job.alarm.bustStars}.`, trust);
+        fact(lead("wanted", `r${e.round}.wanted`, e.round, "Wanted"), `${seq}`, `Wanted rose to ${e.wanted} of ${job.alarm.bustStars}.`, trust);
         break;
       }
       case "bellsCooled":
@@ -228,7 +229,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         const perk = e.type === "perkSold" ? e.perk : e.perk.kind;
         if (e.type === "perkBought" && e.perk.kind === "plantEvidence") myPlants.set(`${e.round}:${e.perk.room}`, e.perk.target);
         count(e.type === "perkSold" ? sold : bought, e.round, perk);
-        const d = lead(`r${e.round}.market`, e.round, "Black market");
+        const d = lead("market", `r${e.round}.market`, e.round, "Black market");
         if (e.type === "perkSold") d.summary.push(`Someone bought ${perkName(perk)} · ${e.cost}`);
         fact(d, `${seq}`, text(), trust);
         break;
@@ -266,7 +267,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
         break;
       }
       case "gameEnded":
-        fact(lead("end", round, "The end"), `${seq}`, text(), trust, e.outcome.winners);
+        fact(lead("end", "end", round, "The end"), `${seq}`, text(), trust, e.outcome.winners);
         break;
       // Housekeeping (setup, lock-ins, your own move edits, meeting-time proposals) lives on the seats and the panels.
       case "gameAborted":
@@ -353,6 +354,7 @@ export function caseData(view: PlayerView, pins: ReadonlySet<string>): CaseData 
 
   const leads: Lead[] = [...drafts.values()].map((d) => ({
     id: d.id,
+    kind: d.kind,
     round: d.round,
     title: d.title,
     ...(d.summary.length ? { summary: d.summary.join(" · ") } : {}),

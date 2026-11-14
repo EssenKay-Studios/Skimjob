@@ -25,9 +25,23 @@ export interface Warning {
   readonly names: readonly PlayerId[];
 }
 
+/** What a lead is about (§15.4): each kind has its own colour and icon on the board. "end" is the game's last lead. */
+export type LeadKind = "room" | "meeting" | "market" | "missing" | "wanted" | "round" | "crew" | "end";
+export const LEAD_KIND_NAMES: Readonly<Record<LeadKind, string>> = {
+  room: "Room",
+  meeting: "Meeting",
+  market: "Black market",
+  missing: "Missing coins",
+  wanted: "Wanted rising",
+  round: "The round",
+  crew: "The crew",
+  end: "The end",
+};
+
 export interface Lead {
   /** Unique and stable, like a fact's id. */
   readonly id: string;
+  readonly kind: LeadKind;
   readonly round: number;
   readonly title: string;
   /** The one line under the title, e.g. "rang 1 · 2 inside" or "raid · 3 seized". */

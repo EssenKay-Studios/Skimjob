@@ -65,6 +65,14 @@ describe("the case board adapter — design §15.4", () => {
     expect(vault.names).toEqual(expect.arrayContaining(["p2", "p3", "p5"]));
   });
 
+  it("gives each lead its kind from what it is about (#245)", () => {
+    const kindOf = (id: string) =>
+      id === "end" ? "end" : id.startsWith("m.") ? "meeting" : /^r\d+\.room\./.test(id) ? "room" : { crew: "crew", event: "round", haul: "missing", wanted: "wanted", market: "market" }[id.split(".")[1]!];
+    expect(data.leads.map((l) => [l.id, l.kind])).toEqual(data.leads.map((l) => [l.id, kindOf(l.id)]));
+    expect(lead("r1.room.vault").kind).toBe("room");
+    expect(lead("r1.haul").kind).toBe("missing");
+  });
+
   it("fires Seen elsewhere and Not seen from the alibis (owner, 13 Nov)", () => {
     const warnings = data.leads.flatMap((l) => l.warnings.map((w) => [l.id, w.kind, w.names.join()]));
     expect(warnings).toEqual([

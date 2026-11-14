@@ -59,7 +59,7 @@ test("the alibi pop-up posts an alibi, the snapshot card shows says and facts, a
   await openPanel(page, "Case");
   const board = page.getByRole("region", { name: "Case board" });
   const picker = board.getByRole("group", { name: "Round" });
-  const r1 = picker.getByRole("button", { name: "1", exact: true });
+  const r1 = picker.getByRole("button", { name: "1 latest" }); // the latest round, picked on open (#245)
   const r12 = picker.getByRole("button", { name: "12", exact: true });
   const box = (await r1.boundingBox())!;
   expect(Math.abs(box.width - box.height)).toBeLessThan(1);

@@ -23,7 +23,7 @@ const overflowing = (page: Page) =>
     [...document.querySelectorAll<HTMLElement>('section[aria-labelledby="g-caseboard"] .cb')].flatMap((board) => {
       const edge = board.getBoundingClientRect().right + 0.5;
       return [...board.querySelectorAll<HTMLElement>("*")]
-        .filter((el) => !el.closest(".sk-art, .cb__players") && el.getBoundingClientRect().right > edge)
+        .filter((el) => !el.closest(".sk-art, .cb__players, .cb__rounds") && el.getBoundingClientRect().right > edge)
         .map((el) => el.getAttribute("class") ?? el.tagName);
     }),
   );
@@ -32,6 +32,7 @@ for (const width of WIDTHS) {
   test(`${width}px: everything opened and pinned still fits; screenshot @caseboard`, async ({ browser }, info) => {
     const { ctx, page, section, board } = await gallery(browser, width);
     const leads = board.getByRole("group", { name: "Leads" });
+    await board.getByRole("button", { name: "All", exact: true }).click(); // every round (#245)
     // Open every lead and pin every lead and every fact: the longest the board gets.
     for (const btn of await leads.locator(".cb__lead-btn").all()) await btn.click();
     for (const name of await leads.getByRole("button", { name: /^Pin: / }).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")!))) {

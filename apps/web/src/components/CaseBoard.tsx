@@ -1,16 +1,17 @@
 // The case board (design §15.4): the suspect card, the Players strip (tap a seat
 // for the leads that name them and your private note on them, §15.3), your pins,
-// a round picker (a round's snapshot card and its leads, design §10) and one
-// Leads list, newest first. It only draws what the adapter
+// a round picker (one scrolling row that opens on the latest round: its snapshot
+// card and its leads, design §10; or All) and one Leads list, newest first, each
+// lead with its kind's colour, icon and name (#245). It only draws what the adapter
 // (game/caseLeads.ts) gave it; pins are private to the seat. Few words, "i" InfoTips.
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { PlayerId } from "@skimjob/engine";
 import { CrookAvatar } from "../art/Crook";
-import { leadsNaming, newestFirst, pinnedItems, playerStat, TRUST_LABELS, type CaseData, type Fact, type Lead } from "../game/caseBoard";
+import { LEAD_KIND_NAMES, leadsNaming, newestFirst, pinnedItems, playerStat, TRUST_LABELS, type CaseData, type Fact, type Lead, type LeadKind } from "../game/caseBoard";
 import type { BoardChannel, PinsChannel } from "../game/notes";
 import { Button } from "./Button";
 import { InfoTip } from "./InfoTip";
-import { Bell, Lock, Pin, Warn } from "./icons";
+import { Bell, Bubbles, CoinMinus, Crew, Door, EventCard, Flag, Lock, Pin, Star, Tag, Warn } from "./icons";
 import { SeatNote } from "./SeatNote";
 import { SketchFrame } from "./SketchFrame";
 import { Underline } from "./Underline";
@@ -39,7 +40,16 @@ export interface CaseBoardProps {
 export function CaseBoard({ data, people, pins, board, card, seed = "case" }: CaseBoardProps) {
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [who, setWho] = useState<PlayerId | null>(null);
-  const [round, setRound] = useState<number | null>(null);
+  // design §15.4: null follows the latest round played (none before round 1 resolves); "all" is every round.
+  const [pick, setPick] = useState<number | "all" | null>(null);
+  const round = pick === "all" ? null : (pick ?? (data.played || null));
+  const rowRef = useRef<HTMLDivElement>(null);
+  // While following the latest round, keep it in view at the row's end, with the next button peeking past the fade.
+  useEffect(() => {
+    const row = rowRef.current;
+    const latest = row?.querySelector<HTMLElement>("[data-latest]");
+    if (pick === null && row && latest) row.scrollLeft = latest.offsetLeft + latest.offsetWidth - row.clientWidth + 30;
+  }, [pick, data.played]);
   const toggleOpen = (id: string) =>
     setOpen((o) => {
       const next = new Set(o);
@@ -150,11 +160,25 @@ export function CaseBoard({ data, people, pins, board, card, seed = "case" }: Ca
 
       <div className="cb__picker" role="group" aria-label="Round">
         <span className="cb__h">Round:</span>
-        {Array.from({ length: data.roundCap }, (_, i) => i + 1).map((r) => (
-          <button key={r} type="button" className="cb__rbtn num" aria-pressed={round === r} disabled={r > data.played} onClick={() => setRound(round === r ? null : r)}>
-            {r}
-          </button>
-        ))}
+        <button type="button" className="cb__rbtn cb__all" aria-pressed={pick === "all"} onClick={() => setPick("all")}>
+          All
+        </button>
+        <div ref={rowRef} className="cb__rounds">
+          {Array.from({ length: data.roundCap }, (_, i) => i + 1).map((r) => (
+            <button
+              key={r}
+              type="button"
+              className="cb__rbtn num"
+              aria-pressed={round === r}
+              disabled={r > data.played}
+              data-latest={r === data.played ? "" : undefined}
+              onClick={() => setPick(r === data.played ? null : r)}
+            >
+              {r}
+              {r === data.played && <span className="cb__latest"> latest</span>}
+            </button>
+          ))}
+        </div>
       </div>
       {round !== null && card?.(round)}
 
@@ -211,8 +235,12 @@ function LeadRow({ lead, open, onOpen, pins, uid }: RowProps & { lead: Lead }) {
     <li className={lead.warnings.length ? "cb__lead has-warning" : "cb__lead"}>
       <div className="cb__lead-head">
         <button type="button" className="cb__lead-btn" aria-expanded={isOpen} aria-controls={panel} onClick={() => onOpen(lead.id)}>
-          <span className="cb__round">R{lead.round}</span>
+          <LeadBlob kind={lead.kind} />
           <span className="cb__lead-text">
+            <span className="cb__kind">
+              <span className="cb__dot" style={kindStyle(lead.kind)} aria-hidden="true" />
+              {LEAD_KIND_NAMES[lead.kind]} · R{lead.round}
+            </span>
             <span className="cb__line">
               <span className="cb__title">{lead.title}</span>
               {lead.warnings.length > 0 && (
@@ -258,5 +286,20 @@ function FactRow({ fact, pins }: { fact: Fact; pins: PinsChannel }) {
       </p>
       <PinButton pins={pins} id={fact.id} label={fact.text} />
     </li>
+  );
+}
+
+const KIND_ICONS: Readonly<Record<LeadKind, () => ReactNode>> = { room: Door, meeting: Bubbles, market: Tag, missing: CoinMinus, wanted: Star, round: EventCard, crew: Crew, end: Flag };
+
+/** A lead kind's colours as `--lk` (strong) and `--lk-l` (tint), from the `--lead-*` tokens. */
+export const kindStyle = (kind: LeadKind) => ({ "--lk": `var(--lead-${kind})`, "--lk-l": `var(--lead-${kind}-l)` }) as CSSProperties;
+
+/** A lead kind's icon in its tinted blob (ui-style §6). */
+export function LeadBlob({ kind }: { kind: LeadKind }) {
+  const Icon = KIND_ICONS[kind];
+  return (
+    <span className="cb__blob" style={kindStyle(kind)} aria-hidden="true">
+      <Icon />
+    </span>
   );
 }

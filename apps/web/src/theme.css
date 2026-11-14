@@ -71,6 +71,25 @@
   /* Light washes for result banners (M2-7). */
   --good-l: #e2ebd2;
   --bad-l: #f4d5cf;
+  /* Case board lead kinds (#245, ui-style §6 icon blobs): the strong colour (dot, swatch) and the tint (blob). */
+  --lead-room: #9a5541;
+  --lead-room-l: #ecd9cf;
+  --lead-meeting: #6b5aa6;
+  --lead-meeting-l: #e2ddf0;
+  --lead-market: #3d5a80;
+  --lead-market-l: #d8e0ea;
+  --lead-missing: #c4932f;
+  --lead-missing-l: #f5e7c4;
+  --lead-wanted: #c46686;
+  --lead-wanted-l: #f3dce5;
+  --lead-round: #6a9bcc;
+  --lead-round-l: #dce8f4;
+  --lead-crew: #788c5d;
+  --lead-crew-l: #e1e8d6;
+  --lead-end: #4a403a;
+  --lead-end-l: #e3dacc;
+  /* A scroll row's soft edges (mask-image): fades the first and last 14 px. */
+  --edge-fade: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent);
   --sight-l: #dde8f3;
   /* Vote tallies (ui-style "Vote window"): the leading option, and the one that passed. */
   --tally-lead: #f2b640;
