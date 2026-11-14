@@ -33,10 +33,10 @@ test("in a live game the picker follows each new round, until an older round or 
   // The alibi pop-up opens after each round; close it before tapping the board.
   const tap = async (name: string) => {
     const popup = page.locator("dialog[open]");
-    while (await popup.count()) {
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(200);
-    }
+    await expect(async () => {
+      if (await popup.count()) await page.keyboard.press("Escape");
+      await expect(popup).toHaveCount(0, { timeout: 500 });
+    }).toPass();
     await picker.getByRole("button", { name, exact: true }).click();
   };
 
