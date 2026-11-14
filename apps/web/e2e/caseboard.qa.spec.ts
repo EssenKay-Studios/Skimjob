@@ -105,10 +105,11 @@ test("the shell's Case tab holds the board, with 44px targets, at 360 and 1280 @
     if (await caseTab.isVisible()) await caseTab.click();
     const board = page.getByRole("region", { name: "Case board" }).filter({ has: page.locator(".cb__card") });
     await expect(board.first()).toBeAttached();
+    // Far down the gallery, getBoundingClientRect loses a sub-pixel to float rounding (44 px reads 43.9995): allow 0.01 px.
     const small = await page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>(".cb button")]
         .map((el) => ({ el, r: el.getBoundingClientRect() }))
-        .filter(({ r }) => r.width > 0 && (r.width < 44 || r.height < 44))
+        .filter(({ r }) => r.width > 0 && (r.width < 43.99 || r.height < 43.99))
         .map(({ el, r }) => `${el.className} ${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim()} ${r.width}x${r.height}`),
     );
     expect(small).toEqual([]);
