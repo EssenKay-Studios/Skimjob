@@ -88,6 +88,17 @@ test("the game menu holds the Tips setting, on by default, and Off is saved @tea
   await expect(menu).toBeFocused();
 });
 
+test("the game menu's Rulebook entry closes the menu and opens This game @teaching", async ({ page }) => {
+  const game = await startGame(page.request, { bots: 3, nickname: "Reader", tips: true });
+  await page.goto(`/game/${game.id}`);
+  await page.getByRole("button", { name: "Menu" }).click();
+  const entry = page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Rulebook" });
+  expect((await entry.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await entry.click();
+  await expect(page.getByRole("dialog", { name: "This game" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Game menu" })).toBeHidden();
+});
+
 // A live game, no fixed waits: the human locks in a Vault grab (three noisy coins), the bots lock in
 // themselves, and round 1 resolves after the lock-in grace; whichever lesson that lights is due then.
 const LESSON_TITLE = new RegExp(`^(${Object.values(LESSONS).map((l) => l.title).join("|")})$`);

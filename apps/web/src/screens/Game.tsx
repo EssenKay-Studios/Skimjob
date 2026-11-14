@@ -132,6 +132,7 @@ export function Game({ id }: { id: string }) {
       <GameTop
         connection={access.kind === "ok" ? channel.connection : null}
         tips={tips}
+        view={view}
         host={access.kind === "ok" && access.game.youAreHost && view && view.phase.kind !== "ended" && view.phase.kind !== "aborted" ? <HostMenu gameId={id} game={access.game} view={view} control={channel.control} /> : null}
       />
       {view?.phase.kind === "aborted" ? (
@@ -174,12 +175,12 @@ export function Game({ id }: { id: string }) {
   );
 }
 
-function GameTop({ connection, tips, host }: { connection: Connection | null; tips?: TipsState; host?: ReactNode }) {
+function GameTop({ connection, tips, host, view }: { connection: Connection | null; tips?: TipsState; host?: ReactNode; view?: PlayerView | null }) {
   const label = connection === "reconnecting" ? "Reconnecting…" : connection === "connecting" ? "Connecting…" : connection === "signedOut" ? "Signed out" : null;
   return (
     <TopBar>
       <span aria-live="polite">{label && <Chip colour={connection === "signedOut" ? "var(--bad)" : "var(--gold)"}>{label}</Chip>}</span>
-      {tips?.me && <GameMenu tips={tips.me.tips} busy={tips.saving} onChange={tips.change}>{host}</GameMenu>}
+      {tips?.me && <GameMenu tips={tips.me.tips} busy={tips.saving} onChange={tips.change} view={view}>{host}</GameMenu>}
     </TopBar>
   );
 }
