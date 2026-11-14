@@ -6,11 +6,11 @@ import { RaccoonNarrator } from "../art/Raccoon";
 import { AwayRecap } from "../components/AwayRecap";
 import { Button } from "../components/Button";
 import { BottomSheet } from "../components/BottomSheet";
-import { CaseBoard } from "../components/CaseBoard";
+import { CaseBoard, kindStyle, LeadBlob } from "../components/CaseBoard";
 import { SeatNote } from "../components/SeatNote";
 import { SketchFrame } from "../components/SketchFrame";
 import { Underline } from "../components/Underline";
-import { togglePin } from "../game/caseBoard";
+import { LEAD_KIND_NAMES, togglePin, type LeadKind } from "../game/caseBoard";
 import { FIXTURE } from "../game/caseBoard.fixture";
 import { NO_LEADS } from "../game/caseBoard";
 import type { Board, BoardChannel, PinsChannel } from "../game/notes";
@@ -89,6 +89,21 @@ export function CaseSections() {
           <CaseBoardDemo seed="g-case-in-sheet" />
         </BottomSheet>
         <CaseBoardDemo empty seed="g-case-empty" />
+      </Section>
+      <Section id="lead-kinds" title="Lead kinds" note="§15.4 per kind: the strong --lead-* swatch (hatched), the --lead-*-l blob with its icon, and the name">
+        <ul className="g-lead-kinds">
+          {(Object.keys(LEAD_KIND_NAMES) as LeadKind[]).map((k) => (
+            <li key={k} className="g-lead-kind" style={kindStyle(k)}>
+              <span className="g-lead-kind__swatch" />
+              <LeadBlob kind={k} />
+              <span className="cb__kind">
+                <span className="cb__dot" />
+                {LEAD_KIND_NAMES[k]}
+              </span>
+              <code>--lead-{k}</code>
+            </li>
+          ))}
+        </ul>
       </Section>
       <Section id="seat-note" title="Your note on a seat" note="§15.3 the Players strip's private note: with a note, without one, loading and unreachable">
         <SeatNote seed="g-note-ben" person={people[0]!} board={board} />

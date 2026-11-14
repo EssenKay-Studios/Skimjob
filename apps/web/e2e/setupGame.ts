@@ -80,9 +80,11 @@ export async function callEmergency(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Sure? Tap again to call it" }).click();
 }
 
-/** design §15.4: the live case board with every lead opened, so each fact shows ("<trust> <line>"). */
+/** design §15.4: the live case board on All rounds with every lead opened, so each fact shows ("<trust> <line>"). */
 export async function openLeads(page: Page): Promise<Locator> {
-  const leads = page.getByRole("region", { name: "Case board" }).getByRole("group", { name: "Leads" });
+  const board = page.getByRole("region", { name: "Case board" });
+  await board.getByRole("group", { name: "Round" }).getByRole("button", { name: "All", exact: true }).click();
+  const leads = board.getByRole("group", { name: "Leads" });
   const closed = leads.locator('.cb__lead-btn[aria-expanded="false"]');
   while ((await closed.count()) > 0) await closed.first().click();
   return leads;

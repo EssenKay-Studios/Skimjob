@@ -23,7 +23,7 @@ const overflowing = (page: Page) =>
     [...document.querySelectorAll<HTMLElement>('section[aria-labelledby="g-caseboard"] .cb')].flatMap((board) => {
       const edge = board.getBoundingClientRect().right + 0.5;
       return [...board.querySelectorAll<HTMLElement>("*")]
-        .filter((el) => !el.closest(".sk-art, .cb__players") && el.getBoundingClientRect().right > edge)
+        .filter((el) => !el.closest(".sk-art, .cb__players, .cb__rounds") && el.getBoundingClientRect().right > edge)
         .map((el) => el.getAttribute("class") ?? el.tagName);
     }),
   );
@@ -32,6 +32,7 @@ for (const width of WIDTHS) {
   test(`${width}px: everything opened and pinned still fits; screenshot @caseboard`, async ({ browser }, info) => {
     const { ctx, page, section, board } = await gallery(browser, width);
     const leads = board.getByRole("group", { name: "Leads" });
+    await board.getByRole("button", { name: "All", exact: true }).click(); // every round (#245)
     // Open every lead and pin every lead and every fact: the longest the board gets.
     for (const btn of await leads.locator(".cb__lead-btn").all()) await btn.click();
     for (const name of await leads.getByRole("button", { name: /^Pin: / }).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")!))) {
@@ -104,12 +105,14 @@ test("the shell's Case tab holds the board, with 44px targets, at 360 and 1280 @
     if (await caseTab.isVisible()) await caseTab.click();
     const board = page.getByRole("region", { name: "Case board" }).filter({ has: page.locator(".cb__card") });
     await expect(board.first()).toBeAttached();
+    // Far down the gallery, getBoundingClientRect loses a sub-pixel to float rounding (44 px reads 43.9995): allow 0.01 px.
     const small = await page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>(".cb button")]
-        .map((el) => el.getBoundingClientRect())
-        .filter((r) => r.width > 0 && (r.width < 44 || r.height < 44)).length,
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .filter(({ r }) => r.width > 0 && (r.width < 43.99 || r.height < 43.99))
+        .map(({ el, r }) => `${el.className} ${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim()} ${r.width}x${r.height}`),
     );
-    expect(small).toBe(0);
+    expect(small).toEqual([]);
     await ctx.close();
   }
 });

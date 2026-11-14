@@ -12,6 +12,7 @@ const BIG: Lead[] = Array.from({ length: 36 }, (_, i) => {
   const names = [SEATS[i % 12]!, SEATS[(i + 5) % 12]!];
   return {
     id: `lead:r${round}.${i}`,
+    kind: "room" as const,
     round,
     title: `Lead ${i}`,
     bell: i % 2 === 0,

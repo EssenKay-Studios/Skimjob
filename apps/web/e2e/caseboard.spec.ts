@@ -41,6 +41,9 @@ for (const viewport of VIEWPORTS) {
   test(`leads, pins and the Players strip at ${viewport.width}x${viewport.height}: no overflow, targets ≥44px @caseboard`, async ({ browser }) => {
     const { ctx, page, board } = await open(browser, viewport);
     const leads = board.getByRole("group", { name: "Leads" });
+    // It opens on the latest round (4); All shows every round.
+    await expect(leads.locator(".cb__title")).toHaveText(["Vault", "Black market"]);
+    await board.getByRole("button", { name: "All", exact: true }).click();
     // Newest first, with ⚠ and bell icons; facts stay folded until a lead is tapped.
     const titles = await leads.locator(".cb__title").allTextContents();
     expect(titles).toEqual(["Vault", "Black market", "The crew", "Lobby"]);
@@ -90,6 +93,7 @@ test("the same board opens in a phone bottom sheet and pins work there @caseboar
   await section.getByRole("button", { name: "Open as a phone sheet" }).click();
   const sheet = page.getByRole("dialog", { name: "Case board" });
   await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "All", exact: true }).click();
   await sheet.getByRole("button", { name: "Pin: Lobby" }).click();
   await expect(sheet.getByRole("group", { name: "Pinned" })).toContainText("Lobby");
   await sheet.getByRole("button", { name: "Close" }).click();
@@ -171,3 +175,73 @@ for (const width of [960, 980, 1023, 1024, 1280]) {
     await ctx.close();
   });
 }
+
+for (const viewport of VIEWPORTS) {
+  test(`lead kinds and the one-row round picker at ${viewport.width}px: latest picked and in view, All, no wrap @caseboard`, async ({ browser }) => {
+    const { ctx, page, board } = await open(browser, viewport);
+    const picker = board.getByRole("group", { name: "Round" });
+    const leads = board.getByRole("group", { name: "Leads" });
+    const latest = picker.getByRole("button", { name: "4 latest" });
+    const all = picker.getByRole("button", { name: "All", exact: true });
+    // design §15.4 (#245): opens on the latest round, picked, its leads only, and in view without scrolling.
+    await expect(latest).toHaveAttribute("aria-pressed", "true");
+    await expect(all).toHaveAttribute("aria-pressed", "false");
+    await expect(leads.locator(".cb__title")).toHaveText(["Vault", "Black market"]);
+    const row = picker.locator(".cb__rounds");
+    const inView = (el: import("@playwright/test").Locator) =>
+      el.evaluate((b) => {
+        const r = b.getBoundingClientRect();
+        const box = b.parentElement!.getBoundingClientRect();
+        return r.left >= box.left - 1 && r.right <= box.right + 1;
+      });
+    await expect.poll(() => inView(latest)).toBe(true);
+    // One line at every width: every button on the same row, and only the rounds scroll.
+    const tops = await picker.locator("button").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+    expect(new Set(tops).size, "one row").toBe(1);
+    expect(await row.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    // Each lead's kind is in its button's name.
+    await expect(leads.locator(".cb__lead-btn").first()).toHaveAccessibleName(/^Room · R4 Vault/);
+    await expect(leads.locator(".cb__lead-btn").nth(1)).toHaveAccessibleName(/^Black market · R4 Black market/);
+    // An older round: gold, its leads; the latest keeps its tag. All: every round, newest first.
+    await picker.getByRole("button", { name: "2", exact: true }).click();
+    await expect(picker.getByRole("button", { name: "2", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(latest).toHaveAttribute("aria-pressed", "false");
+    await expect(leads.locator(".cb__title")).toHaveText(["Lobby"]);
+    await all.click();
+    await expect(all).toHaveAttribute("aria-pressed", "true");
+    await expect(leads.locator(".cb__title")).toHaveText(["Vault", "Black market", "The crew", "Lobby"]);
+    await expect(picker.locator("button[aria-pressed=true]")).toHaveCount(1);
+    // Rows are no taller than before the kinds: main b413541 measured 64, 80, 64 and 79 px here at 360 (Option C, #245).
+    if (viewport.width === 360) {
+      const heights = await leads.locator(".cb__lead").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+      heights.forEach((h, i) => expect(h).toBeLessThanOrEqual([64, 80, 64, 79][i]!));
+    }
+    // Not played yet: dashed and disabled.
+    await expect(picker.getByRole("button", { name: "12", exact: true })).toBeDisabled();
+    const o = await overflow(page);
+    expect(o.scroll).toBeLessThanOrEqual(o.client);
+    expect(await smallTargets(page, 'section[aria-labelledby="g-caseboard"] .cb__picker')).toEqual([]);
+    await ctx.close();
+  });
+}
+
+test("the round row scrolls by keyboard: Tab brings a focused round into view; reduced motion jumps @caseboard", async ({ browser }) => {
+  const { ctx, page, board } = await open(browser, VIEWPORTS[0]!, "reduce");
+  const row = board.locator(".cb__rounds");
+  expect(await row.evaluate((el) => getComputedStyle(el).scrollBehavior)).toBe("auto");
+  expect(await row.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0); // scrolled to the latest round
+  await board.getByRole("button", { name: "All", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(board.getByRole("button", { name: "1", exact: true })).toBeFocused();
+  await expect.poll(() => row.evaluate((el) => el.scrollLeft)).toBe(0);
+  await ctx.close();
+});
+
+test("the gallery shows every lead kind: swatch, blob and name @caseboard", async ({ browser }) => {
+  const { ctx, page } = await open(browser, VIEWPORTS[1]!);
+  const kinds = page.locator('section[aria-labelledby="g-lead-kinds"] .g-lead-kind');
+  await expect(kinds.locator(".cb__kind")).toHaveText(["Room", "Meeting", "Black market", "Missing coins", "Wanted rising", "The round", "The crew", "The end"]);
+  const colours = await kinds.locator(".cb__blob").evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
+  expect(new Set(colours).size).toBe(8);
+  await ctx.close();
+});

@@ -291,6 +291,9 @@ States (all buttons):
   full-width primary button → the premium card.
 - Filter chips become a **horizontal scroll row** with no wrapping. *Skimjob wraps them instead*,
   so nothing is hidden off-screen.
+  *Exception:* the case board's round picker is one row that scrolls (owner, 14 Nov; #245): "Round:"
+  and **All** stay put, the round buttons scroll, with a fade at each edge and the next button
+  peeking. The Players strip scrolls the same way.
 - Grids drop to **2 columns** (catalog) or 1 column (styles, how-to steps).
 - The Back button shrinks to an icon-only 48×48 clay-outlined square.
 - *Their weakness to avoid:* long page titles wrap awkwardly beside the subtitle ("How to / Play").

@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { NO_LEADS } from "../game/caseBoard";
+import { LEAD_KIND_NAMES, NO_LEADS, type Lead, type LeadKind } from "../game/caseBoard";
 import { FIXTURE } from "../game/caseBoard.fixture";
 import type { BoardChannel, PinsChannel } from "../game/notes";
-import { CaseBoard } from "./CaseBoard";
+import { CaseBoard, LeadBlob } from "./CaseBoard";
 
 const people = [
   { id: "p2", name: "Ben", look: 1, isBot: false },
@@ -25,7 +25,7 @@ describe("the case board shell (design §15.4)", () => {
   });
 
   it("lists leads newest first with ⚠ and bell icons, facts folded away until tapped", () => {
-    const out = html();
+    const out = html({ ...FIXTURE, played: 0 }); // nothing picked: every round
     expect(out.indexOf("Vault")).toBeLessThan(out.indexOf("Lobby"));
     expect(out).toContain('aria-label="Doesn&#x27;t add up"');
     expect(out).toContain('aria-label="Bell rang"');
@@ -71,10 +71,29 @@ describe("the case board shell (design §15.4)", () => {
     expect(html(NO_LEADS)).toContain("Nobody yet.");
   });
 
-  it("gives each lead its one-line summary under the title, and the round in a chip", () => {
-    const out = html();
-    expect(out).toContain('<span class="cb__summary">rang 3 · Ben, Cy inside</span>');
-    expect(out).toContain('<span class="cb__round">R4</span>');
+  it("gives each lead its one-line summary under the title", () => {
+    expect(html()).toContain('<span class="cb__summary">rang 3 · Ben, Cy inside</span>');
+  });
+
+  it("starts each lead with its kind's icon blob, and names the kind and round in the lead's button (#245)", () => {
+    const all = (FIXTURE.leads as Lead[]).map((l) => ({ ...l, round: 1 }));
+    const out = html({ ...FIXTURE, leads: all, played: 1 });
+    const btns = [...out.matchAll(/<button type="button" class="cb__lead-btn"[^>]*>(.*?)<\/button>/g)].map((m) => m[1]!);
+    expect(btns).toHaveLength(4);
+    for (const b of btns) expect(b).toMatch(/^<span class="cb__blob" style="--lk:var\(--lead-(room|market|crew)\);--lk-l:var\(--lead-\1-l\)" aria-hidden="true"><svg/);
+    expect(btns[0]).toContain("</span>Room · R1</span>");
+    expect(btns[1]).toContain("</span>Black market · R1</span>");
+    expect(btns[2]).toContain("</span>The crew · R1</span>");
+  });
+
+  it("has a name and an icon for every lead kind, and colour tokens for each (#245)", () => {
+    expect(Object.keys(LEAD_KIND_NAMES).sort()).toEqual(["crew", "end", "market", "meeting", "missing", "room", "round", "wanted"]);
+    const theme = readFileSync(new URL("../theme.css", import.meta.url), "utf8");
+    for (const k of Object.keys(LEAD_KIND_NAMES)) {
+      expect(theme).toMatch(new RegExp(`--lead-${k}: #[0-9a-f]{6};`));
+      expect(theme).toMatch(new RegExp(`--lead-${k}-l: #[0-9a-f]{6};`));
+      expect(renderToStaticMarkup(createElement(LeadBlob, { kind: k as LeadKind }))).toContain("<svg");
+    }
   });
 
   it("shows ⚠ and pin counts on a player chip only above zero, and the whole name", () => {
@@ -95,18 +114,31 @@ describe("the case board shell (design §15.4)", () => {
     expect(on).toContain('aria-pressed="true"');
   });
 
-  it("has a round picker: square buttons up to the round cap, the rounds not played yet disabled, none picked at first (design §10, §15.4)", () => {
+  it("has a round picker: All, then square buttons up to the round cap, the rounds not played yet disabled, the latest picked and tagged (design §10, §15.4, #245)", () => {
     const out = html();
     expect(out).toContain('role="group" aria-label="Round"');
     expect(out).toContain("Round:");
-    const btns = [...out.matchAll(/<button type="button" class="cb__rbtn num"([^>]*)>(\d+)<\/button>/g)];
+    expect(out).toContain('<button type="button" class="cb__rbtn cb__all" aria-pressed="false">All</button>');
+    const btns = [...out.matchAll(/<button type="button" class="cb__rbtn num"([^>]*)>(\d+)(<span class="cb__latest"> latest<\/span>)?<\/button>/g)];
     expect(btns.map((m) => m[2])).toEqual(Array.from({ length: 12 }, (_, i) => `${i + 1}`));
     expect(btns.map((m) => m[1]!.includes("disabled"))).toEqual(Array.from({ length: 12 }, (_, i) => i >= 4));
-    expect(out).not.toContain('class="cb__rbtn num" aria-pressed="true"');
+    expect(btns.map((m) => m[1]!.includes('aria-pressed="true"'))).toEqual(Array.from({ length: 12 }, (_, i) => i === 3));
+    expect(btns.map((m) => !!m[3])).toEqual(Array.from({ length: 12 }, (_, i) => i === 3));
+    // Opened on round 4: only its leads.
+    expect(out).toContain("Vault");
+    expect(out).not.toContain("Lobby");
+    // No round played: nothing picked, no latest tag.
+    const none = html(NO_LEADS);
+    expect(none).not.toContain('aria-pressed="true"');
+    expect(none).not.toContain("cb__latest");
     const css = readFileSync(new URL("./caseboard.css", import.meta.url), "utf8");
     expect(css).toMatch(/\.cb__rbtn \{[^}]*width: 44px;[^}]*height: 44px;/);
     expect(css).toMatch(/\.cb__rbtn\[aria-pressed="true"\] \{[^}]*background: var\(--gold\);/);
     expect(css).toMatch(/\.cb__rbtn:disabled \{[^}]*border-style: dashed;/);
+    // One row: the rounds scroll sideways and never wrap; smooth scrolling only without reduced motion.
+    expect(css).toMatch(/\.cb__rounds \{[^}]*overflow-x: auto;[^}]*mask-image: var\(--edge-fade\);/);
+    expect(css).not.toMatch(/\.cb__picker \{[^}]*flex-wrap: wrap/);
+    expect(css).toMatch(/prefers-reduced-motion: no-preference\) \{[^@]*\.cb__rounds \{\s*scroll-behavior: smooth;/);
   });
 
   it("labels your own trust marks \"Your mark\" and a no-alibi fact as a Fact (design §10)", () => {

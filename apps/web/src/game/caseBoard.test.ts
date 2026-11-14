@@ -48,7 +48,7 @@ describe("Players strip (design §15.4: ⚠ count, pin count; tapping shows the 
 
 describe("suspect card (design §15.4)", () => {
   const w = (names: string[], text: string): Warning => ({ kind: "seenElsewhere", names, text });
-  const lead = (id: string, round: number, warnings: Warning[]): Lead => ({ id, round, title: id, bell: false, warnings, names: [], facts: [{ id: `${id}:f`, text: "f", trust: "fact" }] });
+  const lead = (id: string, round: number, warnings: Warning[]): Lead => ({ id, kind: "room", round, title: id, bell: false, warnings, names: [], facts: [{ id: `${id}:f`, text: "f", trust: "fact" }] });
   const seats = ["me", "p2", "p3", "p4"];
 
   it("names nobody without a contradiction, and never you", () => {

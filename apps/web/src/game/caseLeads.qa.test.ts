@@ -124,6 +124,7 @@ describe("QA: pin ids — design §15.4", () => {
 describe("QA: the suspect — design §15.4", () => {
   const lead = (id: string, round: number, warnings: { names: string[]; text: string }[]): Lead => ({
     id,
+    kind: "room",
     round,
     title: id,
     bell: false,

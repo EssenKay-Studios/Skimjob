@@ -170,3 +170,74 @@ export function Shield() {
     </svg>
   );
 }
+
+/** A room lead (#245): a door. */
+export function Door() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M5.2 17V3.6c3.2-.2 6.4-.2 9.6 0V17M3.4 17.1c4.4-.2 8.8-.2 13.2 0" {...S} />
+      <path d="M11.8 10.2v.4" {...S} strokeWidth={2.4} />
+    </svg>
+  );
+}
+
+/** A meeting lead (#245): two speech bubbles. */
+export function Bubbles() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M2.8 3.6c3.4-.2 6.8-.2 10.2 0 .2 2 .2 4 0 6H7.4l-2.8 2.4V9.6H2.8c-.2-2-.2-4 0-6z" {...S} />
+      <path d="M15.4 7.4h1.8c.2 1.9.2 3.8 0 5.8h-1.4v2.4l-2.8-2.4H8.6v-1.4" {...S} />
+    </svg>
+  );
+}
+
+/** A black-market lead (#245): a price tag. */
+export function Tag() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M3.4 3.6l6.6-.2 7 7-6.6 6.8-7-7z" {...S} />
+      <circle cx="7.2" cy="7.2" r="1.2" {...S} strokeWidth={1.6} />
+    </svg>
+  );
+}
+
+/** A missing-coins lead (#245): a coin with a minus. */
+export function CoinMinus() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="9" cy="11" r="5.8" {...S} />
+      <path d="M9 8.2v5.6M13.8 4.2h4" {...S} />
+    </svg>
+  );
+}
+
+/** A lead about the round itself (#245): its event card. */
+export function EventCard() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M5 2.8c3.4-.2 6.8-.2 10.2 0 .2 4.8.2 9.6 0 14.4-3.4.2-6.8.2-10.2 0-.2-4.8-.2-9.6 0-14.4z" {...S} />
+      <path d="M7.6 7h5M7.6 10h5M7.6 13h3" {...S} strokeWidth={1.6} />
+    </svg>
+  );
+}
+
+/** A crew lead (#245): two heads. */
+export function Crew() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="7.4" cy="7" r="2.6" {...S} />
+      <circle cx="13.6" cy="7.6" r="2.2" {...S} />
+      <path d="M2.8 16.4c.4-3 2.2-4.6 4.6-4.6s4.2 1.6 4.6 4.6M12.4 11.8c2.4-.2 4.4 1.2 4.8 4.2" {...S} />
+    </svg>
+  );
+}
+
+/** The end-of-game lead (#245): a flag. */
+export function Flag() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M5 17.4V3" {...S} />
+      <path d="M5.2 3.6c3.2-1.4 5.4 1.4 9.8 0-.2 2.6-.2 4.8 0 7-4.4 1.4-6.6-1.4-9.8 0" {...S} />
+    </svg>
+  );
+}
