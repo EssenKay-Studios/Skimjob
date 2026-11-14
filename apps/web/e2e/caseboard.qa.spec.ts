@@ -107,10 +107,11 @@ test("the shell's Case tab holds the board, with 44px targets, at 360 and 1280 @
     await expect(board.first()).toBeAttached();
     const small = await page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>(".cb button")]
-        .map((el) => el.getBoundingClientRect())
-        .filter((r) => r.width > 0 && (r.width < 44 || r.height < 44)).length,
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .filter(({ r }) => r.width > 0 && (r.width < 44 || r.height < 44))
+        .map(({ el, r }) => `${el.className} ${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim()} ${r.width}x${r.height}`),
     );
-    expect(small).toBe(0);
+    expect(small).toEqual([]);
     await ctx.close();
   }
 });
