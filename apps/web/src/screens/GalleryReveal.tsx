@@ -21,13 +21,13 @@ const NAMES: Record<string, string> = {
   p1: "Ana",
   p2: "Ben",
   p3: "Cy",
-  p4: "Bot · Dot",
+  p4: "DotB",
 };
 const LONG_NAMES: Record<string, string> = {
   p1: "Maximiliana Wolfensteins",
   p2: "WWWWWWWWWWWWWWWWWWWWWWWW",
   p3: "MMMMMMMMMMMMMMMMMMMMMMMM",
-  p4: "Bot · WWWWWWWWWWWWWWWWWWWWWWWW",
+  p4: "WWWWWWWWWWWWWWWWWWWWWWWWB",
 };
 const ctxFor = (names: Record<string, string>) => ({
   me: "p1",

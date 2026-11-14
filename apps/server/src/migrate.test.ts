@@ -138,7 +138,7 @@ describe("schema v1", () => {
     await expect(real.query("update games set status = 'paused' where id = $1", [id])).rejects.toThrow();
     // a seat is a human (user) or a bot (personality), never both or neither
     await real.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, 0, $2, 'Host')", [id, host]);
-    await real.query("insert into seats (game_id, seat_no, nickname, bot_personality) values ($1, 1, 'Bot · Riya', 'honest')", [id]);
+    await real.query("insert into seats (game_id, seat_no, nickname, bot_personality) values ($1, 1, 'RiyaB', 'honest')", [id]);
     await expect(real.query("insert into seats (game_id, seat_no, nickname) values ($1, 2, 'nobody')", [id])).rejects.toThrow();
     const other = await insertUser(real, "u2");
     await expect(

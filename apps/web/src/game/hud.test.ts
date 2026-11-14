@@ -24,7 +24,7 @@ import {
 
 const config = (n = 4, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "hud-test",
-  players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · ${i}`, isBot: i > 0 })),
+  players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `${i}B`, isBot: i > 0 })),
   job: "bank",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
@@ -103,7 +103,7 @@ describe("seats", () => {
     // p1's lock-in is public; its room and split are not.
     for (const viewer of ["p1", "p2", "p3"]) expect(seatsOf(viewFor(s, viewer)).map((x) => x.lockedIn)).toEqual([true, false, false]);
     expect(viewFor(s, "p2").me.move).toBeNull();
-    expect(namesOf(viewFor(s, "p1"))("p2")).toBe("Bot · 1");
+    expect(namesOf(viewFor(s, "p1"))("p2")).toBe("1B");
   });
 
   it("presence: online, last seen, not here yet; bots are bots, never online (owner decision, 2 Nov)", () => {

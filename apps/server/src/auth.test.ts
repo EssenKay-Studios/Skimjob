@@ -370,7 +370,7 @@ describe("Google provider (OIDC: PKCE, nonce, ID token checks)", () => {
     const cb = await callback(google.approve(long.location, "sub-long", { claims: { name: "A".repeat(40), given_name: "Ada" } }), long.signin.value);
     expect((await me(sessionOf(cb)))!.name).toBe("Ada");
     const bot = await begin();
-    const cb2 = await callback(google.approve(bot.location, "sub-bot", { claims: { name: "Bot Riya", given_name: undefined } }), bot.signin.value);
+    const cb2 = await callback(google.approve(bot.location, "sub-bot", { claims: { name: "RiyaB", given_name: undefined } }), bot.signin.value);
     expect((await me(sessionOf(cb2)))!.name).toBe("Crook");
   });
 

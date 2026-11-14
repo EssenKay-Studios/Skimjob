@@ -56,7 +56,6 @@ interface Props {
   readonly send: Send;
 }
 
-const plain = (name: string) => name.replace(/^Bot · /, "");
 const useWho = (view: PlayerView) => {
   const name = namesOf(view);
   return (p: PlayerId) => (p === view.me.id ? "you" : name(p));
@@ -79,7 +78,7 @@ function VotePicker({ view, value, onChange, label, seed, sealed = false }: { vi
           seed={`${seed}-${t.id}`}
           className="vote-pick"
           pressed={value?.kind === "shakedown" && value.target === t.id}
-          icon={<Avatar name={plain(t.name)} seat={seatOf(t.id)} size={26} bot={t.isBot} />}
+          icon={<Avatar name={t.name} seat={seatOf(t.id)} size={26} bot={t.isBot} />}
           onClick={() => onChange({ kind: "shakedown", target: t.id })}
         >
           {t.name}
@@ -480,7 +479,7 @@ export function ResultDialog({ view, pins, dismissed, onDismiss }: { view: Playe
     <DialogSheet open onClose={close} seed={`results-${o.meetingId}`} labelledBy="results-h">
       <div className="result">
         <div className="result__head">
-          {target && <Avatar name={plain(who(target))} seat={seatOf(target)} size={52} bot={view.players.find((p) => p.id === target)?.isBot} />}
+          {target && <Avatar name={who(target)} seat={seatOf(target)} size={52} bot={view.players.find((p) => p.id === target)?.isBot} />}
           <div>
             <p className="meta">
               {MEETING_TITLE[o.kind]} after R{o.round}

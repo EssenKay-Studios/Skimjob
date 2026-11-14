@@ -9,7 +9,7 @@ import { BANK_JOB } from "@skimjob/content";
 
 const config = (n = 4): GameConfig => ({
   seed: "board-test",
-  players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · B${i}`, isBot: i > 0 })),
+  players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `BB${i}`, isBot: i > 0 })),
   job: "bank",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",
@@ -208,10 +208,10 @@ describe("board scene (M2-9 wiring)", () => {
     expect([1, 2, 3, 4, 5, 6].map((r) => timeOfRound(r, 6))).toEqual(["day", "day", "dusk", "dusk", "night", "night"]);
   });
 
-  it("gives each seat its index as the look and a crew-unique tag, bot prefix dropped", () => {
+  it("gives each seat its index as the look and a crew-unique tag", () => {
     const looks = seatLooks(viewFor(createGame(config()), "p2"));
     expect([...looks.values()].map((l) => l.look)).toEqual([0, 1, 2, 3]);
-    expect(looks.get("p2")).toMatchObject({ name: "B1", bot: true });
+    expect(looks.get("p2")).toMatchObject({ name: "BB1", bot: true });
     expect(new Set([...looks.values()].map((l) => l.tag)).size).toBe(4);
   });
 });

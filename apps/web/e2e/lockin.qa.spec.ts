@@ -25,7 +25,7 @@ test("a person's lock-in shows on others' seats, a change shows nothing; presenc
   // Before the host opens the game: never here; the idle guest too; bots show as bots, never online.
   await expect(seat(page, "Host")).toContainText("not here yet");
   await expect(seat(page, "Guest 2")).toContainText("not here yet");
-  for (const b of await page.locator(".crew-seat:not(.is-you)").filter({ hasText: "Bot" }).all()) {
+  for (const b of await page.locator(".crew-seat:not(.is-you)").filter({ hasText: /[a-z]B\b/ }).all()) {
     await expect(b).toContainText("bot");
     await expect(b).not.toContainText("online");
   }

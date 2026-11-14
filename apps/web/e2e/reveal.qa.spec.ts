@@ -32,7 +32,7 @@ test.describe("the reveal demo, every ending", () => {
         // design §18: Secret-mode ballots never open; only the meeting's tally is told.
         expect(text).not.toMatch(/voted for|ballot/i);
         // design §3.3: Dot sat round 3 out (the Lobby was raided in round 2).
-        if (i === 2) await expect(sheet.getByText("Bot · Dot sat the round out: the Lobby was taped off.")).toBeVisible();
+        if (i === 2) await expect(sheet.getByText("DotB sat the round out: the Lobby was taped off.")).toBeVisible();
         else expect(text).not.toContain("sat the round out");
       }
       // design §5.4: one Lobby raid in round 2 on every ending; the bust adds round 3's two, up to 3 stars.

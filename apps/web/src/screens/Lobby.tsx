@@ -388,13 +388,13 @@ function SeatRow({
   const toast = useToast();
   return (
     <li className={s.bot ? "seat seat--bot" : "seat"}>
-      <Avatar name={s.bot ? s.nickname.replace(/^Bot · /, "") : s.nickname} seat={s.seat} size={40} bot={!!s.bot} />
+      <Avatar name={s.nickname} seat={s.seat} size={40} bot={!!s.bot} />
       <div className="seat__who">
         <span className="seat__name">{s.nickname}</span>
         <span className="seat__tags">
           {s.host && <Chip colour="var(--gold)">Host</Chip>}
           {s.you && <Chip colour="var(--clay)">You</Chip>}
-          {s.bot && <Chip colour="var(--sky)">Bot · {personalityName ?? s.bot}</Chip>}
+          {s.bot && <Chip colour="var(--sky)">{personalityName ?? s.bot}</Chip>}
         </span>
       </div>
       {game.youAreHost && s.bot && (

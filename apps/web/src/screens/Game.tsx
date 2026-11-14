@@ -547,7 +547,7 @@ export function GameOver({ view }: { view: PlayerView }) {
           return (
             <li key={r.player} className={["ranking__row", winner && "is-winner", !won && !winner && "is-void", seat?.you && "is-you"].filter(Boolean).join(" ")}>
               <span className="ranking__pos num">{i + 1}</span>
-              <CrookAvatar name={name(r.player).replace(/^Bot · /, "")} look={looks.get(r.player)?.look ?? 0} tag={looks.get(r.player)?.tag} size={44} bot={seat?.isBot ?? false} expression={winner ? "smug" : won ? "neutral" : "caught"} />
+              <CrookAvatar name={name(r.player)} look={looks.get(r.player)?.look ?? 0} tag={looks.get(r.player)?.tag} size={44} bot={seat?.isBot ?? false} expression={winner ? "smug" : won ? "neutral" : "caught"} />
               <span className="ranking__who">
                 <b>{seat?.you ? "You" : name(r.player)}</b>
                 <span className="meta">{roleName(r.role)}</span>

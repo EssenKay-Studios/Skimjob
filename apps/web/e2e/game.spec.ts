@@ -184,7 +184,7 @@ test("the move panel: pick a room, coins into the bags, lock it in, change it; r
   // Lock-ins are public (owner decision, 2 Nov): the bots have locked in, the idle guest hasn't; never a room or split.
   await expect(page.locator(".crew-seat:not(.is-you) .crook-avatar--ready")).toHaveCount(3);
   await expect(page.locator(".crew-seat:not(.is-you)").filter({ hasText: "Guest 1" })).toContainText("not here yet");
-  await expect(page.locator(".crew-seat:not(.is-you)").filter({ hasText: "Bot" }).first()).toContainText("bot");
+  await expect(page.locator(".crew-seat:not(.is-you)").filter({ hasText: /[a-z]B\b/ }).first()).toContainText("bot");
   await shot(page, "mid-round");
 
   // Security needs a room to watch before it can lock in. design §6.1

@@ -19,7 +19,7 @@ import { BANK_JOB } from "@skimjob/content";
 
 const config = (n: number, extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "board-qa",
-  players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · B${i}`, isBot: i > 0 })),
+  players: Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `BB${i}`, isBot: i > 0 })),
   job: "bank",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",

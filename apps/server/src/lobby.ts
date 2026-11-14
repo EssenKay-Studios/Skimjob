@@ -12,7 +12,7 @@ import { createGuestUser, type Sessions, type User } from "./auth";
 import type { Db, Queryable } from "./db";
 import type { GameStatus, GameStore } from "./store";
 import { TIMINGS } from "./timing";
-import { BOT_NAMES, checkNickname, DEFAULT_SETTINGS, isSettingKey, looksLikeBot, MY_GAMES_LIMIT, nicknameKey, parseSettings, storedSettings, type LobbySettings } from "./settings";
+import { BOT_NAMES, checkNickname, DEFAULT_SETTINGS, isSettingKey, isBotName, botName, MY_GAMES_LIMIT, nicknameKey, parseSettings, storedSettings, type LobbySettings } from "./settings";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i
@@ -227,7 +227,7 @@ export function lobbyRoutes(
     const { id, user } = await openLobby(req, { ...DEFAULT_SETTINGS, sessionLength: "15m" });
     await store.withGameLock(id, async () => {
       for (let seat = 1; seat < LEARN_SEATS; seat++) {
-        await db.query("insert into seats (game_id, seat_no, nickname, bot_personality) values ($1, $2, $3, $4)", [id, seat, `Bot · ${BOT_NAMES[seat - 1]}`, DEFAULT_BOT]);
+        await db.query("insert into seats (game_id, seat_no, nickname, bot_personality) values ($1, $2, $3, $4)", [id, seat, botName(BOT_NAMES[seat - 1]!), DEFAULT_BOT]);
       }
       await startLobby(req, (await gameById(db, id))!, await seatsOf(db, id), "learn");
     });
@@ -290,7 +290,7 @@ export function lobbyRoutes(
       if (game.status !== "lobby") refuse(410, "this game has already started");
       if (seats.length >= MAX_PLAYERS) refuse(409, `the game is full (${MAX_PLAYERS} seats)`);
       const name = nickname ?? current!.name;
-      if (looksLikeBot(name)) refuse(400, "nicknames starting with \"Bot\" are for bots");
+      if (isBotName(name)) refuse(400, "that nickname is reserved for bots");
       if (seats.some((x) => nicknameKey(x.nickname) === nicknameKey(name))) refuse(409, "that nickname is taken in this game; pick another");
       const user = current ?? (await createGuestUser(db, name));
       await db.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, $2, $3, $4)", [
@@ -346,7 +346,7 @@ export function lobbyRoutes(
       }
       if (seats.length >= MAX_PLAYERS) refuse(409, `the game is full (${MAX_PLAYERS} seats)`);
       const taken = new Set(seats.map((x) => nicknameKey(x.nickname)));
-      const name = [...BOT_NAMES, String(nextSeat(seats))].map((n) => `Bot · ${n}`).find((n) => !taken.has(nicknameKey(n)))!;
+      const name = [...BOT_NAMES, String(nextSeat(seats))].map(botName).find((n) => !taken.has(nicknameKey(n)))!;
       await db.query("insert into seats (game_id, seat_no, nickname, bot_personality) values ($1, $2, $3, $4)", [
         game.id,
         nextSeat(seats),

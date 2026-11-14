@@ -114,7 +114,7 @@ function RoleEnvelope({
   trend: number[];
 }) {
   const you = s.player === ctx.me;
-  const name = ctx.name(s.player).replace(/^Bot · /, "");
+  const name = ctx.name(s.player);
   const star = starText(s.role);
   const cls = [
     "reveal__card",
@@ -291,7 +291,7 @@ function RoundSheet({ round, last, ctx, looks, marks, cards, bulbs }: SheetProps
   const lies = roundLies(round, marks);
   const crew = new Map(
     [...looks].map(([p, l]) => {
-      const name = ctx.name(p).replace(/^Bot · /, "");
+      const name = ctx.name(p);
       return [p, { look: l.look, tag: l.tag ?? initialsOf(name), bot: l.bot, name }];
     }),
   );

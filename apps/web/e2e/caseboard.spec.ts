@@ -111,7 +111,7 @@ test("the Players strip is one scrolling row of whole names at 360 px @caseboard
   const tops = await chips.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(tops).size, "one row").toBe(1);
   // Names are whole (no mid-word break, no ellipsis for short names), and zero counts are not drawn.
-  for (const [i, name] of ["Ben", "Cy", "Bot · Dot"].entries()) {
+  for (const [i, name] of ["Ben", "Cy", "DotB"].entries()) {
     const n = chips.nth(i).locator(".cb__pname");
     await expect(n).toHaveText(name);
     expect(await n.evaluate((el) => el.scrollWidth <= el.clientWidth && el.getClientRects().length === 1)).toBe(true);

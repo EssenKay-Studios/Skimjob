@@ -17,7 +17,7 @@ const people: ChatPerson[] = [
   { id: "p2", name: HOSTILE_NAME, isBot: false },
   { id: "p3", name: "\u202eesreveR", isBot: false },
   { id: "p4", name: "עמית", isBot: false },
-  { id: "p5", name: "Bot · Dot", isBot: true },
+  { id: "p5", name: "DotB", isBot: true },
 ];
 const panel = (over: Partial<ChatPanelProps> = {}) =>
   renderToStaticMarkup(
