@@ -21,6 +21,7 @@ test("without a Google client id there's no Google button @auth", async ({ page 
   // The real server answered (no Google) before checking the button stays hidden.
   expect(await (await providers).json()).toEqual({ providers: [] });
   await expect(page.getByRole("button", { name: "Sign in with Google" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toHaveCount(0);
 });
 
 test("with Google on, Sign in with Google goes to the server's Google start (back to /) @auth", async ({ page }) => {
@@ -31,6 +32,7 @@ test("with Google on, Sign in with Google goes to the server's Google start (bac
     return r.fulfill({ contentType: "text/html", body: "<h1>Google</h1>" });
   });
   await page.goto("/");
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Sign in with Google", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Google" })).toBeVisible();
   expect(started!.pathname).toBe("/api/auth/google/start");

@@ -1,6 +1,6 @@
 // Landing (m2-plan M2-5): create a game (/new), join with an invite code
 // (/join/:code), sign in with Google (M2-12; shown only when the server has a
-// Google client id, else the top bar's "Sign in" just explains nicknames).
+// Google client id).
 // Signed in with Google, the pass card's place shows "My games". Any signed-in
 // user, guest or account, also gets the Tips setting (S3b.3), so /me is asked
 // on every visit; signed out shows neither.
