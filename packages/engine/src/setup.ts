@@ -9,13 +9,14 @@
 // else's role (no automatic reveals).
 import {
   CONTENT_VERSION,
+  DEFAULT_RULESET,
+  RULESETS,
   JOBS,
   MAX_PLAYERS,
   MAX_ROLE_COPIES,
   MIN_PLAYERS,
   ROLES,
   PERKS,
-  PERK_IDS,
   PERK_TIERS,
   ROLE_DEAL,
   type JobId,
@@ -30,7 +31,7 @@ import { pick, seedRng, shuffle } from "./rng";
 import { replay } from "./reduce";
 import { show } from "./check";
 import { jobById, roomsInPlay } from "./job";
-import { jobFor, validateOverrides } from "./overrides";
+import { jobFor, rulesetOf, validateOverrides } from "./overrides";
 
 const VOTE_VISIBILITIES: readonly string[] = ["hiddenThenRevealed", "open", "secret"] satisfies readonly VoteVisibility[];
 const ROLE_LISTS: readonly string[] = ["exact", "possible", "hidden"] satisfies readonly RoleListSetting[];
@@ -56,13 +57,14 @@ export const isSafePlayerId = (id: unknown): id is string =>
 export function validateConfig(config: unknown): string[] {
   if (!isObject(config)) return ["config must be an object"];
   const errors: string[] = [];
-  const { seed, players, job, roleList, eventsEnabled, voteVisibility, contentOverrides } = config;
+  const { seed, players, job, ruleset, roleList, eventsEnabled, voteVisibility, contentOverrides } = config;
   if (typeof seed !== "string") errors.push("seed must be a string");
   if (typeof eventsEnabled !== "boolean") errors.push("eventsEnabled must be a boolean");
   if (roleList !== undefined && (typeof roleList !== "string" || !ROLE_LISTS.includes(roleList))) errors.push(`roleList must be one of ${ROLE_LISTS.join(", ")}`);
   if (typeof voteVisibility !== "string" || !VOTE_VISIBILITIES.includes(voteVisibility)) {
     errors.push(`voteVisibility must be one of ${VOTE_VISIBILITIES.join(", ")}`);
   }
+  if (ruleset !== undefined && (typeof ruleset !== "string" || !Object.hasOwn(RULESETS, ruleset))) errors.push(`unknown ruleset ${show(ruleset)}`);
   if (typeof job !== "string" || !Object.hasOwn(JOBS, job)) errors.push(`unknown job ${show(job)}`);
   // design §17.4: overrides name the job's rooms, so they're checked once the job is known.
   else errors.push(...validateOverrides(contentOverrides, jobById(job)));
@@ -80,6 +82,9 @@ export function validateConfig(config: unknown): string[] {
     else if (!players.every((p) => isSafePlayerId(p.id))) {
       errors.push(`player ids must match ${PLAYER_ID_PATTERN} and not be ${RESERVED_PLAYER_IDS.join(", ")}`);
     } else if (new Set(players.map((p) => p.id)).size !== players.length) errors.push("player ids must be unique");
+    if (errors.length === 0 && !dealFits(rulesetOf(config as Pick<GameConfig, "ruleset">).roles, players.length)) {
+      errors.push(`the ruleset's roles can't deal ${players.length} players`);
+    }
   }
   return errors;
 }
@@ -91,16 +96,30 @@ export function roomsFor(job: JobId, playerCount: number): RoomId[] {
 
 const roleListOf = (config: GameConfig): RoleListSetting => config.roleList ?? "exact";
 
-/** Every role, in content order: the "possible" role list, since any role can be dealt at any crew size. design §11.3 */
+/** Every role, in content order. */
 const ALL_ROLES: readonly RoleId[] = Object.keys(ROLES);
+
+/** `pool`'s roles of `kind`, in content order. */
+const ofKind = (pool: readonly RoleId[], kind: RoleKind): RoleId[] => ALL_ROLES.filter((r) => pool.includes(r) && (ROLES[r] as (typeof ROLES)[string]).kind === kind);
+
+/** Whether `pool` holds enough roles of each kind, at most `MAX_ROLE_COPIES` each, for a crew of `crew`. design §11.3, §19.2 seam 3 */
+function dealFits(pool: readonly RoleId[], crew: number): boolean {
+  const counts = ROLE_DEAL[crew];
+  if (!counts) return false;
+  const most = (kind: RoleKind) => ofKind(pool, kind).length * MAX_ROLE_COPIES;
+  const eyes = most("eyes");
+  const shadows = most("shadows");
+  return eyes >= counts.eyes + counts.either && shadows >= counts.shadows + counts.either;
+}
 
 /**
  * One role per seat, in seat order (design §11.3, owner 6 Nov): every player
  * gets a role, the counts of eyes and shadows by crew size come from content
  * (`ROLE_DEAL`, seam 8), an odd crew's extra seat goes to either kind at
- * random. Each kind's roles are drawn distinct while they last, then any role
- * of that kind may repeat, at most `MAX_ROLE_COPIES` times. Every role, the
- * Mole and Fixer included, is dealt at random with the seeded RNG.
+ * random. The roles come from the game's ruleset (seam 3). Each kind's roles
+ * are drawn distinct while they last, then any role of that kind may repeat,
+ * at most `MAX_ROLE_COPIES` times. Every role, the Mole and Fixer included, is
+ * dealt at random with the seeded RNG.
  */
 export function dealRoles(config: GameConfig, rng: RngState): { readonly value: RoleId[]; readonly rng: RngState } {
   const counts = ROLE_DEAL[config.players.length];
@@ -113,7 +132,7 @@ export function dealRoles(config: GameConfig, rng: RngState): { readonly value: 
   const seats: Record<RoleKind, number> = { eyes: counts.eyes + (extraEyes ? counts.either : 0), shadows: counts.shadows + (extraEyes ? 0 : counts.either) };
   const dealt: RoleId[] = [];
   for (const kind of ["eyes", "shadows"] as const) {
-    const pool = ALL_ROLES.filter((r) => (ROLES[r] as (typeof ROLES)[string]).kind === kind);
+    const pool = ofKind(rulesetOf(config).roles, kind);
     const distinct = draw(shuffle(rng, pool)).slice(0, seats[kind]);
     const copies = new Map(distinct.map((r) => [r, 1]));
     while (distinct.length < seats[kind]) {
@@ -127,14 +146,18 @@ export function dealRoles(config: GameConfig, rng: RngState): { readonly value: 
 }
 
 /**
- * The black market's three perks, one per tier, drawn with the game's seed.
- * In Open vote mode the Check ballot is left out: ballots are already public
- * (owner, 9 Nov, #187). design §12
+ * The black market's perks, one per tier, drawn with the game's seed from the
+ * ruleset's perks; a tier with none has no perk, so a ruleset without perks has
+ * no shop (design §14). In Open vote mode the Check ballot is left out: ballots
+ * are already public (owner, 9 Nov, #187). design §12
  */
 function dealShop(config: GameConfig, rng: RngState): { readonly value: PerkId[]; readonly rng: RngState } {
   const perks: PerkId[] = [];
+  const offered = rulesetOf(config).perks;
   for (const tier of PERK_TIERS) {
-    const drawn = pick(rng, PERK_IDS.filter((id) => PERKS[id].tier === tier && !(id === "ballot" && config.voteVisibility === "open")));
+    const pool = offered.filter((id) => PERKS[id].tier === tier && !(id === "ballot" && config.voteVisibility === "open"));
+    if (pool.length === 0) continue;
+    const drawn = pick(rng, pool);
     rng = drawn.rng;
     perks.push(drawn.value);
   }
@@ -148,7 +171,7 @@ const inContentOrder = (list: readonly RoleId[]): RoleId[] => [...list].sort((a,
 function roleListEvents(config: GameConfig, dealt: readonly RoleId[]): GameEvent[] {
   const list = roleListOf(config);
   if (list === "hidden") return [];
-  return [{ type: "roleListShown", visibility: PUBLIC, list, roles: list === "exact" ? inContentOrder(dealt) : [...ALL_ROLES] }];
+  return [{ type: "roleListShown", visibility: PUBLIC, list, roles: list === "exact" ? inContentOrder(dealt) : inContentOrder(rulesetOf(config).roles) }];
 }
 
 /** The setup events for a new game. Pure: same config, same events. */
@@ -163,6 +186,7 @@ export function setupEvents(config: GameConfig): GameEvent[] {
       visibility: PUBLIC,
       players: config.players,
       job: config.job,
+      ruleset: config.ruleset ?? DEFAULT_RULESET,
       roleList: roleListOf(config),
       eventsEnabled: config.eventsEnabled,
       voteVisibility: config.voteVisibility,

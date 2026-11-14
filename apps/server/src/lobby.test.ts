@@ -516,6 +516,33 @@ describe("start", () => {
     expect((await call("POST", `/games/${game.id}/bots`, who, {})).status).toBe(409);
   });
 
+  // design §14: Learn the game is a single-player game, you plus 3 bots, started at once under the Learn ruleset.
+  it("Learn the game starts a game at once: you plus 3 bots, the Learn ruleset, the 15 min timings", async () => {
+    const who = await guest("Karthik");
+    const res = await call("POST", "/games/learn", who, { nickname: "Mara" });
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe("running");
+    expect(res.body.youAreHost).toBe(true);
+    expect(res.body.settings).toMatchObject({ sessionLength: "15m" });
+    expect(res.body.seats!.map((s) => [s.nickname, s.bot, s.playerId])).toEqual([
+      ["Mara", null, "p1"],
+      ["Bot · Riya", "opportunist", "p2"],
+      ["Bot · Max", "opportunist", "p3"],
+      ["Bot · Nico", "opportunist", "p4"],
+    ]);
+    expect(JSON.stringify(res.body)).not.toMatch(/seed|config/);
+    const state = (await store.load(res.body.id!))!;
+    expect(state.phase.kind).toBe("planning");
+    expect(state.config).toMatchObject({ ruleset: "learn", job: "bank" });
+    expect(state.playerOrder.map((p) => state.players[p]!.role).sort()).toEqual(["detective", "hacker", "locksmith", "lookout"]);
+    expect(state.shop).toEqual([]);
+  });
+
+  it("Learn the game needs a session and a valid nickname", async () => {
+    expect((await call("POST", "/games/learn", null, {})).status).toBe(401);
+    expect((await call("POST", "/games/learn", await guest("Ana"), { nickname: "Bot · Max" })).status).toBe(400);
+  });
+
   it("maps a session's user to its seat's player id (the only source of command.player)", async () => {
     const { who, game } = await host();
     const ana = (await join(game.inviteCode, "Ana")).session;

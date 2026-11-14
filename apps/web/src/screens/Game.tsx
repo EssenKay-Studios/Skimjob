@@ -61,7 +61,8 @@ import { useGameChat } from "./GameChat";
 import { MovePanel } from "./MovePanel";
 import { GameHost, HostMenu } from "./GameHost";
 import { GameMenu } from "../components/GameMenu";
-import { TeachingPopups } from "../components/TeachingPopup";
+import { GuidePopup, TeachingPopups } from "../components/TeachingPopup";
+import { useGuide } from "../game/useGuide";
 import { useTips, type TipsState } from "../game/useTips";
 import { TopBar } from "./TopBar";
 import "./game.css";
@@ -98,6 +99,9 @@ export function Game({ id }: { id: string }) {
   const channel = useGame(id, access.kind === "ok");
   const toast = useToast();
   const tips = useTips();
+  // Another sheet owns the screen: a meeting's result card or the alibi pop-up (one sheet at a time, §20.6).
+  const sheetOpen = channel.view !== null && (resultCardOf(channel.view, cardDismissed) !== null || alibiDue(channel.view) !== null);
+  const guide = useGuide(id, channel.view, sheetOpen);
   const send = async (cmd: ClientCommand, done?: string): Promise<Reply> => {
     const r = await channel.send(cmd);
     if (!r.ok) toast(sentence(r.reason), "bad");
@@ -149,7 +153,8 @@ export function Game({ id }: { id: string }) {
         </main>
       ) : (
         <>
-        {tips.me && <TeachingPopups view={view} player={tips.me.id} tips={tips.me.tips} saving={tips.saving} held={resultCardOf(view, cardDismissed) !== null || alibiDue(view) !== null} onTipsOff={() => tips.change(false)} />}
+        <GuidePopup step={guide.step} place={guide.place} onGotIt={guide.gotIt} />
+        {tips.me && <TeachingPopups view={view} player={tips.me.id} tips={tips.me.tips} saving={tips.saving} held={sheetOpen || guide.step !== null} onTipsOff={() => tips.change(false)} />}
         <Board
           view={view}
           timers={channel.timers}

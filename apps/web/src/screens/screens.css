@@ -614,7 +614,8 @@ hr.dashed {
   .landing__cta {
     margin-top: 20px;
   }
-  .landing__create {
+  .landing__create,
+  .landing__learn {
     width: 100%;
   }
   .join__row {

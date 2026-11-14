@@ -21,6 +21,10 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+.teaching__line {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .teaching__foot {
   display: flex;
   flex-wrap: wrap;

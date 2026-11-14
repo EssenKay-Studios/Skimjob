@@ -443,6 +443,10 @@ From **round 2**, each round has a **4-in-10 chance** [tunable] that one card fl
 
 **Learn the game** is a single-player guided game (you plus bots), about 5 minutes: a small bank, about 6 short rounds [tunable], a fixed set of roles (Lookout, Locksmith, Detective, Hacker; one per seat, so you plus 3 bots), no shop and no events, with scripted pop-ups and guides at every step. It is a **ruleset and content entry** (§19 seam 3), not engine branches, and it is built as its own PR once the core game works (S4).
 
+- **Starting it:** "Learn the game" on the start page asks for your name and starts the game at once (no lobby): you host it, the 3 bots fill the other seats, on the 15 min session timings. You can pause it like any host.
+- **The ruleset** (content `RULESETS.learn`): the deal draws from the four roles (2 eyes, 2 shadows, so a crew of 4 gets one each), 10 coins per player [tunable] and a 6-round cap [tunable]; no perks, so no black market; no event cards. The Black market button and the rulebook's market and events sections show only when the game has them.
+- **The guide:** one pop-up at a time, in the teaching pop-up's sheet ("Guide · N of M", a title, two or three lines, "Got it"), each shown once per player and game, only while planning (the alibi pop-up, a meeting's vote and result card, and the reveal go first). A step due in a round shows from that round on, so a round taken up by a meeting loses none. The steps: round 1, the welcome, your secret role and your move; once you lock in, your alibi (the 20-second pop-up after the round; miss it and the crew sees the room you were really in); round 2, the snapshot card; round 3, marking a crook Trusted or Liar; after the first meeting, meetings; round 5, the ending. The text is content (`RULESETS.learn.guide`). The usual teaching pop-ups (§15.6) follow the Tips setting as in any game and wait while a guide step is open.
+
 ---
 
 ## 15. Lobby, chat, the case board and the reveal

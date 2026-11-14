@@ -6,7 +6,7 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { PERSONALITIES, type PersonalityId } from "@skimjob/bots";
-import { MAX_PLAYERS, MIN_PLAYERS } from "@skimjob/content";
+import { LEARN_SEATS, MAX_PLAYERS, MIN_PLAYERS, type RulesetId } from "@skimjob/content";
 import { validateConfig, type GameConfig } from "@skimjob/engine";
 import { createGuestUser, type Sessions, type User } from "./auth";
 import type { Db, Queryable } from "./db";
@@ -180,11 +180,9 @@ export function lobbyRoutes(
       return fn(game, seats, user);
     });
 
-  app.post("/games", async (req, reply) => {
+  /** A new lobby hosted by the signed-in user, seated under the body's nickname (default: their account name). Never changes the session. */
+  const openLobby = async (req: FastifyRequest, settings: LobbySettings) => {
     const user = await signedIn(req);
-    const parsed = parseSettings(body(req).settings);
-    if (!parsed.ok) return refuse(400, parsed.error);
-    // The host's seat name in this game (default: their account name). Never changes the session.
     const rawName = body(req).nickname;
     const checked = rawName === undefined ? null : checkNickname(rawName);
     if (checked && !checked.ok) return refuse(400, checked.error);
@@ -192,12 +190,48 @@ export function lobbyRoutes(
     let id: string | null = null;
     for (let tries = 0; id === null; tries++) {
       try {
-        id = await store.create({ hostUserId: user.id, inviteCode: inviteCode(), settings: { ...parsed.settings } });
+        id = await store.create({ hostUserId: user.id, inviteCode: inviteCode(), settings: { ...settings } });
       } catch (err) {
         if (tries >= 2) throw err; // an invite-code clash twice running isn't bad luck
       }
     }
     await db.query("insert into seats (game_id, seat_no, user_id, nickname) values ($1, 0, $2, $3)", [id, user.id, seatName]);
+    return { id, user };
+  };
+
+  /** Starts a lobby's game: seats in seat order, the host's settings, the given ruleset. Under the game's lock. */
+  const startLobby = async (req: FastifyRequest, game: GameRow, seats: readonly SeatRow[], ruleset?: RulesetId) => {
+    const asked = body(req).seed;
+    const seed = seedFromRequest && typeof asked === "string" && asked !== "" ? asked : gameSeed();
+    const config: GameConfig = { ...gameConfig(storedSettings(game.settings), seats, seed), ...(ruleset && { ruleset }) };
+    const errors = validateConfig(config);
+    if (errors.length > 0) throw new Error(`lobby made a bad config: ${errors.join("; ")}`);
+    await store.start(game.id, config, async (tx) => {
+      for (const seat of seats) {
+        await tx.query("update seats set player_id = $3 where game_id = $1 and seat_no = $2", [game.id, seat.seat_no, playerIdFor(seat.seat_no)]);
+      }
+    });
+  };
+
+  app.post("/games", async (req, reply) => {
+    const parsed = parseSettings(body(req).settings);
+    if (!parsed.ok) return refuse(400, parsed.error);
+    const { id, user } = await openLobby(req, parsed.settings);
+    reply.code(201);
+    return view((await gameById(db, id))!, await seatsOf(db, id), user);
+  });
+
+  // Learn the game (design §14): a single-player game under the Learn ruleset, started at once:
+  // you plus a bot for every other seat, on the shortest session preset.
+  app.post("/games/learn", async (req, reply) => {
+    const { id, user } = await openLobby(req, { ...DEFAULT_SETTINGS, sessionLength: "15m" });
+    await store.withGameLock(id, async () => {
+      for (let seat = 1; seat < LEARN_SEATS; seat++) {
+        await db.query("insert into seats (game_id, seat_no, nickname, bot_personality) values ($1, $2, $3, $4)", [id, seat, `Bot · ${BOT_NAMES[seat - 1]}`, DEFAULT_BOT]);
+      }
+      await startLobby(req, (await gameById(db, id))!, await seatsOf(db, id), "learn");
+    });
+    await onStart(id).catch((err: unknown) => req.log.error({ err, gameId: id }, "settling bots after start failed"));
     reply.code(201);
     return view((await gameById(db, id))!, await seatsOf(db, id), user);
   });
@@ -345,16 +379,7 @@ export function lobbyRoutes(
   app.post<{ Params: { id: string } }>("/games/:id/start", async (req) => {
     const started = await asHost(req, async (game, seats, user) => {
       if (seats.length < MIN_PLAYERS) refuse(409, `a game needs at least ${MIN_PLAYERS} seats`);
-      const asked = body(req).seed;
-      const seed = seedFromRequest && typeof asked === "string" && asked !== "" ? asked : gameSeed();
-      const config = gameConfig(storedSettings(game.settings), seats, seed);
-      const errors = validateConfig(config);
-      if (errors.length > 0) throw new Error(`lobby made a bad config: ${errors.join("; ")}`);
-      await store.start(game.id, config, async (tx) => {
-        for (const seat of seats) {
-          await tx.query("update seats set player_id = $3 where game_id = $1 and seat_no = $2", [game.id, seat.seat_no, playerIdFor(seat.seat_no)]);
-        }
-      });
+      await startLobby(req, game, seats);
       return view((await gameById(db, game.id))!, await seatsOf(db, game.id), user);
     });
     // The game has started either way; the bots also act at the next change or boot.

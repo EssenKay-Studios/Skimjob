@@ -60,6 +60,8 @@ export function App() {
         <Landing />
       ) : route === "/new" ? (
         <NewGame />
+      ) : route === "/learn" ? (
+        <NewGame key="learn" mode="learn" />
       ) : page === "join" ? (
         <Invite key={param} code={param} />
       ) : page === "lobby" ? (

@@ -50,19 +50,24 @@
   "apps/web/src/screens/Game.tsx": [
     "@board",
     "@move",
-    "@teaching"
+    "@teaching",
+    "@learn"
   ],
   "apps/web/src/screens/GameChat.tsx": "@chat",
   "apps/web/src/screens/GameHost.tsx": "@host",
   "apps/web/src/screens/Invite.tsx": "@lobby",
   "apps/web/src/screens/Landing.tsx": [
     "@auth",
-    "@lobby"
+    "@lobby",
+    "@learn"
   ],
   "apps/web/src/screens/Lobby.tsx": "@lobby",
   "apps/web/src/screens/Meetings.tsx": "@meeting",
   "apps/web/src/screens/MovePanel.tsx": "@move",
-  "apps/web/src/screens/NewGame.tsx": "@lobby",
+  "apps/web/src/screens/NewGame.tsx": [
+    "@lobby",
+    "@learn"
+  ],
   "packages/engine/src/said.ts": "@move",
   "packages/engine/src/meeting.ts": "@meeting",
   "packages/engine/src/perks.ts": "@shop",
@@ -84,5 +89,7 @@
   "apps/web/src/components/AlibiPopup.tsx": "@alibi",
   "apps/web/src/components/SnapshotCard.tsx": "@alibi",
   "apps/web/src/game/snapshot.ts": "@alibi",
-  "apps/web/src/screens/GalleryAlibi.tsx": "@alibi"
+  "apps/web/src/screens/GalleryAlibi.tsx": "@alibi",
+  "apps/web/src/game/guide.ts": "@learn",
+  "apps/web/src/game/useGuide.ts": "@learn"
 }

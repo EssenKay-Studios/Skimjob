@@ -203,7 +203,9 @@ describe("board scene (M2-9 wiring)", () => {
   });
 
   it("lights the bank by thirds of the round cap: day, dusk, night (ui-style, design §6.2)", () => {
-    expect([1, 4, 5, 8, 9, 12].map(timeOfRound)).toEqual(["day", "day", "dusk", "dusk", "night", "night"]);
+    expect([1, 4, 5, 8, 9, 12].map((r) => timeOfRound(r, 12))).toEqual(["day", "day", "dusk", "dusk", "night", "night"]);
+    // A 6-round Learn the game crew sees dusk and night too. design §14
+    expect([1, 2, 3, 4, 5, 6].map((r) => timeOfRound(r, 6))).toEqual(["day", "day", "dusk", "dusk", "night", "night"]);
   });
 
   it("gives each seat its index as the look and a crew-unique tag, bot prefix dropped", () => {

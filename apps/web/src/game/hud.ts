@@ -1,10 +1,11 @@
 // Pure helpers behind the game screen: what the HUD, seats, move panel and alibi
 // pop-up show, read only from the player's own view (and the public timers).
 // docs/m2-plan.md M2-6; design §5, §5.4, §6, §11.5, §13
-import type { JobDef, RoomId } from "@skimjob/content";
+import type { JobDef, RoomId, RulesetDef } from "@skimjob/content";
 import {
   eventsFor,
   jobFor,
+  rulesetOf,
   rolesFor,
   type GameCreated,
   type Outcome,
@@ -28,10 +29,16 @@ export const setupOf = (view: PlayerView): GameCreated | null => {
   return null;
 };
 
-/** The job's numbers, with any content overrides the game was set up with. design §17.4 */
+/** The game's ruleset: the content it plays (§19.2 seam 3). */
+export const rulesetOfView = (view: PlayerView): RulesetDef => {
+  const setup = setupOf(view);
+  return rulesetOf(setup ? { ruleset: setup.ruleset } : {});
+};
+
+/** The job's numbers, with the game's ruleset and any content overrides it was set up with. design §17.4, §19.2 seam 3 */
 export const jobOf = (view: PlayerView): JobDef => {
   const setup = setupOf(view);
-  return jobFor({ job: setup?.job ?? "bank", contentOverrides: setup?.contentOverrides ?? null });
+  return jobFor({ job: setup?.job ?? "bank", contentOverrides: setup?.contentOverrides ?? null, ...(setup && { ruleset: setup.ruleset }) });
 };
 
 export const crewSize = (view: PlayerView) => view.players.length + 1;

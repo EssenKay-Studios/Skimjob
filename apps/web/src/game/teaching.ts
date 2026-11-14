@@ -38,21 +38,22 @@ export function dueLesson(view: PlayerView, seen: ReadonlySet<string>, tips: boo
 /** The lesson on screen: the one already open stays until dismissed, a newer one queues behind it (§20.6); Tips off closes it. */
 export const latch = (current: LessonId | null, due: LessonId | null, tips: boolean): LessonId | null => (tips ? (current ?? due) : null);
 
-const key = (player: string) => `skimjob.lessons.${player}`;
+/** Where a player's seen lessons are kept. */
+export const lessonsKey = (player: string) => `skimjob.lessons.${player}`;
 
-/** The lessons this player has already been shown. */
-export function loadSeen(player: string): Set<string> {
+/** The pop-ups already shown, stored under `key`; junk and ids not in `known` are dropped. */
+export function loadSeen(key: string, known: readonly string[]): Set<string> {
   try {
-    const raw: unknown = JSON.parse(localStorage.getItem(key(player)) ?? "[]");
-    return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string" && x in LESSONS) : []);
+    const raw: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string" && known.includes(x)) : []);
   } catch {
     return new Set();
   }
 }
 
-export function saveSeen(player: string, seen: ReadonlySet<string>): void {
+export function saveSeen(key: string, seen: ReadonlySet<string>): void {
   try {
-    localStorage.setItem(key(player), JSON.stringify([...seen]));
+    localStorage.setItem(key, JSON.stringify([...seen]));
   } catch {
     // Storage blocked: the pop-up may show again next visit, which is harmless.
   }

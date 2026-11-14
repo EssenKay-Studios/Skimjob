@@ -1,10 +1,10 @@
 // The teaching pop-up (design §15.6, §20.6): "What just happened / What it
 // means / What you can do", one lesson at a time. A native modal dialog, so
 // focus moves into it and goes back to where it was; the text is from content.
-import { LESSONS, type LessonId } from "@skimjob/content";
+import { LESSONS, type GuideStep, type LessonId } from "@skimjob/content";
 import type { PlayerView } from "@skimjob/engine";
 import { useEffect, useState } from "react";
-import { dueLesson, heldByMeeting, latch, loadSeen, saveSeen } from "../game/teaching";
+import { dueLesson, heldByMeeting, latch, lessonsKey, loadSeen, saveSeen } from "../game/teaching";
 import { Button } from "./Button";
 import { DialogSheet } from "./MeetingKit";
 import "./teaching.css";
@@ -40,13 +40,37 @@ export function TeachingPopup({ lesson, busy, onGotIt, onTipsOff }: { lesson: Le
   );
 }
 
+/** A scripted guide step (design §14): its place in the guide, its title and lines, and "Got it". Same sheet as a lesson. */
+export function GuidePopup({ step, place, onGotIt }: { step: GuideStep | null; place: string; onGotIt: () => void }) {
+  return (
+    <DialogSheet open={step !== null} onClose={onGotIt} seed="guide" labelledBy="guide-h">
+      {step && (
+        <div className="teaching">
+          <p className="meta">Guide · {place}</p>
+          <h2 id="guide-h">{step.title}</h2>
+          {step.lines.map((line) => (
+            <p key={line} className="teaching__line">
+              {line}
+            </p>
+          ))}
+          <div className="teaching__foot">
+            <Button variant="primary" seed="guide-ok" onClick={onGotIt}>
+              Got it
+            </Button>
+          </div>
+        </div>
+      )}
+    </DialogSheet>
+  );
+}
+
 /**
  * Shows the due pop-up for this player, if any; "Got it" (or Esc) marks it seen for good.
  * One at a time: the lesson on screen stays until dismissed and a newer one queues behind it,
  * and the sheet steps aside while a meeting's vote window or result card is open (§20.6).
  */
 export function TeachingPopups({ view, player, tips, saving, held, onTipsOff }: { view: PlayerView; player: string; tips: boolean; saving: boolean; held: boolean; onTipsOff: () => void }) {
-  const [seen, setSeen] = useState(() => loadSeen(player));
+  const [seen, setSeen] = useState(() => loadSeen(lessonsKey(player), Object.keys(LESSONS)));
   const [current, setCurrent] = useState<LessonId | null>(null);
   const due = dueLesson(view, seen, tips);
   const latched = latch(current, due, tips);
@@ -56,7 +80,7 @@ export function TeachingPopups({ view, player, tips, saving, held, onTipsOff }: 
     // The dialog's own close event lands here once more after it hides: nothing is showing then.
     if (!lesson) return;
     const next = new Set(seen).add(lesson);
-    saveSeen(player, next);
+    saveSeen(lessonsKey(player), next);
     setSeen(next);
     setCurrent(null);
   };
