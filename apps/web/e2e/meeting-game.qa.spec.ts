@@ -67,7 +67,7 @@ for (const bots of [5, 11])
         await widths(page, `${mode}-${bots + 1}-vote`);
         await dialog.getByRole("group", { name: "Your vote" }).getByRole("button").first().click();
         await dialog.getByRole("button", { name: "Cast vote" }).click();
-        await expect(dialog.locator(".vote__status")).toContainText("Your vote: shake down Bot");
+        await expect(dialog.locator(".vote__status")).toContainText(/Your vote: shake down \w+B\b/);
         if (mode === "secret") await expect(dialog.locator(".ballots")).toHaveCount(0);
         await widths(page, `${mode}-${bots + 1}-voted`);
       });

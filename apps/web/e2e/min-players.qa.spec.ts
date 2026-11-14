@@ -30,7 +30,7 @@ test("the lobby can't start below 3 seats; bots fill to 3 and the game starts @l
   await page.screenshot({ path: `test-results/qa125-lobby-3-${info.project.name}.png`, fullPage: true });
 
   // Removing a bot drops back to 2 seats: Start is disabled again.
-  await page.getByRole("button", { name: /^Remove Bot/ }).first().click();
+  await page.getByRole("button", { name: /^Remove \w+B$/ }).first().click();
   await expect(page.locator(".seat--bot")).toHaveCount(1);
   await expect(startBtn).toBeDisabled();
   await page.getByRole("button", { name: "Add bot" }).click();

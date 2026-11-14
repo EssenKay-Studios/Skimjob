@@ -176,7 +176,7 @@ test("non-host: controls hidden and the API refuses host actions; hand-over to a
   expect((await sctx.request.post(`/api/games/${g.id}/host`, { data: { seat: 0 } })).status()).toBe(404);
   const host = await hctx.newPage();
   await host.goto(`/lobby/${g.id}`);
-  await expect(host.getByRole("button", { name: /^Make Bot/ })).toHaveCount(0);
+  await expect(host.getByRole("button", { name: /^Make \w+B/ })).toHaveCount(0);
   await expect(host.getByRole("button", { name: "Make Lou host" })).toBeVisible();
 });
 
