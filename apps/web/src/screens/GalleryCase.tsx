@@ -18,7 +18,7 @@ import type { Board, BoardChannel, PinsChannel } from "../game/notes";
 const people = [
   { id: "p2", name: "Ben", look: 1, isBot: false },
   { id: "p3", name: "Cy", look: 2, isBot: false },
-  { id: "p4", name: "Bot · Dot", look: 3, isBot: true },
+  { id: "p4", name: "DotB", look: 3, isBot: true },
 ];
 
 /** Notes kept in the page (no server); an empty note clears it, as on the server. */

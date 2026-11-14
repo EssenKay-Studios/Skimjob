@@ -205,7 +205,7 @@ export function Gallery() {
                 <Avatar name="Dez" size={40} status="ready" />
                 <Avatar name="Lucky Lou" size={40} status="turn" />
                 <Avatar name="Priya K" size={40} status="away" />
-                <Avatar name="Bot Opportunist" size={40} bot />
+                <Avatar name="OpportunistB" size={40} bot />
                 <Avatar name="otto" size={36} />
                 <Avatar name="émile" size={28} />
               </div>
@@ -436,7 +436,7 @@ const G_PEOPLE = [
   { id: "me", name: "You", isBot: false },
   { id: "dez", name: "Dez", isBot: false },
   { id: "lou", name: "Lucky Lou", isBot: false },
-  { id: "bot", name: "Bot · Rex", isBot: true },
+  { id: "bot", name: "RexB", isBot: true },
 ];
 const gAt = (min: number) => new Date(Date.UTC(2026, 10, 2, 18, min)).toISOString();
 const G_SIGHTING = { type: "roomSighting", payload: { player: "dez", round: 2, room: "vault", others: ["lou"] } };

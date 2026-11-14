@@ -43,12 +43,9 @@ export interface SeatLook {
 
 export function seatLooks(view: PlayerView): ReadonlyMap<PlayerId, SeatLook> {
   const seats = seatsOf(view);
-  const tags = crewTags(seats.map((s) => plainName(s.name)));
-  return new Map(seats.map((s, i) => [s.id, { look: s.seat, name: plainName(s.name), bot: s.isBot, tag: tags[i]! }]));
+  const tags = crewTags(seats.map((s) => s.name));
+  return new Map(seats.map((s, i) => [s.id, { look: s.seat, name: s.name, bot: s.isBot, tag: tags[i]! }]));
 }
-
-/** Seat names carry a "Bot · " prefix for bots; the art draws its own bot badge. */
-const plainName = (name: string) => name.replace(/^Bot · /, "");
 
 /** The first third of the round cap is daylight, the second dusk, the last night (ui-style "time-of-day lighting tracks session progress"). */
 export const timeOfRound = (round: number, roundCap: number): TimeOfDay => {

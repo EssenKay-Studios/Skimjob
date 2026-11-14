@@ -76,11 +76,11 @@ for (const list of ["exact", "possible", "hidden"] as const) {
       await expect(chips).toHaveCount(0);
       await expect(rip).toContainText("hidden in this game");
     }
-    // design §18: no other seat's role anywhere in the page's markup or ARIA (the bots are named "Bot · …").
+    // design §18: no other seat's role anywhere in the page's markup or ARIA (the bots are named "<Name>B").
     const dom = await page.content();
     expect(dom).not.toMatch(/data-role=|"role":"/);
     const tree = await page.locator("body").ariaSnapshot();
-    expect(tree).not.toMatch(/Bot[^\n]*(Lookout|Locksmith|Detective|Auditor|Smooth Talker|Hacker|Electrician|Priest|Mole|Fixer)/);
+    expect(tree).not.toMatch(/[a-z]B\b[^\n]*(Lookout|Locksmith|Detective|Auditor|Smooth Talker|Hacker|Electrician|Priest|Mole|Fixer)/);
 
     for (const width of list === "exact" ? WIDTHS : [360, 1280]) {
       await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });

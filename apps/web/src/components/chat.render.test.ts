@@ -14,7 +14,7 @@ const people = [
   { id: "p1", name: "Ana", isBot: false },
   { id: "p2", name: "Ben", isBot: false },
   { id: "p3", name: "Cyd", isBot: false },
-  { id: "p4", name: "Bot · Dot", isBot: true },
+  { id: "p4", name: "DotB", isBot: true },
 ];
 const state = (messages: ChatMessage[], notices: { from: string; to: string; at: string }[] = []): ChatState =>
   chatReducer(EMPTY_CHAT, { type: "history", history: { messages, dmNotices: notices } });

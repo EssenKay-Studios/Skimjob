@@ -49,8 +49,6 @@ export interface ShareableEntry {
   readonly text: string;
 }
 
-const plainName = (name: string) => name.replace(/^Bot · /, "");
-
 /** A clay count badge (unread messages). Nothing at 0. */
 export function ChatBadge({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -87,7 +85,7 @@ function MessageRow({ m, ctx }: { m: ChatMessage; ctx: FeedCtx }) {
   const name = ctx.name(m.from);
   return (
     <li className={mine ? "chat-msg is-mine" : "chat-msg"}>
-      <Avatar name={plainName(ctx.seatName(m.from))} seat={seatOf(m.from)} size={32} bot={ctx.bot(m.from)} title={mine ? "You" : name} />
+      <Avatar name={ctx.seatName(m.from)} seat={seatOf(m.from)} size={32} bot={ctx.bot(m.from)} title={mine ? "You" : name} />
       <div className="chat-msg__body">
         <p className="chat-msg__meta">
           <span className="chat-msg__name">{mine ? "You" : name}</span>
@@ -258,7 +256,7 @@ export function ChatPanel(props: ChatPanelProps) {
           ) : (
             humans.map((p) => (
               <Button key={p.id} variant="secondary" seed={`dm-${p.id}`} className="chat__person" onClick={() => startDm(p.id)}>
-                <Avatar name={plainName(p.name)} seat={seatOf(p.id)} size={26} title={p.name} />
+                <Avatar name={p.name} seat={seatOf(p.id)} size={26} title={p.name} />
                 <span className="chat__ellipsis">{p.name}</span>
               </Button>
             ))

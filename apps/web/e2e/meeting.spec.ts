@@ -86,7 +86,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
     // The vote window opens by itself as a dialog.
     const dialog = page.getByRole("dialog", { name: "Who's skimming?" });
     await expect(dialog).toBeVisible({ timeout: 20_000 });
-    await expect(dialog).toContainText(mine ? "Emergency meeting · called by you" : /Emergency meeting · called by Bot/);
+    await expect(dialog).toContainText(mine ? "Emergency meeting · called by you" : /Emergency meeting · called by \w+B\b/);
     // The briefing: why it is on, and the pool the call just spent (design §9.1, §9.3).
     await expect(dialog).toContainText("Called from the crew's emergency pool.");
     await expect(dialog).toContainText("Emergency pool: 0 left for the crew.");
@@ -97,7 +97,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
       await expect(pick.getByRole("button")).toHaveCount(4 - shielded.filter((n) => n !== "You").length);
       await pick.getByRole("button").first().click();
       await dialog.getByRole("button", { name: "Cast vote" }).click();
-      await expect(dialog.locator(".vote__status")).toContainText("Your vote: shake down Bot");
+      await expect(dialog.locator(".vote__status")).toContainText(/Your vote: shake down \w+B\b/);
       // design §11.2: change it until the window closes.
       await pick.getByRole("button", { name: "Skip" }).click();
       await dialog.getByRole("button", { name: "Change vote" }).click();
@@ -154,7 +154,7 @@ for (const mode of ["hiddenThenRevealed", "open", "secret"] as const) {
 
     // The case board's lead for the meeting (design §15.4): the call, the result, and your ballot, a public fact only in Open mode.
     const lead = await openLead(page, "Emergency meeting");
-    await expect(lead).toContainText(mine ? "Fact You called an emergency meeting." : /Fact Bot .* called an emergency meeting\./);
+    await expect(lead).toContainText(mine ? "Fact You called an emergency meeting." : /Fact \w+B called an emergency meeting\./);
     await expect(lead).toContainText(/The crew voted|No majority|Too few votes/);
     await expect(lead).toContainText(mode === "open" ? "Fact You voted to skip." : "Seen by you You voted to skip.");
     expect(errors).toEqual([]);
@@ -176,11 +176,11 @@ test("a player a shakedown passed against is left off the next vote's list (desi
   await expect(dialog).toContainText("Emergency meeting · called by you", { timeout: 20_000 });
   const pick = dialog.getByRole("group", { name: "Your vote" });
   // The protected bot is named on the briefing and left off the list: two others and Skip.
-  await expect(dialog.locator(".briefing__protected")).toContainText(/so not on the list: Bot/);
+  await expect(dialog.locator(".briefing__protected")).toContainText(/so not on the list: \w+B\b/);
   await expect(pick.getByRole("button")).toHaveCount(3);
   await pick.getByRole("button").first().click();
   await dialog.getByRole("button", { name: "Cast vote" }).click();
-  await expect(dialog.locator(".vote__status")).toContainText("Your vote: shake down Bot");
+  await expect(dialog.locator(".vote__status")).toContainText(/Your vote: shake down \w+B\b/);
 });
 
 test("propose a meeting time, a second player backs it, and leave a sealed vote (design §11.1, §11.2) @meeting", async ({ page, browser }, info) => {

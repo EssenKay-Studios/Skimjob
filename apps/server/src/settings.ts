@@ -41,7 +41,7 @@ export const CHAT_HISTORY_LIMIT = 200;
 /** Most combining marks in a row (stacked "zalgo" text); real scripts need far fewer. */
 export const CHAT_MAX_MARKS = 8;
 
-/** Themed names for bot seats, used in order; shown as "Bot · <name>". */
+/** Themed names for bot seats, used in order; a bot seat is "<name>B" (RiyaB). */
 export const BOT_NAMES = ["Riya", "Max", "Nico", "Juno", "Kofi", "Lena", "Omar", "Suki", "Tavi", "Wren", "Yara", "Zed"] as const;
 
 const own = (o: object, k: string) => Object.hasOwn(o, k);
@@ -88,8 +88,11 @@ const HIDDEN = /[\p{Cc}\u115f\u1160\u2800\u3164\uffa0]|(?!\u200d)\p{Cf}/u;
 /** NFKC, lower case, without default-ignorable characters (ZWJ, variation selectors, U+034F …). */
 const fold = (name: string) => name.normalize("NFKC").toLowerCase().replace(/\p{Default_Ignorable_Code_Point}/gu, "");
 
-/** "Bot ·", "bot-", "BOT:", "Bot" … (any separator after "bot") are reserved for bot seats. */
-export const looksLikeBot = (name: string) => /^bot(?:[^\p{L}\p{N}]|$)/u.test(fold(name).trim());
+/** A bot seat's name: "<name>B", e.g. "RiyaB"; past the list, "<seat number>B". */
+export const botName = (name: string) => `${name}B`;
+
+/** Generated bot names ("RiyaB", "7B") are reserved: a human can't take one. */
+export const isBotName = (name: string) => /^\d+b$/u.test(nicknameKey(name)) || BOT_NAMES.some((n) => nicknameKey(botName(n)) === nicknameKey(name));
 
 /** Two nicknames are the same if they match ignoring case, width, whitespace and invisible characters. */
 export const nicknameKey = (name: string) => fold(name).replace(/\s+/gu, "");
@@ -107,13 +110,13 @@ const visible = hasVisibleText;
 
 /**
  * A person's display name: free text, trimmed, inner whitespace collapsed,
- * 1–24 characters, nothing invisible, not bot-like. Never an id.
+ * 1–24 characters, nothing invisible, not a bot name. Never an id.
  */
 export function checkNickname(input: unknown): { ok: true; name: string } | { ok: false; error: string } {
   if (typeof input !== "string") return { ok: false, error: "nickname must be 1–24 characters" };
   const name = input.trim().replace(/\s+/gu, " ");
   if (name.length === 0 || [...name].length > NICKNAME_MAX || HIDDEN.test(name) || !visible(name)) return { ok: false, error: "nickname must be 1–24 visible characters" };
-  if (looksLikeBot(name)) return { ok: false, error: "nicknames starting with \"Bot\" are for bots" };
+  if (isBotName(name)) return { ok: false, error: "that nickname is reserved for bots" };
   return { ok: true, name };
 }
 

@@ -14,7 +14,7 @@ import { KIND_LABEL, abilityFor, abilityTargets, cadenceOf, explainSpot, eventsN
 
 const config = (extra: Partial<GameConfig> = {}): GameConfig => ({
   seed: "ext-test",
-  players: Array.from({ length: 4 }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `Bot · ${i}`, isBot: i > 0 })),
+  players: Array.from({ length: 4 }, (_, i) => ({ id: `p${i + 1}`, name: i === 0 ? "Ana" : `${i}B`, isBot: i > 0 })),
   job: "bank",
   eventsEnabled: false,
   voteVisibility: "hiddenThenRevealed",

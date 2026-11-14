@@ -22,7 +22,7 @@ test.describe("the reveal demo", () => {
 
     // Job done: the top of the ranking wins; four envelopes in ranking order, the Mole's ★, no VOID, no tokens.
     const cards = reveal.locator(".reveal__card");
-    await expect(cards.locator(".reveal__who b")).toHaveText(["Ben", "Cy", "Bot · Dot", "You"]);
+    await expect(cards.locator(".reveal__who b")).toHaveText(["Ben", "Cy", "DotB", "You"]);
     await expect(cards.locator(".reveal__score b")).toHaveText(["12", "5", "2", "0"]);
     await expect(reveal.locator(".reveal__why")).toContainText("Job done, so the top of the ranking wins: Ben.");
     await expect(cards.nth(0)).toContainText("★ Also wins if the heist is sunk by theft");
@@ -55,7 +55,7 @@ test.describe("the reveal demo", () => {
     await r3.click();
     await expect(r3).toHaveAttribute("aria-pressed", "true");
     await expect(moves.locator("li")).toHaveCount(4);
-    await expect(moves).toContainText("Bot · Dot sat the round out: the Lobby was taped off.");
+    await expect(moves).toContainText("DotB sat the round out: the Lobby was taped off.");
     await expect(sheet).toContainText("Round 3: Cy hid the Vault's bell; it really shows 2 lit.");
     await expect(sheet).toContainText("you bought Tail");
     await expect(reveal.getByRole("button", { name: "Next round" })).toBeDisabled();

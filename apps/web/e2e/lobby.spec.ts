@@ -43,8 +43,8 @@ test("host creates, copies the invite, guest joins, host adds bots, start lands 
   await host.getByRole("button", { name: "Add bot" }).click();
   await host.getByRole("button", { name: "Add bot" }).click();
   await expect(host.locator(".seat--bot")).toHaveCount(2);
-  await expect(host.locator(".seat--bot").first()).toContainText("Bot · Greedy");
-  await host.getByRole("button", { name: "Remove Bot · Max" }).click();
+  await expect(host.locator(".seat--bot").first()).toContainText("Greedy");
+  await host.getByRole("button", { name: "Remove MaxB" }).click();
   await expect(host.locator(".seat--bot")).toHaveCount(1);
 
   // Host settings, incl. DM notices and the vote setting; the guest sees them read-only.

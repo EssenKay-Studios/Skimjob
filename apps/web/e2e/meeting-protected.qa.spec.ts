@@ -55,7 +55,7 @@ test("a briefing's protected bot: on the sealed picker, off the live one, and th
   await expect(dialog).toContainText("Emergency meeting · called by you", { timeout: 20_000 });
   await held(async () => {
     const note = dialog.locator(".briefing__protected");
-    await expect(note).toContainText(/so not on the list: Bot/);
+    await expect(note).toContainText(/so not on the list: \w+B\b/);
     const shielded = (await note.innerText()).match(/not on the list: (.+)\./)![1]!.trim();
     expect(sealedNames.some((t) => t.endsWith(shielded)), `sealed picker lists ${shielded}: ${sealedNames}`).toBe(true);
     const live = dialog.getByRole("group", { name: "Your vote" }).getByRole("button");

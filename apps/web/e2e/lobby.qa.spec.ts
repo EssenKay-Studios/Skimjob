@@ -116,7 +116,7 @@ test("bad and started invite codes show a friendly page @lobby", async ({ browse
   await shot(page, "invite-started");
 });
 
-test("duplicate, invisible-character and Bot nicknames get friendly errors @lobby", async ({ browser }) => {
+test("duplicate, invisible-character and bot-name nicknames get friendly errors @lobby", async ({ browser }) => {
   const hctx = await newCtx(browser);
   const g = await apiHost(hctx, "Mara");
   const page = await (await newCtx(browser, 360, 740, true)).newPage();
@@ -128,7 +128,7 @@ test("duplicate, invisible-character and Bot nicknames get friendly errors @lobb
     ["MARA", /nickname is taken/i],
     ["​​", /visible characters/i],
     ["⠀", /visible characters/i],
-    ["Bot Max", /are for bots/i],
+    ["MaxB", /reserved for bots/i],
     ["", /pick a nickname/i],
   ];
   for (const [name, msg] of cases) {
@@ -154,7 +154,7 @@ test("non-host: controls hidden and the API refuses host actions; hand-over to a
   const guest = await gctx.newPage();
   await guest.goto(`/lobby/${g.id}`);
   await expect(guest.getByText("Only the host can change these.")).toBeVisible();
-  for (const name of ["Start the job", "Add bot", /^Make .* host$/, /^Remove Bot/]) await expect(guest.getByRole("button", { name })).toHaveCount(0);
+  for (const name of ["Start the job", "Add bot", /^Make .* host$/, /^Remove \w+B$/]) await expect(guest.getByRole("button", { name })).toHaveCount(0);
   await expect(guest.getByRole("group", { name: "Votes" }).getByRole("button")).toHaveCount(0);
   await shot(guest, "lobby-nonhost");
 
@@ -176,7 +176,7 @@ test("non-host: controls hidden and the API refuses host actions; hand-over to a
   expect((await sctx.request.post(`/api/games/${g.id}/host`, { data: { seat: 0 } })).status()).toBe(404);
   const host = await hctx.newPage();
   await host.goto(`/lobby/${g.id}`);
-  await expect(host.getByRole("button", { name: /^Make Bot/ })).toHaveCount(0);
+  await expect(host.getByRole("button", { name: /^Make \w+B/ })).toHaveCount(0);
   await expect(host.getByRole("button", { name: "Make Lou host" })).toBeVisible();
 });
 

@@ -71,19 +71,19 @@ describe("guest sign-in (invite link + nickname)", () => {
     ["\ufe0f"], // lone variation selector 16
     ["\u0301"], // bare combining mark
     ["\u034f \u200d \ufe0f"], // only invisible characters and spaces
-    ["B\u200dot · Riya"], // a bot name with a ZWJ hidden in it
-    ["Bot · Riya"],
-    ["bot-riya"],
-    ["BOT: Max"],
-    ["Bot•Max"],
-    ["ＢＯＴ · Max"], // fullwidth
-    ["Bot"],
+    ["Ri\u200dyaB"], // a bot name with a ZWJ hidden in it
+    ["RiyaB"],
+    ["riyab"],
+    [" MAXB "],
+    ["ｎｉｃｏｂ"], // fullwidth
+    ["Ju noB"],
+    ["7B"], // the fallback style, past the list
   ])("refuses nickname %j", async (nickname) => {
     expect((await call("POST", "/auth/guest", null, { nickname })).status).toBe(400);
   });
 
-  it("allows names that merely start with the letters b-o-t, and emoji joined with ZWJ", async () => {
-    for (const nickname of ["Botswana Bob", "Bottle", "👨\u200d👩\u200d👧"]) {
+  it("allows Bot, a bot name without its B, names starting with b-o-t, and emoji joined with ZWJ", async () => {
+    for (const nickname of ["Bot", "Bot Riya", "Riya", "Botswana Bob", "Bottle", "👨\u200d👩\u200d👧"]) {
       expect((await call("POST", "/auth/guest", null, { nickname })).status).toBe(200);
     }
   });
@@ -358,7 +358,7 @@ describe("host nickname per game", () => {
     expect(res.body.seats!.map((s) => [s.nickname, s.you, s.host])).toEqual([["Kay", true, true]]);
     expect((await call("GET", "/me", who)).body.user).toMatchObject({ name: "Karthik" });
     expect((await call("GET", `/games/${first.body.id}`, who)).status).toBe(200); // the other game is still yours
-    for (const nickname of ["", "Bot · X", 7]) expect((await call("POST", "/games", who, { nickname })).status).toBe(400);
+    for (const nickname of ["", "riyab", "7B", 7]) expect((await call("POST", "/games", who, { nickname })).status).toBe(400);
   });
 });
 
@@ -380,7 +380,7 @@ describe("host hand-over", () => {
     expect((await call("POST", `/games/${game.id}/bots`, ana, {})).status).toBe(201);
     const started = await call("POST", `/games/${game.id}/start`, ana);
     expect(started.status).toBe(200);
-    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["Bot · Riya", "p1"], ["Ana", "p2"], ["Bot · Max", "p3"]]);
+    expect(started.body.seats!.map((s) => [s.nickname, s.playerId])).toEqual([["RiyaB", "p1"], ["Ana", "p2"], ["MaxB", "p3"]]);
   });
 
   it("refuses a bot, yourself, an empty seat, a non-host, and after the start", async () => {
@@ -457,14 +457,14 @@ describe("bots fill seats", () => {
     expect(one.status).toBe(201);
     const two = await call("POST", `/games/${game.id}/bots`, who, {});
     expect(two.body.seats!.slice(2).map((s) => [s.seat, s.nickname, s.bot])).toEqual([
-      [2, "Bot · Riya", "greedy"],
-      [3, "Bot · Max", "opportunist"],
+      [2, "RiyaB", "greedy"],
+      [3, "MaxB", "opportunist"],
     ]);
     expect((await call("DELETE", `/games/${game.id}/bots/2`, ana)).status).toBe(403);
     expect((await call("DELETE", `/games/${game.id}/bots/1`, who)).status).toBe(404); // Ana is no bot
     const left = await call("DELETE", `/games/${game.id}/bots/2`, who);
-    expect(left.body.seats!.map((s) => s.nickname)).toEqual(["Karthik", "Ana", "Bot · Max"]);
-    expect((await call("POST", `/games/${game.id}/bots`, who, {})).body.seats!.at(2)).toMatchObject({ seat: 2, nickname: "Bot · Riya" }); // the freed seat is reused
+    expect(left.body.seats!.map((s) => s.nickname)).toEqual(["Karthik", "Ana", "MaxB"]);
+    expect((await call("POST", `/games/${game.id}/bots`, who, {})).body.seats!.at(2)).toMatchObject({ seat: 2, nickname: "RiyaB" }); // the freed seat is reused
   });
 
   it.each([["evil"], ["__proto__"], [7]])("refuses personality %j", async (personality) => {
@@ -507,7 +507,7 @@ describe("start", () => {
     expect(state.config.players).toEqual([
       { id: "p1", name: "Karthik", isBot: false },
       { id: "p2", name: "__proto__", isBot: false },
-      { id: "p3", name: "Bot · Riya", isBot: true },
+      { id: "p3", name: "RiyaB", isBot: true },
     ]);
     expect(state.config).toMatchObject({ job: "bank", voteVisibility: "open", roleList: "possible", eventsEnabled: true });
     expect(state.config.seed).toMatch(/^[0-9a-f]{32}$/);
@@ -526,9 +526,9 @@ describe("start", () => {
     expect(res.body.settings).toMatchObject({ sessionLength: "15m" });
     expect(res.body.seats!.map((s) => [s.nickname, s.bot, s.playerId])).toEqual([
       ["Mara", null, "p1"],
-      ["Bot · Riya", "opportunist", "p2"],
-      ["Bot · Max", "opportunist", "p3"],
-      ["Bot · Nico", "opportunist", "p4"],
+      ["RiyaB", "opportunist", "p2"],
+      ["MaxB", "opportunist", "p3"],
+      ["NicoB", "opportunist", "p4"],
     ]);
     expect(JSON.stringify(res.body)).not.toMatch(/seed|config/);
     const state = (await store.load(res.body.id!))!;
@@ -540,7 +540,7 @@ describe("start", () => {
 
   it("Learn the game needs a session and a valid nickname", async () => {
     expect((await call("POST", "/games/learn", null, {})).status).toBe(401);
-    expect((await call("POST", "/games/learn", await guest("Ana"), { nickname: "Bot · Max" })).status).toBe(400);
+    expect((await call("POST", "/games/learn", await guest("Ana"), { nickname: "MaxB" })).status).toBe(400);
   });
 
   it("maps a session's user to its seat's player id (the only source of command.player)", async () => {

@@ -9,7 +9,7 @@ import { startGame, settle } from "./setupGame";
 // the page, the shell and the access check are the real ones. QA_SHOTS=… saves qa218-shell-*.png.
 const DIR = process.env.QA_SHOTS;
 const WIDTHS = [360, 768, 1280] as const;
-const NAMES = ["Maximiliana Wolfeschlege", "Christopher Montgomeryyy", "Bot Cy", "Bot Dee", "Bot Eve", "Bot Fox"];
+const NAMES = ["Maximiliana Wolfeschlege", "Christopher Montgomeryyy", "CyB", "DeeB", "EveB", "FoxB"];
 const players = NAMES.map((name, i) => ({ id: `p${i + 1}`, name, isBot: i > 1 }));
 
 function run(state: GameState, ...commands: (PlayerCommand | SystemCommand)[]): GameState {
