@@ -8,7 +8,7 @@ import { DialogSheet } from "./MeetingKit";
 import { RulebookSheet } from "./Rulebook";
 import { TipsToggle } from "./TipsToggle";
 
-export function GameMenu({ tips, busy, onChange, view, children }: { tips: boolean; busy: boolean; onChange: (on: boolean) => void; view?: PlayerView; children?: ReactNode }) {
+export function GameMenu({ tips, busy, onChange, view, children }: { tips: boolean; busy: boolean; onChange: (on: boolean) => void; view?: PlayerView | null; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [rules, setRules] = useState(false);
   return (

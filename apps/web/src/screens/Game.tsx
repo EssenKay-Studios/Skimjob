@@ -180,7 +180,7 @@ function GameTop({ connection, tips, host, view }: { connection: Connection | nu
   return (
     <TopBar>
       <span aria-live="polite">{label && <Chip colour={connection === "signedOut" ? "var(--bad)" : "var(--gold)"}>{label}</Chip>}</span>
-      {tips?.me && <GameMenu tips={tips.me.tips} busy={tips.saving} onChange={tips.change} view={view ?? undefined}>{host}</GameMenu>}
+      {tips?.me && <GameMenu tips={tips.me.tips} busy={tips.saving} onChange={tips.change} view={view}>{host}</GameMenu>}
     </TopBar>
   );
 }
