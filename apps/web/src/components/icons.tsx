@@ -20,16 +20,6 @@ export function Star() {
   );
 }
 
-export function Door() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M6.5 4.5h7.5v12h-7.5z" fill="var(--clay-l)" transform="translate(1 1)" />
-      <path d="M5 17V3.6h8.6V17M3 17h13.6" {...S} />
-      <path d="M10.6 10.4v.2" {...S} strokeWidth={2.6} />
-    </svg>
-  );
-}
-
 export function ArrowBack() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">

@@ -1,6 +1,6 @@
 // Landing (m2-plan M2-5): create a game (/new), join with an invite code
 // (/join/:code), sign in with Google (M2-12; shown only when the server has a
-// Google client id, else the top bar's "Sign in" just explains nicknames).
+// Google client id).
 // Signed in with Google, the pass card's place shows "My games". Any signed-in
 // user, guest or account, also gets the Tips setting (S3b.3), so /me is asked
 // on every visit; signed out shows neither.
@@ -19,7 +19,7 @@ import { Underline } from "../components/Underline";
 import { Wordmark } from "../components/Wordmark";
 import { parseInviteCode } from "../inviteCode";
 import { linkClick, navigate } from "../router";
-import { Play, Star, Door } from "../components/icons";
+import { Play, Star } from "../components/icons";
 
 const CREW = ["Mara Vox", "Dez", "Lucky Lou", "Priya K", "Otto"];
 
@@ -79,19 +79,10 @@ export function Landing() {
           <Wordmark size={30} />
         </a>
         <nav className="topbar__nav">
-          {account ? (
+          {account && (
             <span aria-label={`Signed in as ${account.name}`}>
               <Chip colour="var(--olive)">{account.name}</Chip>
             </span>
-          ) : (
-            <Button
-              variant="secondary"
-              seed="nav-signin"
-              icon={<Door />}
-              onClick={google ? signIn : () => toast("Sign-in is on its way. For now, you'll just pick a nickname.")}
-            >
-              Sign in
-            </Button>
           )}
         </nav>
       </header>
