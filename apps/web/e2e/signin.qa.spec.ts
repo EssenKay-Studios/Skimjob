@@ -37,3 +37,20 @@ test("/auth/providers failing: the landing page still works signed out @auth", a
   await expect(page.getByRole("button", { name: "Plan a heist" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in with Google" })).toHaveCount(0);
 });
+
+// QA #264: the top bar's own Sign in is gone, so with Google on "Sign in with
+// Google" is the page's only sign-in control, and a guest's top bar is empty.
+for (const width of [360, 390, 768, 1024, 1280]) {
+  test(`at ${width}px a guest's top bar has no sign-in or name, and Sign in with Google is the only sign-in @auth`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.route("**/api/auth/providers", (r) => r.fulfill({ json: { providers: ["google"] } }));
+    await page.route("**/api/me", (r) => r.fulfill({ json: { user: { id: "g1", name: "Rookie", guest: true, tips: true } } }));
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /sign in/i })).toHaveCount(1);
+    await expect(page.locator(".topbar__nav").getByRole("button")).toHaveCount(0);
+    await expect(page.getByLabel(/Signed in as/)).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: `test-results/qa-264/guest-${width}.png` });
+  });
+}
