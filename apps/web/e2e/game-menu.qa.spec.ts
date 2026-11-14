@@ -62,6 +62,7 @@ test.describe("touch", () => {
     const game = await startGame(page.request, { bots: 3, nickname: "Thumb", tips: true });
     await page.goto(`/game/${game.id}`);
     await page.getByRole("button", { name: "Menu" }).tap();
+    await settle(page);
     await page.getByRole("dialog", { name: "Game menu" }).getByRole("button", { name: "Rulebook" }).tap();
     await expect(page.getByRole("dialog", { name: "This game" })).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(1);
