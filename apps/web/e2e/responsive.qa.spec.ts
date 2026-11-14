@@ -57,7 +57,7 @@ for (const { width, height } of VIEWPORTS) {
         });
       }
 
-      // QA PR #19: topbar "Sign in" was 40px tall, home link 34px (fixed).
+      // QA PR #19: topbar home link was 34px tall (fixed).
       test(`touch targets are at least 44px on / @lobby`, async ({ page }) => {
         await page.goto("/");
         expect(await smallTargets(page)).toEqual([]);
@@ -122,9 +122,14 @@ test.describe("landing behaviour", () => {
   test.describe("reduced motion", () => {
     test.use({ reducedMotion: "reduce" });
     test("turns off the sheet entrance and toast animations @lobby", async ({ page }) => {
+      await page.route("**/api/me", (r) =>
+        r.request().method() === "PATCH"
+          ? r.fulfill({ status: 503, json: { error: "down" } })
+          : r.fulfill({ json: { user: { id: "u1", name: "Riya", guest: false, tips: true } } }),
+      );
       await page.goto("/");
       expect(await page.locator(".enter-sheet").first().evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
-      await page.getByRole("button", { name: "Sign in", exact: true }).click();
+      await page.getByRole("group", { name: "Tips" }).getByRole("button", { name: "Off" }).click(); // a failed save raises a toast
       expect(await page.locator(".toast").first().evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
     });
   });
