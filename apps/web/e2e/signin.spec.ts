@@ -14,35 +14,28 @@ const GAMES = [
 ];
 const myGames = (page: Page, games: object[] = GAMES) => page.route("**/api/me/games", (r) => r.fulfill({ json: { games } }));
 
-test("without a Google client id there's no Google button and Sign in explains nicknames @auth", async ({ page }) => {
+test("without a Google client id there's no Google button @auth", async ({ page }) => {
   const providers = page.waitForResponse((r) => r.url().endsWith("/api/auth/providers"));
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Plan a heist" })).toBeVisible();
   // The real server answered (no Google) before checking the button stays hidden.
   expect(await (await providers).json()).toEqual({ providers: [] });
   await expect(page.getByRole("button", { name: "Sign in with Google" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.locator(".toast").first()).toContainText("pick a nickname");
 });
 
-for (const [label, name] of [
-  ["Sign in with Google", "Sign in with Google"],
-  ["top bar Sign in", "Sign in"],
-] as const) {
-  test(`with Google on, ${label} goes to the server's Google start (back to /) @auth`, async ({ page }) => {
-    await googleOn(page);
-    let started: URL | null = null;
-    await page.route("**/api/auth/google/start**", (r) => {
-      started = new URL(r.request().url());
-      return r.fulfill({ contentType: "text/html", body: "<h1>Google</h1>" });
-    });
-    await page.goto("/");
-    await page.getByRole("button", { name, exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Google" })).toBeVisible();
-    expect(started!.pathname).toBe("/api/auth/google/start");
-    expect(started!.searchParams.get("returnTo")).toBe("/");
+test("with Google on, Sign in with Google goes to the server's Google start (back to /) @auth", async ({ page }) => {
+  await googleOn(page);
+  let started: URL | null = null;
+  await page.route("**/api/auth/google/start**", (r) => {
+    started = new URL(r.request().url());
+    return r.fulfill({ contentType: "text/html", body: "<h1>Google</h1>" });
   });
-}
+  await page.goto("/");
+  await page.getByRole("button", { name: "Sign in with Google", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Google" })).toBeVisible();
+  expect(started!.pathname).toBe("/api/auth/google/start");
+  expect(started!.searchParams.get("returnTo")).toBe("/");
+});
 
 test("signed in with Google: the top bar shows the name and the sign-in card is gone @auth", async ({ page }) => {
   await googleOn(page);

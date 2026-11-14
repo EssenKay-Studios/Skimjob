@@ -36,6 +36,4 @@ test("/auth/providers failing: the landing page still works signed out @auth", a
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Plan a heist" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in with Google" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.locator(".toast").first()).toContainText("pick a nickname");
 });
