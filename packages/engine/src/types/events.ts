@@ -4,7 +4,7 @@
 // must stay secret (a dealt role, a real split) cannot be constructed as public.
 // When you add an event type: add it to GameEvent, add a sample to
 // `samples.ts`, and make sure viewFor() tests cover it (CLAUDE.md).
-import type { EventId, JobId, PerkId, RoleId, RoomId } from "@skimjob/content";
+import type { EventId, JobId, PerkId, RoleId, RoomId, RulesetId } from "@skimjob/content";
 import type { ContentOverrides, PlayerId, PlayerSeat, RoleListSetting, VoteVisibility } from "./config";
 import type { AbilityUse, AlibiMark, Move, PerkUse, VoteChoice } from "./commands";
 import type { PrivateVisibility, PublicVisibility, RevealVisibility, SecretVisibility } from "./visibility";
@@ -24,6 +24,8 @@ export interface GameCreated {
   readonly visibility: PublicVisibility;
   readonly players: readonly PlayerSeat[];
   readonly job: JobId;
+  /** The game's ruleset (public: the content everyone plays). design §19.2 seam 3 */
+  readonly ruleset: RulesetId;
   readonly roleList: RoleListSetting;
   readonly eventsEnabled: boolean;
   readonly voteVisibility: VoteVisibility;

@@ -19,6 +19,7 @@ export const sampleEvents: { readonly [T in GameEventType]: EventOfType<T> } = {
       { id: ben, name: "Ben", isBot: true },
     ],
     job: "bank",
+    ruleset: "simplified",
     roleList: "exact",
     eventsEnabled: false,
     voteVisibility: "hiddenThenRevealed",

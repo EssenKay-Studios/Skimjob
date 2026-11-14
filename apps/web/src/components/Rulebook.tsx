@@ -2,10 +2,10 @@
 // role list), this game's three black-market perks, the events deck and the
 // numbers, plus the Terms glossary. Every line and number comes from content
 // or the player's own view.
-import { EVENTS, ROOM_TEXT, infoText, termsFor } from "@skimjob/content";
+import { ROOM_TEXT, infoText, termsFor } from "@skimjob/content";
 import type { PlayerView } from "@skimjob/engine";
 import { RoleIcon } from "../art/RoleIcon";
-import { jobOf, setupOf } from "../game/hud";
+import { jobOf, rulesetOfView, setupOf } from "../game/hud";
 import { eventsNote, numberRows, roleInfo, roleListInfo, rolesOf } from "../game/roles";
 import { Button } from "./Button";
 import { InfoTip, MoreInGame } from "./InfoTip";
@@ -28,7 +28,7 @@ function Section({ id, title, note, children }: { id: string; title: string; not
 export function Rulebook({ view }: { view: PlayerView }) {
   const list = roleListInfo(view);
   const roles = rolesOf(view);
-  const events = setupOf(view)?.eventsEnabled ?? false;
+  const deck = setupOf(view)?.eventsEnabled ? rulesetOfView(view).events : [];
   return (
     // The tips in here are already in This game: no "More in This game" link.
     <MoreInGame.Provider value={null}>
@@ -59,6 +59,7 @@ export function Rulebook({ view }: { view: PlayerView }) {
             </ul>
           )}
         </Section>
+        {view.shop.length > 0 && (
         <Section id="market" title="Black market" note="One perk a round.">
           <ul className="rulebook__rows" aria-label="This game's black market">
             {view.shop.map(({ perk, cost }) => (
@@ -75,6 +76,7 @@ export function Rulebook({ view }: { view: PlayerView }) {
             ))}
           </ul>
         </Section>
+        )}
         <Section id="rooms" title="Rooms" note={`${view.rooms.length} in play`}>
           <ul className="rulebook__rows">
             {view.rooms.map((id) => (
@@ -88,10 +90,10 @@ export function Rulebook({ view }: { view: PlayerView }) {
             ))}
           </ul>
         </Section>
-        {events && (
+        {deck.length > 0 && (
           <Section id="events" title="Events" note={eventsNote}>
             <ul className="rulebook__rows">
-              {Object.keys(EVENTS).map((id) => (
+              {deck.map((id) => (
                 <li key={id}>
                   <div className="rulebook__name">
                     <b className="hand">{infoText({ kind: "event", id })?.name}</b>

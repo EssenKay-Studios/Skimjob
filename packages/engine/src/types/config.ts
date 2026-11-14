@@ -4,7 +4,7 @@
 // time — session length, round deadlines, meeting window length, quiet hours,
 // pause/extend — belongs to the server's scheduler, because the engine has no
 // clock (CLAUDE.md "Engine rules"; design §4.1).
-import type { EventId, JobId, PerkId, RoleId, RoomId } from "@skimjob/content";
+import type { EventId, JobId, PerkId, RoleId, RoomId, RulesetId } from "@skimjob/content";
 
 /** Stable id for a seat. Unique within a game. */
 export type PlayerId = string;
@@ -28,6 +28,8 @@ export interface GameConfig {
   /** Seat order is significant only for determinism, never for rules. 3–12 seats. */
   readonly players: readonly PlayerSeat[];
   readonly job: JobId;
+  /** The content this game plays (Learn the game is one); absent means `DEFAULT_RULESET`. design §14, §19.2 seam 3 */
+  readonly ruleset?: RulesetId;
   /** Absent means Exact. design §11.3, §16 */
   readonly roleList?: RoleListSetting;
   readonly eventsEnabled: boolean;

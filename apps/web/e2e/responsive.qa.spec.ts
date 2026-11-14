@@ -17,7 +17,7 @@ const VIEWPORTS = [
   { width: 1024, height: 768 },
   { width: 1280, height: 800 },
 ];
-const ROUTES = ["/", "/no-such-page", "/new", "/join/abcdefghjk", "/lobby/00000000-0000-0000-0000-000000000000", "/game/00000000-0000-0000-0000-000000000000"];
+const ROUTES = ["/", "/no-such-page", "/new", "/learn", "/join/abcdefghjk", "/lobby/00000000-0000-0000-0000-000000000000", "/game/00000000-0000-0000-0000-000000000000"];
 
 // Viewport sizes are set per test below, so run each test once.
 test.beforeEach(({}, info) => test.skip(info.project.name !== "mobile", "viewports are set per test"));
@@ -198,7 +198,7 @@ test.describe("phones", () => {
         await expect(page.getByRole("heading", { name: "Component gallery" })).toBeVisible();
         expect(await smallTargets(page)).toEqual([]);
         // The last is the game screen's "not your game" sheet (M2-6).
-        for (const route of ["/no-such-page", "/new", "/join/abcdefghjk", "/game/00000000-0000-0000-0000-000000000000"]) {
+        for (const route of ["/no-such-page", "/new", "/learn", "/join/abcdefghjk", "/game/00000000-0000-0000-0000-000000000000"]) {
           await page.goto(route);
           expect(await smallTargets(page), route).toEqual([]);
         }

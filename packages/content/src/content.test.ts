@@ -16,6 +16,8 @@ import {
   MIN_PLAYERS,
   ROLES,
   ROLE_DEAL,
+  RULESETS,
+  LEARN_SEATS,
 } from "./index";
 
 describe("job data is consistent", () => {
@@ -187,5 +189,27 @@ describe("events deck content — design §13", () => {
       if (def?.effect.kind === "roomSurge") expect(Object.keys(BANK_JOB.rooms)).toContain(def.effect.room);
     }
     expect(EVENTS.shiftChange?.effect).toEqual({ kind: "roomSurge", room: "vault", extraCoins: 1 }); // design §13: Vault +1 coin
+  });
+});
+
+describe("rulesets select content — design §14, §19.2 seam 3", () => {
+  for (const r of Object.values(RULESETS)) {
+    it(`${r.id}: names only roles, perks and cards that exist, and unique guide steps`, () => {
+      for (const role of r.roles) expect(ROLES).toHaveProperty(role);
+      for (const perk of r.perks) expect(PERKS).toHaveProperty(perk);
+      for (const card of r.events) expect(EVENTS).toHaveProperty(card);
+      expect(new Set(r.guide.map((s) => s.id)).size).toBe(r.guide.length);
+    });
+  }
+
+  it("Learn the game: the four roles, one per seat, a small bank, about 6 rounds, no shop, no events, a guide", () => {
+    const learn = RULESETS.learn!;
+    expect(learn.roles).toEqual(["lookout", "locksmith", "detective", "hacker"]);
+    expect(LEARN_SEATS).toBe(4);
+    expect(learn.bank!.coinsPerPlayer).toBeLessThan(BANK_JOB.bank.coinsPerPlayer);
+    expect(learn.roundCap).toBe(6);
+    expect(learn.perks).toEqual([]);
+    expect(learn.events).toEqual([]);
+    expect(learn.guide.length).toBeGreaterThan(0);
   });
 });

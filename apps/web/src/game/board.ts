@@ -9,7 +9,7 @@
 // "seen on camera"), and every
 // public alibi claim for the round as a dashed ghost. Nothing else: never another player's
 // move or room unless the view itself says so.
-import { BANK_JOB, EVENTS, type RoomId } from "@skimjob/content";
+import { EVENTS, type RoomId } from "@skimjob/content";
 import type { PlayerId, PlayerView } from "@skimjob/engine";
 import type { BankOccupant, RoomBell, TimeOfDay } from "../art/BankCutaway";
 import { crewTags } from "../art/crookLooks";
@@ -51,8 +51,8 @@ export function seatLooks(view: PlayerView): ReadonlyMap<PlayerId, SeatLook> {
 const plainName = (name: string) => name.replace(/^Bot · /, "");
 
 /** The first third of the round cap is daylight, the second dusk, the last night (ui-style "time-of-day lighting tracks session progress"). */
-export const timeOfRound = (round: number): TimeOfDay => {
-  const third = Math.ceil((Math.max(1, round) * 3) / BANK_JOB.roundCap);
+export const timeOfRound = (round: number, roundCap: number): TimeOfDay => {
+  const third = Math.ceil((Math.max(1, round) * 3) / roundCap);
   return third <= 1 ? "day" : third === 2 ? "dusk" : "night";
 };
 
@@ -144,7 +144,7 @@ export function boardScene(view: PlayerView, pick: RoomId | null = null): BoardS
     const selected = pick ?? view.me.move?.room ?? null;
     if (selected) put(selected, view.me.id);
     const taped = tapedLeft(view);
-    return { round, mode: "pick", selected, occupants, closed: closedIn(view, round), taped, bells: bellsOf(view, selected, taped), time: timeOfRound(round) };
+    return { round, mode: "pick", selected, occupants, closed: closedIn(view, round), taped, bells: bellsOf(view, selected, taped), time: timeOfRound(round, jobOf(view).roundCap) };
   }
 
   const round = resolvedRound(view);
@@ -180,5 +180,5 @@ export function boardScene(view: PlayerView, pick: RoomId | null = null): BoardS
     if (!there) put(room, player, "ghost");
   }
   const taped = tapedLeft(view);
-  return { round, mode: "seen", selected: mine, occupants, closed: closedIn(view, round), taped, bells: bellsOf(view, mine, taped), time: timeOfRound(round) };
+  return { round, mode: "seen", selected: mine, occupants, closed: closedIn(view, round), taped, bells: bellsOf(view, mine, taped), time: timeOfRound(round, jobOf(view).roundCap) };
 }

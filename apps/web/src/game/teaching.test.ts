@@ -2,7 +2,9 @@
 import { LESSONS } from "@skimjob/content";
 import type { PlayerView } from "@skimjob/engine";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { dueLesson, happened, heldByMeeting, latch, loadSeen, saveSeen } from "./teaching";
+import { dueLesson, happened, heldByMeeting, latch, lessonsKey, loadSeen, saveSeen } from "./teaching";
+
+const LESSON_IDS = Object.keys(LESSONS);
 
 type Ev = Record<string, unknown> & { type: string };
 const view = (events: Ev[], extra: { round?: number; wanted?: number } = {}): PlayerView =>
@@ -69,15 +71,15 @@ describe("the seen set", () => {
     vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) });
   });
   it("is kept per player and survives a reload", () => {
-    saveSeen("p1", new Set(["raid"]));
-    expect(loadSeen("p1")).toEqual(new Set(["raid"]));
-    expect(loadSeen("p2")).toEqual(new Set());
+    saveSeen(lessonsKey("p1"), new Set(["raid"]));
+    expect(loadSeen(lessonsKey("p1"), LESSON_IDS)).toEqual(new Set(["raid"]));
+    expect(loadSeen(lessonsKey("p2"), LESSON_IDS)).toEqual(new Set());
   });
   it("drops junk and unknown lessons", () => {
     localStorage.setItem("skimjob.lessons.p1", JSON.stringify(["raid", "nope", 3]));
-    expect(loadSeen("p1")).toEqual(new Set(["raid"]));
+    expect(loadSeen(lessonsKey("p1"), LESSON_IDS)).toEqual(new Set(["raid"]));
     localStorage.setItem("skimjob.lessons.p1", "{not json");
-    expect(loadSeen("p1")).toEqual(new Set());
+    expect(loadSeen(lessonsKey("p1"), LESSON_IDS)).toEqual(new Set());
   });
 });
 

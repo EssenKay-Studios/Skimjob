@@ -5,7 +5,7 @@
 // rules code never meets a shape it doesn't know. Configs are untrusted JSON,
 // so `validateOverrides` checks every field (own keys only, known keys only,
 // whole numbers: the engine counts coins, rounds, bulbs and stars).
-import { EVENTS, PERKS, ROLES, type EventDef, type EventEffect, type JobDef, type JobId, type PerkId, type RoleDef, type RoleId, type RolePower, type RoomDef } from "@skimjob/content";
+import { DEFAULT_RULESET, EVENTS, PERKS, ROLES, RULESETS, type RulesetDef, type EventDef, type EventEffect, type JobDef, type JobId, type PerkId, type RoleDef, type RoleId, type RolePower, type RoomDef } from "@skimjob/content";
 import type { ContentOverrides, EventOverride, GameConfig, RoleOverride, RoomOverride } from "./types";
 import { isObject } from "./check";
 import { jobById } from "./job";
@@ -192,12 +192,16 @@ export function overrideRoles(roles: RoleTable, overrides: ContentOverrides | nu
 const jobCache = new WeakMap<GameConfig, JobDef>();
 const roleCache = new WeakMap<GameConfig, RoleTable>();
 
-/** The job this game plays: the content job with the config's overrides. design §17.4 */
-export function jobFor(config: Pick<GameConfig, "job" | "contentOverrides">): JobDef {
-  if (!config.contentOverrides) return jobById(config.job as JobId);
+/** The game's ruleset (absent: the default). Assumes `validateConfig` passed. design §19.2 seam 3 */
+export const rulesetOf = (config: Pick<GameConfig, "ruleset">): RulesetDef => RULESETS[config.ruleset ?? DEFAULT_RULESET] as RulesetDef;
+
+/** The job this game plays: the content job with its ruleset's numbers, then the config's overrides. design §17.4, §19.2 seam 3 */
+export function jobFor(config: Pick<GameConfig, "job" | "contentOverrides" | "ruleset">): JobDef {
+  const { bank, roundCap } = rulesetOf(config);
+  if (!config.contentOverrides && !bank && roundCap === undefined) return jobById(config.job as JobId);
   const cached = jobCache.get(config as GameConfig);
   if (cached) return cached;
-  const job = overrideJob(jobById(config.job), config.contentOverrides);
+  const job = overrideJob({ ...jobById(config.job), ...(bank && { bank }), ...(roundCap !== undefined && { roundCap }) }, config.contentOverrides);
   jobCache.set(config as GameConfig, job);
   return job;
 }

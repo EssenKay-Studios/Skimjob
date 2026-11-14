@@ -19,8 +19,10 @@ import "./market.css";
 type Send = (cmd: ClientCommand, done?: string) => Promise<Reply>;
 
 /** The "Black market" button and its sheet. */
+/** Nothing when the game has no black market (a ruleset without perks, design §14). */
 export function MarketButton({ view, send }: { view: PlayerView; send: Send }) {
   const [open, setOpen] = useState(false);
+  if (view.shop.length === 0) return null;
   return (
     <>
       <Button variant="secondary" seed="market-open" icon={<Coin />} onClick={() => setOpen(true)} aria-haspopup="dialog">

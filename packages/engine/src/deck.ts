@@ -3,16 +3,16 @@
 //
 // Cards are data in @skimjob/content; each kind of effect is one small
 // function here. All draws go through the command's `Draw`.
-import { EVENTS, EVENT_CHANCE, EVENT_DECK, EVENTS_FROM_ROUND, type EventDef, type EventEffect, type JobDef, type RoomId } from "@skimjob/content";
+import { EVENTS, EVENT_CHANCE, EVENTS_FROM_ROUND, type EventDef, type EventId, type EventEffect, type JobDef, type RoomId } from "@skimjob/content";
 import type { ActiveCard, GameConfig, GameEvent, GameState, PlayerState } from "./types";
 import { PUBLIC, privateTo } from "./types";
 import type { Draw } from "./handle";
-import { eventsFor, jobFor, type EventTable } from "./overrides";
+import { eventsFor, jobFor, rulesetOf, type EventTable } from "./overrides";
 import { applyEvent } from "./reduce";
 import { isTaped } from "./bells";
 
-/** Events are on unless the host turns them off. design §13, §16 */
-const eventsOn = (config: GameConfig): boolean => config.eventsEnabled;
+/** The ruleset's deck (seam 3): events are on unless the host turns them off or the deck is empty. design §13, §14, §16 */
+const deckOf = (config: GameConfig): readonly EventId[] => (config.eventsEnabled ? rulesetOf(config).events : []);
 
 /** The card's definition. Throws for ids the content doesn't have (the log only holds drawn ones). */
 function cardDef(id: string, events: EventTable = EVENTS): EventDef {
@@ -65,11 +65,12 @@ function flip(started: GameState, round: number, card: string, draw: Draw): Game
 export function startRound(state: GameState, round: number, draw: Draw): GameEvent[] {
   const started: GameEvent = { type: "roundStarted", visibility: PUBLIC, round };
   const events: GameEvent[] = [started];
-  if (eventsOn(state.config) && round >= EVENTS_FROM_ROUND) {
-    const drawn = draw.int(EVENT_CHANCE.of) < EVENT_CHANCE.in ? draw.pick(EVENT_DECK) : null;
+  const deck = deckOf(state.config);
+  if (deck.length > 0 && round >= EVENTS_FROM_ROUND) {
+    const drawn = draw.int(EVENT_CHANCE.of) < EVENT_CHANCE.in ? draw.pick(deck) : null;
     if (drawn !== null) {
       const now = applyEvent(state, started);
-      const card = applies(now, drawn) ? drawn : draw.pick(EVENT_DECK.filter((c) => applies(now, c)));
+      const card = applies(now, drawn) ? drawn : draw.pick(deck.filter((c) => applies(now, c)));
       events.push(...flip(now, round, card, draw));
     }
   }

@@ -120,6 +120,9 @@ export function Landing() {
                 >
                   Plan a heist
                 </Button>
+                <Button variant="secondary" seed="learn-game" className="landing__learn" onClick={() => navigate("/learn")}>
+                  Learn the game
+                </Button>
                 <div className="landing__crew">
                   <span className="avatar-stack" aria-hidden="true">
                     {CREW.map((n, i) => (
